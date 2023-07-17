@@ -92,14 +92,13 @@ class MultiHeadAttention(nn.Module):
 
 class MLP(nn.Module):
     """
-    Class for feed-forward network (FFN) module in ViT
-    We apply GELU, which is a variant of ReLU
+    Class for MLP module in ViT-Large
     Args:
         dim_model: dimension of model's latent vector space, default 512
-        dim_ffn: dimension of FFN's hidden layer, default 2048 from official paper
+        dim_mlp: dimension of FFN's hidden layer, default 2048 from official paper
         dropout: dropout rate, default 0.1
     Math:
-        FFN(x) = max(0, x*W_1 + b_1)*W_2 + b_2
+        MLP(x) = MLP(LN(x))+x
     """
     def __init__(self, dim_model: int = 1024, dim_mlp: int = 4096, dropout: float = 0.1) -> None:
         super(MLP, self).__init__()
@@ -163,7 +162,7 @@ class VisionEncoder(nn.Module):
         self.num_layers = N
         self.dim_model = dim_model
         self.num_heads = num_heads
-        self.dim_ffn = dim_mlp
+        self.dim_mlp = dim_mlp
         self.dropout = nn.Dropout(p=dropout)
         self.encoder_layers = nn.ModuleList(
             [VisionEncoderLayer(dim_model, num_heads, dim_mlp, dropout) for _ in range(self.num_layers)]
@@ -171,7 +170,7 @@ class VisionEncoder(nn.Module):
 
     def forward(self) -> tuple[Tensor, Tensor]:
         layer_output = []
-        pos_x = torch.arange(self.input_embedding.shape[1]).repeat(self.input_embedding.shape[0]).to(x.device)
+        pos_x = torch.arange(self.input_embedding.shape[1]).repeat(self.input_embedding.shape[0]).to(self.input_embedding.device)
         x = self.dropout(
             self.input_embedding + self.positional_embedding(pos_x)
         )
