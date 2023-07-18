@@ -140,25 +140,26 @@ class VisionEncoderLayer(nn.Module):
         residual_x = self.dropout(self.self_attention(ln_x)) + x
 
         ln_x = self.layer_norm(residual_x)
-        fx = self.mlp(ln_x) + residual_x
+        fx = self.layer_norm(self.mlp(ln_x) + residual_x)  # from official paper & code by Google Research
         return fx
 
 
 class VisionEncoder(nn.Module):
     """
     In this class, encode input sequence(Image) and then we stack N VisionEncoderLayer
+    This model is implemented by cls pooling method for classification
     First, we define "positional embedding" and then add to input embedding for making patch embedding
     Second, forward patch embedding to N EncoderLayer and then get output embedding
     Args:
-        input_embedding: embedding from input sequence, shape => [BS, NUM_PATCH, DIM_MODEL]
-        N: number of EncoderLayer, default 6 for base model
+        num_patches: number of patches in input image => (image_size / patch_size)**2
+        N: number of EncoderLayer, default 24 for large model
     """
 
-    def __init__(self, input_embedding: Tensor, N: int = 24, dim_model: int = 1024, num_heads: int = 16, dim_mlp: int = 4096, dropout: float = 0.1) -> None:
+    def __init__(self, num_patches: int, N: int = 24, dim_model: int = 1024, num_heads: int = 16, dim_mlp: int = 4096, dropout: float = 0.1) -> None:
         super(VisionEncoder, self).__init__()
-        self.input_embedding = input_embedding
+        self.num_patches = num_patches
         self.scale = torch.sqrt(torch.Tensor(dim_model))  # scale factor for input embedding
-        self.positional_embedding = nn.Embedding(self.input_embedding.shape[1], dim_model)
+        self.positional_embedding = nn.Embedding((self.num_patches + 1), dim_model)  # add 1 for cls token
         self.num_layers = N
         self.dim_model = dim_model
         self.num_heads = num_heads
@@ -168,16 +169,117 @@ class VisionEncoder(nn.Module):
             [VisionEncoderLayer(dim_model, num_heads, dim_mlp, dropout) for _ in range(self.num_layers)]
         )
 
-    def forward(self) -> tuple[Tensor, Tensor]:
+    def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor]:
         layer_output = []
-        pos_x = torch.arange(self.input_embedding.shape[1]).repeat(self.input_embedding.shape[0]).to(self.input_embedding.device)
+        pos_x = torch.arange(self.num_patches + 1).repeat(inputs.shape[0]).to(inputs)
         x = self.dropout(
-            self.input_embedding + self.positional_embedding(pos_x)
+            inputs + self.positional_embedding(pos_x)
         )
         for layer in self.encoder_layers:
             x = layer(x)
             layer_output.append(x)
         layer_output = torch.stack(layer_output, dim=0).to(x.device)  # For Weighted Layer Pool: [N, BS, SEQ_LEN, DIM]
         return x, layer_output
+
+
+class VisionTransformer(nn.Module):
+    """
+    Main class for ViT of cls pooling, Pytorch implementation
+    We implement pure ViT, Not hybrid version which is using CNN for extracting patch embedding
+    input must be [BS, CHANNEL, IMAGE_SIZE, IMAGE_SIZE]
+    In NLP, input_sequence is always smaller than vocab size
+    But in Vision, input_sequence is always same as image size, not concept of vocab in vision
+    So, ViT use nn.Linear instead of nn.Embedding for input_embedding
+    Args:
+        num_classes: number of classes for classification task
+        image_size: size of input image, default 512
+        patch_size: size of patch, default 16 from official paper for ViT-Large
+        classifier: option for pooling method, default token meaning that do cls pooling
+                    if you want to use mean pooling, set classifier='mean'
+    Math:
+        image2sequence: [batch, channel, image_size, image_size] -> [batch, patch, patch_size^2*channel]
+        input_embedding: R^(P^2 ·C)×D
+    Reference:
+        https://arxiv.org/abs/2010.11929
+        https://arxiv.org/abs/1706.03762
+        https://github.com/google-research/vision_transformer/blob/main/vit_jax/models_vit.py#L184
+    """
+    def __init__(
+            self,
+            num_classes: int,
+            channels: int = 3,
+            image_size: int = 512,
+            patch_size: int = 16,
+            num_layers: int = 24,
+            dim_model: int = 1024,
+            num_heads: int = 16,
+            dim_mlp: int = 4096,
+            dropout: float = 0.1,
+            classifier: str = 'token',
+    ) -> None:
+        super(VisionTransformer, self).__init__()
+        self.num_patches = int(image_size / patch_size)**2
+        self.input_embedding = nn.Linear((channels * patch_size**2), dim_model)
+        self.num_layers = num_layers
+        self.patch_size = patch_size
+        self.dim_model = dim_model
+        self.num_heads = num_heads
+        self.dim_mlp = dim_mlp
+        self.dropout = nn.Dropout(p=dropout)
+
+        # Encoder Multi-Head Self-Attention
+        self.encoder = VisionEncoder(
+            self.num_patches,
+            self.num_layers,
+            self.dim_model,
+            self.num_heads,
+            self.dim_mlp,
+            dropout,
+        )
+
+        # classification head
+        self.classifier = classifier
+        self.classifier_head = nn.Sequential(
+            nn.Linear(self.dim_model, num_classes),
+            nn.Tanh(),
+        )
+
+    def forward(self, inputs: Tensor) -> any:
+        assert inputs.ndim != 4, f"Input shape should be [BS, CHANNEL, IMAGE_SIZE, IMAGE_SIZE], but got {inputs.shape}"
+        x = inputs
+        x = self.input_embedding(
+            x.reshape(x.shape[0], self.num_patches, (self.patch_size**2 * x.shape[1]))
+        )
+        if self.classifier in 'token':
+            """ Add classification token, such as BERT [cls] """
+            cls_token = torch.zeros(x.shape[0], 1, x.shape[2])  # can change init method
+            x = torch.cat([cls_token, x], dim=1)
+
+        x, layer_output = self.encoder(x)  # output
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
