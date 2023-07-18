@@ -116,8 +116,8 @@ class MLP(nn.Module):
 
 class VisionEncoderLayer(nn.Module):
     """
-    Class for encoder module in ViT-Large
-    In this class, we stack each encoder module (Multi-Head Attention, Residual-Connection, Layer Normalization, MLP)
+    Class for encoder_model module in ViT-Large
+    In this class, we stack each encoder_model module (Multi-Head Attention, Residual-Connection, Layer Normalization, MLP)
     """
     def __init__(self, dim_model: int = 1024, num_heads: int = 16, dim_mlp: int = 4096, dropout: float = 0.1) -> None:
         super(VisionEncoderLayer, self).__init__()

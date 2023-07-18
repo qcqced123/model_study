@@ -9,11 +9,11 @@ class RecurrentModel(nn.Module):
     Model class for pure Recurrent Neural Network
     Variable:
         X_t: input at time t
-        W_x: weight for input X, same value in one unique rnn cell
-        W_h: weight for hidden state, same value in one unique rnn cell
-        W_y: weight for output, same value in one unique rnn cell
-        b: bias for hidden state, same value in one unique rnn cell
-        b_y: bias for output, same value in one unique rnn cell
+        W_x: weight for input X, same value in one unique RNN cell
+        W_h: weight for hidden state, same value in one unique RNN cell
+        W_y: weight for output, same value in one unique RNN cell
+        b: bias for hidden state, same value in one unique RNN cell
+        b_y: bias for output, same value in one unique RNN cell
     Math:
         h_t = tanh(X_t * W_x + h_t-1 * W_h + b)
         y_t = h_t * W_y + b_y (logit in time t)

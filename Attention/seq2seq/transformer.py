@@ -117,8 +117,8 @@ class FeedForward(nn.Module):
 
 class EncoderLayer(nn.Module):
     """
-    Class for encoder module in vanilla transformer
-    In this class, we stack each encoder module (Multi-Head Attention, Residual-Connection, Layer Normalization, FFN)
+    Class for encoder_model module in vanilla transformer
+    In this class, we stack each encoder_model module (Multi-Head Attention, Residual-Connection, Layer Normalization, FFN)
     We apply post-layer Residual-Connection, which is different from original paper
     In common sense, post-layer Residual-Connection are more effective & stable than pre-layer Residual-Connection
     """
@@ -188,7 +188,7 @@ class Encoder(nn.Module):
         x = self.scale * self.input_embedding + self.positional_embedding(pos_x)
 
         for layer in self.encoder_layers:
-            x = layer(x)  # embedding vector from 1 encoder layer
+            x = layer(x)  # embedding vector from 1 encoder_model layer
             layer_output.append(x)
         layer_output = torch.stack(layer_output, dim=0).to(x.device)  # For Weighted Layer Pool: [N, BS, SEQ_LEN, DIM]
         return x, layer_output
