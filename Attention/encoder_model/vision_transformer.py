@@ -1,5 +1,3 @@
-import pandas as pd
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -196,6 +194,8 @@ class VisionTransformer(nn.Module):
         patch_size: size of patch, default 16 from official paper for ViT-Large
         classifier: option for pooling method, default token meaning that do cls pooling
                     if you want to use mean pooling, set classifier='mean'
+        mode: option for train type, default fine-tune, if you want pretrain, set mode='pretrain'
+              In official paper & code by Google Research, they use different classifier head for pretrain, fine-tune
     Math:
         image2sequence: [batch, channel, image_size, image_size] -> [batch, patch, patch_size^2*channel]
         input_embedding: R^(P^2 ·C)×D
@@ -216,6 +216,7 @@ class VisionTransformer(nn.Module):
             dim_mlp: int = 4096,
             dropout: float = 0.1,
             classifier: str = 'token',
+            mode: str = 'fine_tune',
     ) -> None:
         super(VisionTransformer, self).__init__()
         self.num_patches = int(image_size / patch_size)**2
@@ -237,49 +238,40 @@ class VisionTransformer(nn.Module):
             dropout,
         )
 
-        # classification head
+        """
+        Classification Head Init Part
+        Pretrain Classifier:
+            In official code, they use "representation_size" for output dim of pretrain classifier
+            But, we can't find meaning of "representation_size" and it's real size in official paper & code
+            So, we use dim_model for output dim of pretrain classifier
+        """
         self.classifier = classifier
-        self.classifier_head = nn.Sequential(
-            nn.Linear(self.dim_model, num_classes),
+        self.fine_tune_classifier = nn.Linear(self.dim_model, num_classes)
+        self.pretrain_classifier = nn.Sequential(
+            nn.Linear(self.dim_model, self.dim_model),
             nn.Tanh(),
         )
+        self.mode = mode
 
     def forward(self, inputs: Tensor) -> any:
+        """ For cls pooling """
         assert inputs.ndim != 4, f"Input shape should be [BS, CHANNEL, IMAGE_SIZE, IMAGE_SIZE], but got {inputs.shape}"
         x = inputs
         x = self.input_embedding(
             x.reshape(x.shape[0], self.num_patches, (self.patch_size**2 * x.shape[1]))
         )
-        if self.classifier in 'token':
-            """ Add classification token, such as BERT [cls] """
-            cls_token = torch.zeros(x.shape[0], 1, x.shape[2])  # can change init method
-            x = torch.cat([cls_token, x], dim=1)
+        cls_token = torch.zeros(x.shape[0], 1, x.shape[2])  # can change init method
+        x = torch.cat([cls_token, x], dim=1)
 
         x, layer_output = self.encoder(x)  # output
 
+        # classification
+        x = x[:, 0, :]  # select cls token, which is position 0 in sequence
+        if self.mode == 'fine_tune':
+            x = self.fine_tune_classifier(x)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        if self.mode == 'pretrain':
+            x = self.fine_tune_classifier(self.pretrain_classifier(x))
+        return x
 
 
