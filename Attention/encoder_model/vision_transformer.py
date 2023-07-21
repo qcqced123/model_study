@@ -240,17 +240,19 @@ class VisionTransformer(nn.Module):
 
         """
         Classification Head Init Part
-        Pretrain Classifier:
+        pretrain_classifier:
             In official code, they use "representation_size" for output dim of pretrain classifier
             But, we can't find meaning of "representation_size" and it's real size in official paper & code
             So, we use dim_model for output dim of pretrain classifier
+        fine_tune_classifier:
+            In official code, they use ONLY single MLP layer for fine-tune classifier
         """
         self.classifier = classifier
-        self.fine_tune_classifier = nn.Linear(self.dim_model, num_classes)
         self.pretrain_classifier = nn.Sequential(
             nn.Linear(self.dim_model, self.dim_model),
             nn.Tanh(),
         )
+        self.fine_tune_classifier = nn.Linear(self.dim_model, num_classes)
         self.mode = mode
 
     def forward(self, inputs: Tensor) -> any:
