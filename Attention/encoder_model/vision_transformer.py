@@ -186,12 +186,14 @@ class VisionTransformer(nn.Module):
     We implement pure ViT, Not hybrid version which is using CNN for extracting patch embedding
     input must be [BS, CHANNEL, IMAGE_SIZE, IMAGE_SIZE]
     In NLP, input_sequence is always smaller than vocab size
-    But in Vision, input_sequence is always same as image size, not concept of vocab in vision
+    But in vision, input_sequence is always same as image size, not concept of vocab in vision
     So, ViT use nn.Linear instead of nn.Embedding for input_embedding
     Args:
         num_classes: number of classes for classification task
         image_size: size of input image, default 512
         patch_size: size of patch, default 16 from official paper for ViT-Large
+        extractor: option for feature extractor, default 'base' which is crop & just flatten
+                   if you want to use Convolution for feature extractor, set extractor='cnn' named hybrid ver in paper
         classifier: option for pooling method, default token meaning that do cls pooling
                     if you want to use mean pooling, set classifier='mean'
         mode: option for train type, default fine-tune, if you want pretrain, set mode='pretrain'
@@ -215,18 +217,28 @@ class VisionTransformer(nn.Module):
             num_heads: int = 16,
             dim_mlp: int = 4096,
             dropout: float = 0.1,
+            extractor: str = 'base',
             classifier: str = 'token',
             mode: str = 'fine_tune',
     ) -> None:
         super(VisionTransformer, self).__init__()
         self.num_patches = int(image_size / patch_size)**2
-        self.input_embedding = nn.Linear((channels * patch_size**2), dim_model)
         self.num_layers = num_layers
         self.patch_size = patch_size
         self.dim_model = dim_model
         self.num_heads = num_heads
         self.dim_mlp = dim_mlp
         self.dropout = nn.Dropout(p=dropout)
+
+        # Input Embedding
+        self.extractor = extractor
+        self.input_embedding = nn.Linear((channels * patch_size**2), dim_model)
+        self.conv = nn.Conv2d(
+            in_channels=channels,
+            out_channels=self.dim_model,
+            kernel_size=self.patch_size,
+            stride=self.patch_size
+        )
 
         # Encoder Multi-Head Self-Attention
         self.encoder = VisionEncoder(
@@ -259,9 +271,14 @@ class VisionTransformer(nn.Module):
         """ For cls pooling """
         assert inputs.ndim != 4, f"Input shape should be [BS, CHANNEL, IMAGE_SIZE, IMAGE_SIZE], but got {inputs.shape}"
         x = inputs
-        x = self.input_embedding(
-            x.reshape(x.shape[0], self.num_patches, (self.patch_size**2 * x.shape[1]))
-        )
+        if self.extractor == 'cnn':
+            # self.conv(x).shape == [batch, dim, image_size/patch_size, image_size/patch_size]
+            x = self.conv(x).reshape(x.shape[0], self.dim_model, self.num_patches**2).transpose(-1, -2)
+        else:
+            # self.extractor == 'base':
+            x = self.input_embedding(
+                x.reshape(x.shape[0], self.num_patches, (self.patch_size**2 * x.shape[1]))
+            )
         cls_token = torch.zeros(x.shape[0], 1, x.shape[2])  # can change init method
         x = torch.cat([cls_token, x], dim=1)
 
@@ -275,5 +292,3 @@ class VisionTransformer(nn.Module):
         if self.mode == 'pretrain':
             x = self.fine_tune_classifier(self.pretrain_classifier(x))
         return x
-
-
