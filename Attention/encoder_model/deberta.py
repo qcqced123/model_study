@@ -7,18 +7,24 @@ from einops.layers.torch import Rearrange
 
 def disentangled_self_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tensor, dot_scale: Tensor) -> Tensor:
     """
-    Scaled Dot-Product Attention
+    Disentangled Self-Attention for DeBERTa
     Args:
-        q: query matrix, shape (batch_size, seq_len, dim_head)
-        k: key matrix, shape (batch_size, seq_len, dim_head)
-        v: value matrix, shape (batch_size, seq_len, dim_head)
-        qr: relative position query matrix, shape (batch_size, 2*max_relative_position, dim_head)
-        kr: relative position key matrix, shape (batch_size, 2*max_relative_position, dim_head)
+        q: content query matrix, shape (batch_size, seq_len, dim_head)
+        k: content key matrix, shape (batch_size, seq_len, dim_head)
+        v: content value matrix, shape (batch_size, seq_len, dim_head)
+        qr: position query matrix, shape (batch_size, 2*max_relative_position, dim_head), r means relative position
+        kr: position key matrix, shape (batch_size, 2*max_relative_position, dim_head), r means relative position
         dot_scale: scale factor for Q•K^T result, same as pure transformer
     Math:
         Attention Matrix = A_c2c + A_c2r + A_r2c
         A = softmax(Attention Matrix/sqrt(3*D_h)), SA(z) = Av
+    References:
+        https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/disentangled_attention.py
+        https://arxiv.org/pdf/1803.02155.pdf
+
     """
+    c2c = torch.matmul(q, k.transpose(-1, -2))  # A_c2c
+
     attention_dist = F.softmax(
         torch.matmul(q, k.transpose(-1, -2)) / dot_scale,
         dim=-1
@@ -30,13 +36,19 @@ def disentangled_self_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr:
 class RelativePositionEmbedding(nn.Module):
     """
     In this class, we implement Relative Position Embedding Layer for DeBERTa Encoder
+    Args:
 
+    References:
+        https://arxiv.org/abs/2006.03654
+        https://arxiv.org/abs/2111.09543
+        https://arxiv.org/abs/1901.02860
+        https://arxiv.org/abs/1906.08237
     """
 
 
 class AttentionHead(nn.Module):
     """
-    In this class, we implement workflow of single attention head
+    In this class, we implement workflow of single attention head for DeBERTa
     Args:
         dim_model: dimension of model's latent vector space, default 1024 from official paper
         dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
@@ -61,6 +73,8 @@ class AttentionHead(nn.Module):
             self.fc_q(x),
             self.fc_k(x),
             self.fc_v(x),
+            self.fc_qr(x),  # Relative Position Query matrix
+            self.fc_kr(x),  # Relative Position Key matrix
             self.dot_scale
         )
         return attention_matrix
@@ -79,6 +93,7 @@ class MultiHeadAttention(nn.Module):
     Reference:
         https://arxiv.org/abs/2010.11929
         https://arxiv.org/abs/1706.03762
+        https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/bert.py
     """
     def __init__(self, dim_model: int = 1024, num_heads: int = 8, dim_head: int = 64, dropout: float = 0.1) -> None:
         super(MultiHeadAttention, self).__init__()
@@ -128,6 +143,11 @@ class DeBERTaEncoderLayer(nn.Module):
     """
     Class for encoder_model module in ViT-Large
     In this class, we stack each encoder_model module (Multi-Head Attention, Residual-Connection, Layer Normalization, MLP)
+    Args:
+
+    References:
+        https://arxiv.org/abs/2006.03654
+        https://arxiv.org/abs/2111.09543
     """
     def __init__(self, dim_model: int = 1024, num_heads: int = 16, dim_mlp: int = 4096, dropout: float = 0.1) -> None:
         super(DeBERTaEncoderLayer, self).__init__()
@@ -163,6 +183,7 @@ class EMD(nn.Module):
 
     References:
         https://arxiv.org/abs/2006.03654
+        https://arxiv.org/abs/2111.09543
     """
     pass
 
