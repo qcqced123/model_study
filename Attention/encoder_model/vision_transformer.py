@@ -192,7 +192,7 @@ class VisionTransformer(nn.Module):
         num_classes: number of classes for classification task
         image_size: size of input image, default 512
         patch_size: size of patch, default 16 from official paper for ViT-Large
-        extractor: option for feature extractor, default 'base' which is crop & just flatten
+        extractor: option for feature extractor, default 'base' which is crop & just flatten with Linear Projection
                    if you want to use Convolution for feature extractor, set extractor='cnn' named hybrid ver in paper
         classifier: option for pooling method, default token meaning that do cls pooling
                     if you want to use mean pooling, set classifier='mean'
@@ -271,6 +271,7 @@ class VisionTransformer(nn.Module):
         """ For cls pooling """
         assert inputs.ndim != 4, f"Input shape should be [BS, CHANNEL, IMAGE_SIZE, IMAGE_SIZE], but got {inputs.shape}"
         x = inputs
+
         if self.extractor == 'cnn':
             # self.conv(x).shape == [batch, dim, image_size/patch_size, image_size/patch_size]
             x = self.conv(x).reshape(x.shape[0], self.dim_model, self.num_patches**2).transpose(-1, -2)

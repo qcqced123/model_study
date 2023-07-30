@@ -24,6 +24,10 @@ def disentangled_self_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr:
 
     """
     c2c = torch.matmul(q, k.transpose(-1, -2))  # A_c2c
+    tmp_c2p = torch.stack(
+        [torch.matmul(q[i, :], kr.transpose(-1, -2)) for i in range(q.shape[0])],
+        dim=0
+    )
 
     attention_dist = F.softmax(
         torch.matmul(q, k.transpose(-1, -2)) / dot_scale,
