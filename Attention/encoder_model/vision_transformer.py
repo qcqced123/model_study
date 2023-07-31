@@ -125,7 +125,8 @@ class VisionEncoderLayer(nn.Module):
             int(dim_model / num_heads),
             dropout,
         )
-        self.layer_norm = nn.LayerNorm(dim_model)
+        self.layer_norm1 = nn.LayerNorm(dim_model)
+        self.layer_norm2 = nn.LayerNorm(dim_model)
         self.dropout = nn.Dropout(p=dropout)
         self.mlp = MLP(
             dim_model,
@@ -134,10 +135,10 @@ class VisionEncoderLayer(nn.Module):
         )
 
     def forward(self, x: Tensor) -> Tensor:
-        ln_x = self.layer_norm(x)
+        ln_x = self.layer_norm1(x)
         residual_x = self.dropout(self.self_attention(ln_x)) + x
 
-        ln_x = self.layer_norm(residual_x)
+        ln_x = self.layer_norm2(residual_x)
         fx = self.mlp(ln_x) + residual_x  # from official paper & code by Google Research
         return fx
 
@@ -156,7 +157,6 @@ class VisionEncoder(nn.Module):
     def __init__(self, num_patches: int, N: int = 24, dim_model: int = 1024, num_heads: int = 16, dim_mlp: int = 4096, dropout: float = 0.1) -> None:
         super(VisionEncoder, self).__init__()
         self.num_patches = num_patches
-        self.scale = torch.sqrt(torch.Tensor(dim_model))  # scale factor for input embedding
         self.positional_embedding = nn.Embedding((self.num_patches + 1), dim_model)  # add 1 for cls token
         self.num_layers = N
         self.dim_model = dim_model
@@ -176,7 +176,7 @@ class VisionEncoder(nn.Module):
         )
         for layer in self.encoder_layers:
             x = layer(x)
-            layer_output.append(self.layer_norm(x))
+            layer_output.append(x)
         encoded_x = self.layer_norm(x)  # from official paper & code by Google Research
         layer_output = torch.stack(layer_output, dim=0).to(x.device)  # For Weighted Layer Pool: [N, BS, SEQ_LEN, DIM]
         return encoded_x, layer_output
