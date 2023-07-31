@@ -47,14 +47,13 @@ class AttentionHead(nn.Module):
         self.fc_k = nn.Linear(self.dim_model, self.dim_head)  # Linear Projection for Key Matrix
         self.fc_v = nn.Linear(self.dim_model, self.dim_head)  # Linear Projection for Value Matrix
 
-    def forward(self, x: Tensor, mask: Tensor) -> Tensor:
-        attention_matrix = scaled_dot_product_attention(
-            self.fc_q(x),
-            self.fc_k(x),
-            self.fc_v(x),
-            self.dot_scale,
-            mask=mask
-        )
+    def forward(self, x: Tensor, mask: Tensor, enc_output: Tensor = None) -> Tensor:
+        q, k, v = self.fc_q(x), self.fc_k(x), self.fc_v(x)  # x is previous layer's output
+        if enc_output is not None:
+            """ For encoder-decoder self-attention """
+            k = self.fc_k(enc_output)
+            v = self.fc_v(enc_output)
+        attention_matrix = scaled_dot_product_attention(q, k, v, self.dot_scale, mask=mask)
         return attention_matrix
 
 
@@ -82,11 +81,11 @@ class MultiHeadAttention(nn.Module):
         )
         self.fc_concat = nn.Linear(self.dim_model, self.dim_model)
 
-    def forward(self, x: Tensor, mask: Tensor) -> Tensor:
+    def forward(self, x: Tensor, mask: Tensor, enc_output: Tensor = None) -> Tensor:
         """ x is already passed nn.Layernorm """
         assert x.ndim == 3, f'Expected (batch, seq, hidden) got {x.shape}'
         attention_output = self.fc_concat(
-            torch.cat([head(x, mask) for head in self.attention_heads], dim=-1)
+            torch.cat([head(x, mask, enc_output) for head in self.attention_heads], dim=-1)
         )
         return attention_output
 
@@ -121,8 +120,8 @@ class EncoderLayer(nn.Module):
     """
     Class for encoder model module in Transformer
     In this class, we stack each encoder_model module (Multi-Head Attention, Residual-Connection, LayerNorm, FFN)
-    We apply post-layer Residual-Connection, which is different from original paper
-    In common sense, post-layer Residual-Connection are more effective & stable than pre-layer Residual-Connection
+    We apply pre-layernorm, which is different from original paper
+    In common sense, pre-layernorm are more effective & stable than post-layernorm
     """
     def __init__(self, dim_model: int = 512, num_heads: int = 8, dim_ffn: int = 2048, dropout: float = 0.1) -> None:
         super(EncoderLayer, self).__init__()
@@ -132,7 +131,8 @@ class EncoderLayer(nn.Module):
             int(dim_model / num_heads),
             dropout,
         )
-        self.layer_norm = nn.LayerNorm(dim_model)
+        self.layer_norm1 = nn.LayerNorm(dim_model)
+        self.layer_norm2 = nn.LayerNorm(dim_model)
         self.dropout = nn.Dropout(p=dropout)
         self.ffn = FeedForward(
             dim_model,
@@ -141,10 +141,10 @@ class EncoderLayer(nn.Module):
         )
 
     def forward(self, x: Tensor, mask: Tensor) -> Tensor:
-        ln_x = self.layer_norm(x)
+        ln_x = self.layer_norm1(x)
         residual_x = self.dropout(self.self_attention(ln_x, mask)) + x
 
-        ln_x = self.layer_norm(residual_x)
+        ln_x = self.layer_norm2(residual_x)
         fx = self.ffn(ln_x) + residual_x
         return fx
 
@@ -157,6 +157,7 @@ class Encoder(nn.Module):
     In official paper, they use positional encoding, which is base on sinusoidal function(fixed, not learnable)
     But we use "positional embedding" which is learnable from training
     Args:
+        mask: mask for Encoder padded token for speeding up to calculate attention score
         max_seq: maximum sequence length, default 512 from official paper
         N: number of EncoderLayer, default 6 for base model
     """
@@ -185,7 +186,7 @@ class Encoder(nn.Module):
         )
         for layer in self.encoder_layers:
             x = layer(x, self.mask)
-            layer_output.append(self.layer_norm(x))
+            layer_output.append(x)
         encoded_x = self.layer_norm(x)  # from official paper & code by Google Research
         layer_output = torch.stack(layer_output, dim=0).to(x.device)  # For Weighted Layer Pool: [N, BS, SEQ_LEN, DIM]
         return encoded_x, layer_output
@@ -195,9 +196,7 @@ class DecoderLayer(nn.Module):
     """
     Class for decoder model module in Transformer
     In this class, we stack each decoder_model module (Masked Multi-Head Attention, Residual-Connection, LayerNorm, FFN)
-    We apply post-layer Residual-Connection, which is different from original paper
-    Args:
-        Encoder's Output을 매 레이어 마다 받아야 하나..?
+    We apply pre-layernorm, which is different from original paper
     References:
         https://arxiv.org/abs/1706.03762
     """
@@ -215,7 +214,9 @@ class DecoderLayer(nn.Module):
             int(dim_model / num_heads),
             dropout,
         )
-        self.layer_norm = nn.LayerNorm(dim_model)
+        self.layer_norm1 = nn.LayerNorm(dim_model)
+        self.layer_norm2 = nn.LayerNorm(dim_model)
+        self.layer_norm3 = nn.LayerNorm(dim_model)
         self.dropout = nn.Dropout(p=dropout)
         self.ffn = FeedForward(
             dim_model,
@@ -223,17 +224,72 @@ class DecoderLayer(nn.Module):
             dropout,
         )
 
-    def forward(self, x: Tensor, mask: Tensor) -> Tensor:
-        ln_x = self.layer_norm(x)
-        residual_x = self.dropout(self.self_attention(ln_x, mask)) + x
+    def forward(self, x: Tensor, mask: Tensor, enc_output: Tensor) -> Tensor:
+        ln_x = self.layer_norm1(x)
+        residual_x = self.dropout(self.masked_attention(ln_x, mask)) + x
 
-        ln_x = self.layer_norm(residual_x)
+        ln_x = self.layer_norm2(residual_x)
+        residual_x = self.dropout(self.enc_dec_attention(ln_x, mask, enc_output)) + x  # for enc_dec self-attention
+
+        ln_x = self.layer_norm3(residual_x)
         fx = self.ffn(ln_x) + residual_x
         return fx
 
 
 class Decoder(nn.Module):
-    pass
+    """
+    In this class, decode encoded embedding from encoder by outputs (target language, Decoder's Input Sequence)
+    First, we define "positional embedding" for Decoder's Input Sequence,
+    and then add them to Decoder's Input Sequence for making "decoder word embedding"
+    Second, forward "decoder word embedding" to N DecoderLayer and then pass to linear & softmax for OutPut Probability
+    Args:
+        mask: mask for Masked Multi-Head Attention, Encoder padded token for enc_dec self-attention
+        vocab_size: size of vocabulary for output probability
+        max_seq: maximum sequence length, default 512 from official paper
+        N: number of EncoderLayer, default 6 for base model
+    References:
+        https://arxiv.org/abs/1706.03762
+    """
+    def __init__(
+        self,
+        mask: Tensor,
+        vocab_size: int,
+        max_seq: int = 512,
+        N: int = 6,
+        dim_model: int = 512,
+        num_heads: int = 8,
+        dim_ffn: int = 2048,
+        dropout: float = 0.1
+    ) -> None:
+        super(Decoder, self).__init__()
+        self.mask = mask  # for encoder padding mask
+        self.max_seq = max_seq
+        self.scale = torch.sqrt(torch.Tensor(dim_model))  # scale factor for input embedding from official paper
+        self.positional_embedding = nn.Embedding(max_seq, dim_model)  # add 1 for cls token
+        self.num_layers = N
+        self.dim_model = dim_model
+        self.num_heads = num_heads
+        self.dim_ffn = dim_ffn
+        self.dropout = nn.Dropout(p=dropout)
+        self.decoder_layers = nn.ModuleList(
+            [DecoderLayer(dim_model, num_heads, dim_ffn, dropout) for _ in range(self.num_layers)]
+        )
+        self.layer_norm = nn.LayerNorm(dim_model)
+        self.fc_out = nn.Linear(dim_model, vocab_size)  # In Pytorch, nn.CrossEntropyLoss already has softmax function
+
+    def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor]:
+        """ inputs: embedding from input sequence, shape => [BS, SEQ_LEN, DIM_MODEL] """
+        layer_output = []
+        pos_x = torch.arange(self.max_seq).repeat(inputs.shape[0]).to(inputs)
+        x = self.dropout(
+            self.scale * inputs + self.positional_embedding(pos_x)
+        )
+        for layer in self.decoder_layers:
+            x = layer(x, self.mask)  # need to add encoder mask
+            layer_output.append(x)
+        decoded_x = self.fc_out(self.layer_norm(x))  # Because of pre-layernorm
+        layer_output = torch.stack(layer_output, dim=0).to(x.device)  # For Weighted Layer Pool: [N, BS, SEQ_LEN, DIM]
+        return decoded_x, layer_output
 
 
 class Transformer(nn.Module):
