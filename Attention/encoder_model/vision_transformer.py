@@ -138,7 +138,7 @@ class VisionEncoderLayer(nn.Module):
         residual_x = self.dropout(self.self_attention(ln_x)) + x
 
         ln_x = self.layer_norm(residual_x)
-        fx = self.layer_norm(self.mlp(ln_x) + residual_x)  # from official paper & code by Google Research
+        fx = self.mlp(ln_x) + residual_x  # from official paper & code by Google Research
         return fx
 
 
@@ -166,6 +166,7 @@ class VisionEncoder(nn.Module):
         self.encoder_layers = nn.ModuleList(
             [VisionEncoderLayer(dim_model, num_heads, dim_mlp, dropout) for _ in range(self.num_layers)]
         )
+        self.layer_norm = nn.LayerNorm(dim_model)
 
     def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor]:
         layer_output = []
@@ -175,9 +176,10 @@ class VisionEncoder(nn.Module):
         )
         for layer in self.encoder_layers:
             x = layer(x)
-            layer_output.append(x)
+            layer_output.append(self.layer_norm(x))
+        encoded_x = self.layer_norm(x)  # from official paper & code by Google Research
         layer_output = torch.stack(layer_output, dim=0).to(x.device)  # For Weighted Layer Pool: [N, BS, SEQ_LEN, DIM]
-        return x, layer_output
+        return encoded_x, layer_output
 
 
 class VisionTransformer(nn.Module):
