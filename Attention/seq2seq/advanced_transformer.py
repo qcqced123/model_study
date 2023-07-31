@@ -13,7 +13,10 @@ def scaled_dot_product_attention(q: Tensor, k: Tensor, v: Tensor, dot_scale: Ten
         k: key matrix, shape (batch_size, seq_len, dim_head)
         v: value matrix, shape (batch_size, seq_len, dim_head)
         dot_scale: scale factor for Q•K^T result
-        mask: mask for Encoder padded token & Decoder Masked-Self-Attention
+        mask: there are three types of mask, mask matrix shape must be same as single attention head
+              1) Encoder padded token
+              2) Decoder Masked-Self-Attention
+              3) Decoder's Encoder-Decoder Attention
     Math:
         A = softmax(q•k^t/sqrt(D_h)), SA(z) = Av
     """
@@ -157,13 +160,11 @@ class Encoder(nn.Module):
     In official paper, they use positional encoding, which is base on sinusoidal function(fixed, not learnable)
     But we use "positional embedding" which is learnable from training
     Args:
-        mask: mask for Encoder padded token for speeding up to calculate attention score
         max_seq: maximum sequence length, default 512 from official paper
         N: number of EncoderLayer, default 6 for base model
     """
-    def __init__(self, mask: Tensor, max_seq: 512, N: int = 6, dim_model: int = 512, num_heads: int = 8, dim_ffn: int = 2048, dropout: float = 0.1) -> None:
+    def __init__(self, max_seq: 512, N: int = 6, dim_model: int = 512, num_heads: int = 8, dim_ffn: int = 2048, dropout: float = 0.1) -> None:
         super(Encoder, self).__init__()
-        self.mask = mask  # for encoder padding mask
         self.max_seq = max_seq
         self.scale = torch.sqrt(torch.Tensor(dim_model))  # scale factor for input embedding from official paper
         self.positional_embedding = nn.Embedding(max_seq, dim_model)  # add 1 for cls token
@@ -177,15 +178,18 @@ class Encoder(nn.Module):
         )
         self.layer_norm = nn.LayerNorm(dim_model)
 
-    def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor]:
-        """ inputs: embedding from input sequence, shape => [BS, SEQ_LEN, DIM_MODEL] """
+    def forward(self, inputs: Tensor, mask: Tensor) -> tuple[Tensor, Tensor]:
+        """
+        inputs: embedding from input sequence, shape => [BS, SEQ_LEN, DIM_MODEL]
+        mask: mask for Encoder padded token for speeding up to calculate attention score
+        """
         layer_output = []
         pos_x = torch.arange(self.max_seq).repeat(inputs.shape[0]).to(inputs)
         x = self.dropout(
             self.scale * inputs + self.positional_embedding(pos_x)
         )
         for layer in self.encoder_layers:
-            x = layer(x, self.mask)
+            x = layer(x, mask)
             layer_output.append(x)
         encoded_x = self.layer_norm(x)  # from official paper & code by Google Research
         layer_output = torch.stack(layer_output, dim=0).to(x.device)  # For Weighted Layer Pool: [N, BS, SEQ_LEN, DIM]
@@ -217,19 +221,20 @@ class DecoderLayer(nn.Module):
         self.layer_norm1 = nn.LayerNorm(dim_model)
         self.layer_norm2 = nn.LayerNorm(dim_model)
         self.layer_norm3 = nn.LayerNorm(dim_model)
-        self.dropout = nn.Dropout(p=dropout)
+        self.dropout = nn.Dropout(p=dropout)  # dropout is not learnable layer
+
         self.ffn = FeedForward(
             dim_model,
             dim_ffn,
             dropout,
         )
 
-    def forward(self, x: Tensor, mask: Tensor, enc_output: Tensor) -> Tensor:
+    def forward(self, x: Tensor, dec_mask: Tensor, enc_dec_mask: Tensor, enc_output: Tensor) -> Tensor:
         ln_x = self.layer_norm1(x)
-        residual_x = self.dropout(self.masked_attention(ln_x, mask)) + x
+        residual_x = self.dropout(self.masked_attention(ln_x, dec_mask)) + x
 
         ln_x = self.layer_norm2(residual_x)
-        residual_x = self.dropout(self.enc_dec_attention(ln_x, mask, enc_output)) + x  # for enc_dec self-attention
+        residual_x = self.dropout(self.enc_dec_attention(ln_x, enc_dec_mask, enc_output)) + x  # for enc_dec self-attention
 
         ln_x = self.layer_norm3(residual_x)
         fx = self.ffn(ln_x) + residual_x
@@ -243,7 +248,6 @@ class Decoder(nn.Module):
     and then add them to Decoder's Input Sequence for making "decoder word embedding"
     Second, forward "decoder word embedding" to N DecoderLayer and then pass to linear & softmax for OutPut Probability
     Args:
-        mask: mask for Masked Multi-Head Attention, Encoder padded token for enc_dec self-attention
         vocab_size: size of vocabulary for output probability
         max_seq: maximum sequence length, default 512 from official paper
         N: number of EncoderLayer, default 6 for base model
@@ -252,7 +256,6 @@ class Decoder(nn.Module):
     """
     def __init__(
         self,
-        mask: Tensor,
         vocab_size: int,
         max_seq: int = 512,
         N: int = 6,
@@ -262,7 +265,6 @@ class Decoder(nn.Module):
         dropout: float = 0.1
     ) -> None:
         super(Decoder, self).__init__()
-        self.mask = mask  # for encoder padding mask
         self.max_seq = max_seq
         self.scale = torch.sqrt(torch.Tensor(dim_model))  # scale factor for input embedding from official paper
         self.positional_embedding = nn.Embedding(max_seq, dim_model)  # add 1 for cls token
@@ -277,15 +279,19 @@ class Decoder(nn.Module):
         self.layer_norm = nn.LayerNorm(dim_model)
         self.fc_out = nn.Linear(dim_model, vocab_size)  # In Pytorch, nn.CrossEntropyLoss already has softmax function
 
-    def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor]:
-        """ inputs: embedding from input sequence, shape => [BS, SEQ_LEN, DIM_MODEL] """
+    def forward(self, inputs: Tensor, dec_mask: Tensor, enc_dec_mask: Tensor, enc_output: Tensor) -> tuple[Tensor, Tensor]:
+        """
+        inputs: embedding from input sequence, shape => [BS, SEQ_LEN, DIM_MODEL]
+        dec_mask: mask for Decoder padded token for Language Modeling
+        enc_dec_mask: mask for Encoder-Decoder Self-Attention, from encoder padded token
+        """
         layer_output = []
         pos_x = torch.arange(self.max_seq).repeat(inputs.shape[0]).to(inputs)
         x = self.dropout(
             self.scale * inputs + self.positional_embedding(pos_x)
         )
         for layer in self.decoder_layers:
-            x = layer(x, self.mask)  # need to add encoder mask
+            x = layer(x, dec_mask, enc_dec_mask, enc_output)
             layer_output.append(x)
         decoded_x = self.fc_out(self.layer_norm(x))  # Because of pre-layernorm
         layer_output = torch.stack(layer_output, dim=0).to(x.device)  # For Weighted Layer Pool: [N, BS, SEQ_LEN, DIM]
@@ -293,5 +299,65 @@ class Decoder(nn.Module):
 
 
 class Transformer(nn.Module):
-    pass
+    """
+    Main class for Pure Transformer, Pytorch implementation
+    There are two Masking Method for padding token
+        1) Row & Column masking
+        2) Column masking only at forward time, Row masking at calculating loss time
+    second method is more efficient than first method, first method is complex & difficult to implement
+    Args:
+        enc_vocab_size: size of vocabulary for Encoder Input Sequence
+        dec_vocab_size: size of vocabulary for Decoder Input Sequence
+        max_seq: maximum sequence length, default 512 from official paper
+        enc_N: number of EncoderLayer, default 6 for base model
+        dec_N: number of DecoderLayer, default 6 for base model
+    Reference:
+        https://arxiv.org/abs/1706.03762
+    """
+    def __init__(
+        self,
+        enc_vocab_size: int,
+        dec_vocab_size: int,
+        max_seq: int = 512,
+        enc_N: int = 6,
+        dec_N: int = 6,
+        dim_model: int = 512,
+        num_heads: int = 8,
+        dim_ffn: int = 2048,
+        dropout: float = 0.1
+    ) -> None:
+        super(Transformer, self).__init__()
+        self.enc_input_embedding = nn.Embedding(enc_vocab_size, dim_model)
+        self.dec_input_embedding = nn.Embedding(dec_vocab_size, dim_model)
+        self.encoder = Encoder(max_seq, enc_N, dim_model, num_heads, dim_ffn, dropout)
+        self.decoder = Decoder(dec_vocab_size, max_seq, dec_N, dim_model, num_heads, dim_ffn, dropout)
 
+    @staticmethod
+    def enc_masking(x: Tensor, enc_pad_index: int) -> Tensor:
+        """ make masking matrix for Encoder Padding Token """
+        enc_mask = (x != enc_pad_index).int().repeat(1, x.shape[-1]).view(x.shape[0], x.shape[-1], x.shape[-1])
+        return enc_mask
+
+    @staticmethod
+    def dec_masking(x: Tensor, dec_pad_index: int) -> Tensor:
+        """ make masking matrix for Decoder Masked Multi-Head Self-Attention """
+        pad_mask = (x != dec_pad_index).int().repeat(1, x.shape[-1]).view(x.shape[0], x.shape[-1], x.shape[-1])
+        lm_mask = torch.tril(torch.ones(x.shape[0], x.shape[-1], x.shape[-1]))
+        dec_mask = pad_mask * lm_mask
+        return dec_mask
+
+    def enc_dec_masking(self, enc_mask: Tensor, dec_mask: Tensor) -> Tensor:
+        """ make masking matrix for Encoder-Decoder Multi-Head Self-Attention in Decoder """
+        enc_dec_mask = enc_mask | dec_mask
+        return
+
+    def forward(self, enc_inputs: Tensor, dec_inputs: Tensor, enc_pad_index: int, dec_pad_index: int) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        enc_mask = self.enc_masking(enc_inputs)  # enc_x.shape[1] == encoder input sequence length
+        dec_mask = self.dec_masking(dec_inputs)  # dec_x.shape[1] == decoder input sequence length
+        enc_dec_mask = self.enc_dec_masking(enc_mask, dec_mask)
+
+        enc_x, dec_x = self.enc_input_embedding(enc_inputs), self.dec_input_embedding(dec_inputs)
+
+        enc_output, enc_layer_output = self.encoder(enc_x, enc_mask)
+        dec_output, dec_layer_output = self.decoder(dec_x, dec_mask, enc_dec_mask, enc_output)
+        return enc_output, dec_output, enc_layer_output, dec_layer_output
