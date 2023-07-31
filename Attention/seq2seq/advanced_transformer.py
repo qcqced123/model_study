@@ -346,15 +346,18 @@ class Transformer(nn.Module):
         dec_mask = pad_mask * lm_mask
         return dec_mask
 
-    def enc_dec_masking(self, enc_mask: Tensor, dec_mask: Tensor) -> Tensor:
+    @staticmethod
+    def enc_dec_masking(enc_x: Tensor, dec_x: Tensor, enc_pad_index: int) -> Tensor:
         """ make masking matrix for Encoder-Decoder Multi-Head Self-Attention in Decoder """
-        enc_dec_mask = enc_mask | dec_mask
-        return
+        enc_dec_mask = (enc_x != enc_pad_index).int().repeat(1, dec_x.shape[-1]).view(
+            enc_x.shape[0], dec_x.shape[-1], enc_x.shape[-1]
+        )
+        return enc_dec_mask
 
     def forward(self, enc_inputs: Tensor, dec_inputs: Tensor, enc_pad_index: int, dec_pad_index: int) -> tuple[Tensor, Tensor, Tensor, Tensor]:
-        enc_mask = self.enc_masking(enc_inputs)  # enc_x.shape[1] == encoder input sequence length
-        dec_mask = self.dec_masking(dec_inputs)  # dec_x.shape[1] == decoder input sequence length
-        enc_dec_mask = self.enc_dec_masking(enc_mask, dec_mask)
+        enc_mask = self.enc_masking(enc_inputs, enc_pad_index)  # enc_x.shape[1] == encoder input sequence length
+        dec_mask = self.dec_masking(dec_inputs, dec_pad_index)  # dec_x.shape[1] == decoder input sequence length
+        enc_dec_mask = self.enc_dec_masking(enc_inputs, dec_inputs, enc_pad_index)
 
         enc_x, dec_x = self.enc_input_embedding(enc_inputs), self.dec_input_embedding(dec_inputs)
 
