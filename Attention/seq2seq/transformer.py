@@ -20,10 +20,10 @@ def scaled_dot_product_attention(q: Tensor, k: Tensor, v: Tensor, dot_scale: Ten
     Math:
         A = softmax(q•k^t/sqrt(D_h)), SA(z) = Av
     """
-    attention_dist = torch.matmul(q, k.transpose(-1, -2)) / dot_scale
+    attention_matrix = torch.matmul(q, k.transpose(-1, -2)) / dot_scale
     if mask is not None:
-        attention_dist = attention_dist.masked_fill(mask == 0, float('-inf'))
-    attention_dist = F.softmax(attention_dist, dim=-1)
+        attention_matrix = attention_matrix.masked_fill(mask == 0, float('-inf'))
+    attention_dist = F.softmax(attention_matrix, dim=-1)
     attention_matrix = torch.matmul(attention_dist, v)
     return attention_matrix
 

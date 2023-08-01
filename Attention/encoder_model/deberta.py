@@ -5,7 +5,21 @@ from torch import Tensor
 from einops.layers.torch import Rearrange
 
 
-def disentangled_self_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tensor, dot_scale: Tensor, mask: Tensor = None) -> Tensor:
+def build_relative_position(x_size: int) -> Tensor:
+    """
+    Build Relative Position Matrix for Disentangled Self-Attention in DeBERTa
+    Args:
+        x_size: sequence length of query matrix
+    Reference:
+        https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/da_utils.py#L29
+        https://arxiv.org/abs/2006.03654
+    """
+    x_index, y_index = torch.arange(x_size), torch.arange(x_size)
+    rel_pos = x_index.view(-1, 1) - y_index.view(1, -1)
+    return rel_pos
+
+
+def disentangled_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tensor, mask: Tensor = None) -> Tensor:
     """
     Disentangled Self-Attention for DeBERTa
     Args:
@@ -14,43 +28,47 @@ def disentangled_self_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr:
         v: content value matrix, shape (batch_size, seq_len, dim_head)
         qr: position query matrix, shape (batch_size, 2*max_relative_position, dim_head), r means relative position
         kr: position key matrix, shape (batch_size, 2*max_relative_position, dim_head), r means relative position
-        dot_scale: scale factor for Q•K^T result, sqrt(3*dim_head) from official paper by mircosoft
         mask: mask for attention matrix, shape (batch_size, seq_len, seq_len), apply before softmax layer
     Math:
-        Attention Matrix = A_c2c + A_c2r + A_r2c
+        c2c = torch.matmul(q, k.transpose(-1, -2))  # A_c2c
+        c2p = torch.gather(torch.matmul(q, kr.transpose(-1, -2)), dim=-1, index=c2p_pos)
+        p2c = torch.gather(torch.matmul(qr, k.transpose(-1, -2)), dim=-2, index=c2p_pos)
+        Attention Matrix = c2c + c2p + p2c
         A = softmax(Attention Matrix/sqrt(3*D_h)), SA(z) = Av
+    Notes:
+        dot_scale(range 1 ~ 3): scale factor for Q•K^T result, sqrt(3*dim_head) from official paper by microsoft,
+        3 means that use full attention matrix(c2c, c2p, p2c), same as number of using what kind of matrix
+        default 1, c2c is always used and c2p & p2c is optional
     References:
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/disentangled_attention.py
         https://arxiv.org/pdf/1803.02155.pdf
-
-    """
-    c2c = torch.matmul(q, k.transpose(-1, -2))  # A_c2c
-    tmp_c2p = torch.stack(
-        [torch.matmul(q[i, :], kr.transpose(-1, -2)) for i in range(q.shape[0])],
-        dim=0
-    )
-    attention_dist =
-    if mask is not None:
-        attention_dist = attention_dist.masked_fill(mask == 0, float('-inf'))
-    attention_dist = F.softmax(
-        torch.matmul(q, k.transpose(-1, -2)) / dot_scale,
-        dim=-1
-    )
-    attention_matrix = torch.matmul(attention_dist, v)
-    return attention_matrix
-
-
-class RelativePositionEmbedding(nn.Module):
-    """
-    In this class, we implement Relative Position Embedding Layer for DeBERTa Encoder
-    Args:
-
-    References:
         https://arxiv.org/abs/2006.03654
         https://arxiv.org/abs/2111.09543
         https://arxiv.org/abs/1901.02860
         https://arxiv.org/abs/1906.08237
     """
+    scale_factor = 1
+    c2c = torch.matmul(q, k.transpose(-1, -2))  # A_c2c
+
+    c2p_att = torch.matmul(q, kr.transpose(-1, -2))
+    c2p_pos = build_relative_position(q.shape[1]) + kr.shape[1] / 2
+    c2p_pos = torch.clamp(c2p_pos, 0, kr.shape[1] - 1).repeat(q.shape[0], 1, 1)
+    c2p = torch.gather(c2p_att, dim=-1, index=c2p_pos)
+    if c2p is not None:
+        scale_factor += 1
+
+    p2c_att = torch.matmul(qr, k.transpose(-1, -2))
+    p2c = torch.gather(p2c_att, dim=-2, index=c2p_pos)  # same as torch.gather(k•qr^t, dim=-1, index=c2p_pos)
+    if p2c is not None:
+        scale_factor += 1
+
+    dot_scale = torch.sqrt(torch.tensor(scale_factor * q.shape[2]))  # from official paper by microsoft
+    attention_matrix = (c2c + c2p + p2c) / dot_scale  # Attention Matrix = A_c2c + A_c2r + A_r2c
+    if mask is not None:
+        attention_matrix = attention_matrix.masked_fill(mask == 0, float('-inf'))  # Padding Token Masking
+    attention_dist = F.softmax(attention_matrix, dim=-1)
+    attention_matrix = torch.matmul(attention_dist, v)
+    return attention_matrix
 
 
 class AttentionHead(nn.Module):
@@ -68,7 +86,6 @@ class AttentionHead(nn.Module):
         self.dim_model = dim_model
         self.dim_head = dim_head
         self.dropout = dropout
-        self.dot_scale = torch.sqrt(torch.tensor(3 * self.dim_head))  # from official paper by microsoft
         self.fc_q = nn.Linear(self.dim_model, self.dim_head)
         self.fc_k = nn.Linear(self.dim_model, self.dim_head)
         self.fc_v = nn.Linear(self.dim_model, self.dim_head)
@@ -76,13 +93,12 @@ class AttentionHead(nn.Module):
         self.fc_kr = nn.Linear(self.dim_model, self.dim_head)  # projector for Relative Position Key matrix
 
     def forward(self, x: Tensor) -> Tensor:
-        attention_matrix = disentangled_self_attention(
+        attention_matrix = disentangled_attention(
             self.fc_q(x),
             self.fc_k(x),
             self.fc_v(x),
             self.fc_qr(x),  # Relative Position Query matrix
             self.fc_kr(x),  # Relative Position Key matrix
-            self.dot_scale
         )
         return attention_matrix
 
