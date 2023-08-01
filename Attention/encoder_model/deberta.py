@@ -5,7 +5,7 @@ from torch import Tensor
 from einops.layers.torch import Rearrange
 
 
-def disentangled_self_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tensor, dot_scale: Tensor) -> Tensor:
+def disentangled_self_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tensor, dot_scale: Tensor, mask: Tensor = None) -> Tensor:
     """
     Disentangled Self-Attention for DeBERTa
     Args:
@@ -14,7 +14,8 @@ def disentangled_self_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr:
         v: content value matrix, shape (batch_size, seq_len, dim_head)
         qr: position query matrix, shape (batch_size, 2*max_relative_position, dim_head), r means relative position
         kr: position key matrix, shape (batch_size, 2*max_relative_position, dim_head), r means relative position
-        dot_scale: scale factor for Q•K^T result, same as pure transformer
+        dot_scale: scale factor for Q•K^T result, sqrt(3*dim_head) from official paper by mircosoft
+        mask: mask for attention matrix, shape (batch_size, seq_len, seq_len), apply before softmax layer
     Math:
         Attention Matrix = A_c2c + A_c2r + A_r2c
         A = softmax(Attention Matrix/sqrt(3*D_h)), SA(z) = Av
@@ -28,7 +29,9 @@ def disentangled_self_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr:
         [torch.matmul(q[i, :], kr.transpose(-1, -2)) for i in range(q.shape[0])],
         dim=0
     )
-
+    attention_dist =
+    if mask is not None:
+        attention_dist = attention_dist.masked_fill(mask == 0, float('-inf'))
     attention_dist = F.softmax(
         torch.matmul(q, k.transpose(-1, -2)) / dot_scale,
         dim=-1
