@@ -73,52 +73,52 @@ def disentangled_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tens
 
 class AttentionHead(nn.Module):
     """
-    In this class, we implement workflow of single attention head for DeBERTa
+    In this class, we implement workflow of single attention head in DeBERTa-Large
     Args:
         dim_model: dimension of model's latent vector space, default 1024 from official paper
         dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
         dropout: dropout rate, default 0.1
     Math:
-        [q,k,v]=z•U_qkv, A = softmax(q•k^t/sqrt(D_h)), SA(z) = Av
+        Attention Matrix = c2c + c2p + p2c
+        A = softmax(Attention Matrix/sqrt(3*D_h)), SA(z) = Av
+    Reference:
+        https://arxiv.org/abs/1706.03762
+        https://arxiv.org/abs/2006.03654
     """
-    def __init__(self, dim_model: int =  1024, dim_head: int = 64, dropout: float = 0.1) -> None:
+    def __init__(self, dim_model: int = 1024, dim_head: int = 64, dropout: float = 0.1) -> None:
         super(AttentionHead, self).__init__()
         self.dim_model = dim_model
-        self.dim_head = dim_head
+        self.dim_head = dim_head  # 1024 / 16 = 64
         self.dropout = dropout
+        self.dot_scale = torch.sqrt(torch.tensor(self.dim_head))
         self.fc_q = nn.Linear(self.dim_model, self.dim_head)
         self.fc_k = nn.Linear(self.dim_model, self.dim_head)
         self.fc_v = nn.Linear(self.dim_model, self.dim_head)
         self.fc_qr = nn.Linear(self.dim_model, self.dim_head)  # projector for Relative Position Query matrix
         self.fc_kr = nn.Linear(self.dim_model, self.dim_head)  # projector for Relative Position Key matrix
 
-    def forward(self, x: Tensor) -> Tensor:
-        attention_matrix = disentangled_attention(
-            self.fc_q(x),
-            self.fc_k(x),
-            self.fc_v(x),
-            self.fc_qr(x),  # Relative Position Query matrix
-            self.fc_kr(x),  # Relative Position Key matrix
-        )
+    def forward(self, x: Tensor, pos_x: Tensor, mask: Tensor) -> Tensor:
+        q, k, v, qr, kr = self.fc_q(x), self.fc_k(x), self.fc_v(x), self.fc_qr(pos_x), self.fc_kr(pos_x)
+        attention_matrix = disentangled_attention(q, k, v, qr, kr, mask)
         return attention_matrix
 
 
 class MultiHeadAttention(nn.Module):
     """
-    In this class, we implement workflow of Multi-Head Self-Attention for DeBERTa
+    In this class, we implement workflow of Multi-Head Self-Attention for DeBERTa-Large
     Args:
         dim_model: dimension of model's latent vector space, default 1024 from official paper
-        num_heads: number of heads in MHSA, default 16 from official paper for ViT-Large
+        num_heads: number of heads in MHSA, default 16 from official paper for Transformer
         dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
         dropout: dropout rate, default 0.1
     Math:
-        MSA(z) = [SA1(z); SA2(z); · · · ; SAk(z)]•Umsa
+        Attention Matrix = c2c + c2p + p2c
+        A = softmax(Attention Matrix/sqrt(3*D_h)), SA(z) = Av
     Reference:
-        https://arxiv.org/abs/2010.11929
         https://arxiv.org/abs/1706.03762
-        https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/bert.py
+        https://arxiv.org/abs/2006.03654
     """
-    def __init__(self, dim_model: int = 1024, num_heads: int = 8, dim_head: int = 64, dropout: float = 0.1) -> None:
+    def __init__(self, dim_model: int = 1024, num_heads: int = 16, dim_head: int = 64, dropout: float = 0.1) -> None:
         super(MultiHeadAttention, self).__init__()
         self.dim_model = dim_model
         self.num_heads = num_heads
@@ -129,50 +129,45 @@ class MultiHeadAttention(nn.Module):
         )
         self.fc_concat = nn.Linear(self.dim_model, self.dim_model)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, pos_x: Tensor, mask: Tensor) -> Tensor:
         """ x is already passed nn.Layernorm """
         assert x.ndim == 3, f'Expected (batch, seq, hidden) got {x.shape}'
         attention_output = self.fc_concat(
-            torch.cat([head(x) for head in self.attention_heads], dim=-1)  # concat all dim_head = num_heads * dim_head
+            torch.cat([head(x, pos_x, mask) for head in self.attention_heads], dim=-1)
         )
         return attention_output
 
 
 class FeedForward(nn.Module):
     """
-    Class for FeedForward module in ViT-Large
+    Class for Feed-Forward Network module in Transformer Encoder Block, this module for DeBERTa-Large
     Args:
-        dim_model: dimension of model's latent vector space, default 512
-        dim_mlp: dimension of FFN's hidden layer, default 2048 from official paper
+        dim_model: dimension of model's latent vector space, default 1024
+        dim_ffn: dimension of FFN's hidden layer, default 4096 from official paper
         dropout: dropout rate, default 0.1
     Math:
-        MLP(x) = MLP(LN(x))+x
+        FeedForward(x) = FeedForward(LN(x))+x
     """
-    def __init__(self, dim_model: int = 1024, dim_mlp: int = 4096, dropout: float = 0.1) -> None:
+    def __init__(self, dim_model: int = 1024, dim_ffn: int = 4096, dropout: float = 0.1) -> None:
         super(FeedForward, self).__init__()
-        self.mlp = nn.Sequential(
-            nn.Linear(dim_model, dim_mlp),
+        self.ffn = nn.Sequential(
+            nn.Linear(dim_model, dim_ffn),
             nn.GELU(),
             nn.Dropout(p=dropout),
-            nn.Linear(dim_mlp, dim_model),
+            nn.Linear(dim_ffn, dim_model),
             nn.Dropout(p=dropout),
         )
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.mlp(x)
+        return self.ffn(x)
 
 
 class DeBERTaEncoderLayer(nn.Module):
     """
-    Class for encoder_model module in ViT-Large
-    In this class, we stack each encoder_model module (Multi-Head Attention, Residual-Connection, Layer Normalization, MLP)
-    Args:
-
-    References:
-        https://arxiv.org/abs/2006.03654
-        https://arxiv.org/abs/2111.09543
+    Class for encoder model module in DeBERTa-Large
+    In this class, we stack each encoder_model module (Multi-Head Attention, Residual-Connection, LayerNorm, FFN)
     """
-    def __init__(self, dim_model: int = 1024, num_heads: int = 16, dim_mlp: int = 4096, dropout: float = 0.1) -> None:
+    def __init__(self, dim_model: int = 1024, num_heads: int = 16, dim_ffn: int = 4096, dropout: float = 0.1) -> None:
         super(DeBERTaEncoderLayer, self).__init__()
         self.self_attention = MultiHeadAttention(
             dim_model,
@@ -180,33 +175,85 @@ class DeBERTaEncoderLayer(nn.Module):
             int(dim_model / num_heads),
             dropout,
         )
-        self.layer_norm = nn.LayerNorm(dim_model)
+        self.layer_norm1 = nn.LayerNorm(dim_model)
+        self.layer_norm2 = nn.LayerNorm(dim_model)
         self.dropout = nn.Dropout(p=dropout)
-        self.mlp = FeedForward(
+        self.ffn = FeedForward(
             dim_model,
-            dim_mlp,
+            dim_ffn,
             dropout,
         )
 
-    def forward(self, x: Tensor) -> Tensor:
-        ln_x = self.layer_norm(x)
-        residual_x = self.dropout(self.self_attention(ln_x)) + x
+    def forward(self, x: Tensor, mask: Tensor) -> Tensor:
+        ln_x = self.layer_norm1(x)
+        residual_x = self.dropout(self.self_attention(ln_x, mask)) + x
 
-        ln_x = self.layer_norm(residual_x)
-        fx = self.layer_norm(self.mlp(ln_x) + residual_x)  # from official paper & code by Google Research
+        ln_x = self.layer_norm2(residual_x)
+        fx = self.ffn(ln_x) + residual_x
         return fx
+
+
+class DeBERTaEncoder(nn.Module):
+    """
+    In this class, encode input sequence and then we stack N DeBERTaEncoderLayer for DeBERTa-Large
+    This class's forward output is not integrated with EMD Layer's output
+    Output have ONLY result of disentangled self-attention
+    Args:
+        max_seq: maximum sequence length, default 512 from official paper
+        N: number of EncoderLayer, default 24 for large model
+        K: maximum size of relative position, default 512 from official paper
+    """
+    def __init__(self, max_seq: 512, N: int = 24, K: int = 512, dim_model: int = 1024, num_heads: int = 16, dim_ffn: int = 4096, dropout: float = 0.1) -> None:
+        super(DeBERTaEncoder, self).__init__()
+        self.max_seq = max_seq
+        self.positional_embedding = nn.Embedding(2*K, dim_model)  # relative position embedding
+        self.num_layers = N
+        self.dim_model = dim_model
+        self.num_heads = num_heads
+        self.dim_ffn = dim_ffn
+        self.dropout = nn.Dropout(p=dropout)
+        self.encoder_layers = nn.ModuleList(
+            [DeBERTaEncoderLayer(dim_model, num_heads, dim_ffn, dropout) for _ in range(self.num_layers)]
+        )
+        self.layer_norm = nn.LayerNorm(dim_model)
+
+    def forward(self, inputs: Tensor, mask: Tensor) -> tuple[Tensor, Tensor]:
+        """
+        inputs: embedding from input sequence, shape => [BS, SEQ_LEN, DIM_MODEL]
+        mask: mask for Encoder padded token for speeding up to calculate attention score
+        """
+        layer_output = []
+        pos_x = torch.arange(self.max_seq).repeat(inputs.shape[0]).to(inputs)
+        x = self.dropout(
+            self.scale * inputs + self.positional_embedding(pos_x)
+        )
+        for layer in self.encoder_layers:
+            x = layer(x, mask)
+            layer_output.append(x)
+        encoded_x = self.layer_norm(x)  # from official paper & code by Google Research
+        layer_output = torch.stack(layer_output, dim=0).to(x.device)  # For Weighted Layer Pool: [N, BS, SEQ_LEN, DIM]
+        return encoded_x, layer_output
 
 
 class EMD(nn.Module):
     """
     Class for Enhanced Mask Decoder module in DeBERTa, which is used for Masked Language Model
     Word 'Decoder' means that denoise masked token by predicting masked token
-    This module also same as basic deberta encoder layer but, add Absolute Position Embedding for MLM Task
+    In official paper & repo, they might use 2 EMD layers for MLM Task
+        First-EMD layer: query input == Absolute Position Embedding
+        Second-EMD layer: query input == previous EMD layer's output
+    And this layer's key & value input is output from last disentangled self-attention encoder layer,
+    Also, all of them can share parameters.
+    In official repo, they implement this layer so hard coding that we can't understand directly & easily
+    So, we implement this layer with our own style, as closely as possible to paper statement
     Args:
 
     References:
         https://arxiv.org/abs/2006.03654
         https://arxiv.org/abs/2111.09543
+        https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/apps/models/masked_language_model.py
     """
-    pass
+    def __init__(self) -> None:
+        super(EMD, self).__init__()
+
 
