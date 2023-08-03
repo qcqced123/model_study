@@ -14,7 +14,7 @@ def build_relative_position(x_size: int) -> Tensor:
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/da_utils.py#L29
         https://arxiv.org/abs/2006.03654
     """
-    x_index, y_index = torch.arange(x_size), torch.arange(x_size)
+    x_index, y_index = torch.arange(x_size), torch.arange(x_size)  # same as rel_pos in official repo
     rel_pos = x_index.view(-1, 1) - y_index.view(1, -1)
     return rel_pos
 
@@ -171,6 +171,8 @@ class DeBERTaEncoderLayer(nn.Module):
     In this class, we stack each encoder_model module (Multi-Head Attention, Residual-Connection, LayerNorm, FFN)
     This class has same role as Module "BertEncoder" in official Repo (bert.py)
     In official repo, they use post-layer norm, but we use pre-layer norm which is more stable & efficient for training
+    Args:
+
     References:
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/bert.py
     """
@@ -193,8 +195,8 @@ class DeBERTaEncoderLayer(nn.Module):
 
     def forward(self, x: Tensor, rel_pos_emb: torch.nn.Embedding, mask: Tensor) -> Tensor:
         """ rel_pos_emb is fixed for all layer in same forward pass time """
-        ln_x = self.layer_norm1(x)
-        residual_x = self.dropout(self.self_attention(ln_x, self.rel_pos_emb, mask)) + x
+        ln_x, pos_x = self.layer_norm1(x), self.layer_norm1(rel_pos_emb)  # pre-layer norm, weight share
+        residual_x = self.dropout(self.self_attention(ln_x, pos_x, mask)) + x
 
         ln_x = self.layer_norm2(residual_x)
         fx = self.ffn(ln_x) + residual_x
