@@ -403,4 +403,6 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# End of https://www.toptal.com/developers/gitignore/api/linux,macos,windows,python,pycharm,jupyternotebooks,visualstudiocode
+# End of https://www.toptal.com/developers/gitignore/api/linux,macos,windows,python,pycharm,jupyternotebooks,visualstudiocode!/Attention/encoder_model/implementation_test.ipynb
+!/Attention/seq2seq/(NoteTaking_Ver)Transformer.ipynb
+*.ipynb
