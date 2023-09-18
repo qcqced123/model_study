@@ -10,6 +10,9 @@ class PromptEncoder(nn.Module):
     Args:
         inputs: input prompt, which is a sequence of tokens
         masking: masking for select pseudo token, which is param subjected to optimization problem
+    Notes:
+        nn.Dropout(p=dropout): because this module will be used for instead of nn.Embedding Layer,
+                               in common sense, we do not apply Dropout to Inputs Embedding Layer
     References:
         https://arxiv.org/abs/2103.10385
     """
@@ -26,9 +29,8 @@ class PromptEncoder(nn.Module):
             ),
             nn.Linear(dim_model, dim_mlp),
             nn.GELU(),
-            nn.Dropout(p=dropout),
             nn.Linear(dim_mlp, dim_model),
-            nn.Dropout(p=dropout),
+            nn.GELU(),
         )
 
     def forward(self) -> Tensor:
