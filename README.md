@@ -27,10 +27,15 @@
 - [BLIP] BLIP: Bootstrapping Language-Image Pre-training for Unified Vision-Language Understanding and Generation (에정)
 
 
-### Recurrent 
+### Recurrent
+
+- **[RNN] Recurrent Neural Network (완료)**
+- **[GRU] Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling (완료)**
+- **[LSTM] Long Short-Term Memory (완료)**
 - [ELMO] Deep contextualized word representations (예정)
 
 ### Convolution 
+
 - [ConvNext] A ConvNext for the 2020s (에정)
 
 - [CoAtNet] Marrying Convolution and Attention for All Data Sizes (에정)
