@@ -212,15 +212,13 @@ class DeBERTaEncoder(nn.Module):
     In this class, 1) encode input sequence, 2) make relative position embedding, 3) stack N DeBERTaEncoderLayer
     This class's forward output is not integrated with EMD Layer's output
     Output have ONLY result of disentangled self-attention
-    All of ops order is from official paper & repo by microsoft, but ops operating is slightly different,
+    All ops order is from official paper & repo by microsoft, but ops operating is slightly different,
     Because they use custom ops, e.g. XDropout, XSoftmax, ..., we just apply pure pytorch ops
     Args:
-        max_seq: maximum sequence length, named "max_position_embedding" in official repo, default 512
-                 in official paper, this value is called 'k'
+        max_seq: maximum sequence length, named "max_position_embedding" in official repo, default 512, in official paper, this value is called 'k'
         N: number of EncoderLayer, default 24 for large model
     Notes:
-        self.rel_pos_emb: P in paper, this matrix is fixed during forward pass in same time,
-                          all layer & all module must share this layer from official paper
+        self.rel_pos_emb: P in paper, this matrix is fixed during forward pass in same time, all layer & all module must share this layer from official paper
     References:
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/ops.py
     """
