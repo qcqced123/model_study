@@ -36,6 +36,11 @@ class ArcFace(nn.Module):
     def forward(self, inputs: Tensor, labels: Tensor) -> Tensor:
         cosine = torch.matmul(F.normalize(self.w), F.normalize(inputs))
         sine = torch.sqrt((1.0 - torch.pow(cosine, 2)).clamp(0, 1))
+        z = cosine*self.cos_m - sine*self.sin_m
+        z = torch.where(cosine > self.th, z, cosine - self.mm)
+        one_hot = torch.zeros(cosine.size(), device='cuda')
+        one_hot.scatter_(1, labels.view(-1, 1).long(), 1)
+        loss = (one_hot * z) + ((1.0 - one_hot) * cosine)
+        loss *= self.s
+        return loss
 
-
-        return
