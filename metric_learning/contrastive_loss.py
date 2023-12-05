@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 from distance_metric import SelectDistances
+from typing import Iterable, Dict
 
 
 # Batch Embedding Table Dot-Product Version of Contrastive Loss
@@ -39,3 +40,39 @@ class BatchDotProductContrastiveLoss(nn.Module):
                                   (1 - labels.float()) * torch.pow(torch.clamp(self.margin - distance, min=0.0), 2))
         contrastive_loss = torch.sum(torch.triu(contrastive_loss, diagonal=1))
         return contrastive_loss / labels.shape[0]
+
+
+# Contrastive Loss for NLP Semantic Search
+class ContrastiveLoss(nn.Module):
+    """
+    Contrastive Loss which is basic method of Metric Learning
+    Closer distance between data points in intra-class, more longer distance between data points in inter-class
+    Distance:
+        Euclidean Distance: sqrt(sum((x1 - x2)**2))
+        Cosine Distance: 1 - torch.nn.function.cos_sim(x1, x2)
+    Examples:
+        model = SentenceTransformer('all-MiniLM-L6-v2')
+        train_examples = [
+            InputExample(texts=['This is a positive pair', 'Where the distance will be minimized'], label=1),
+            InputExample(texts=['This is a negative pair', 'Their distance will be increased'], label=0)]
+        train_dataloader = DataLoader(train_examples, shuffle=True, batch_size=2)
+        train_loss = losses.ContrastiveLoss(model=model)
+    Args:
+        margin: margin value meaning for Area of intra class(positive area), default 1.0
+        metric: standard of distance metrics, default cosine distance
+    References:
+        https://github.com/KevinMusgrave/pytorch-metric-learning
+        https://github.com/UKPLab/sentence-transformers/blob/master/sentence_transformers/losses/ContrastiveLoss.py
+    """
+    def __init__(self, metric: str = 'cosine', margin: int = 1.0) -> None:
+        super(ContrastiveLoss, self).__init__()
+        self.distance = SelectDistances(metric)  # Options: euclidean, manhattan, cosine
+        self.margin = margin
+
+    def forward(self, sentence_features: Iterable[Dict[str, Tensor]], labels: Tensor) -> Tensor:
+        embeddings = [self.model(sentence_feature)['sentence_embedding'] for sentence_feature in sentence_features]
+        anchor, instance = embeddings
+        distance = self.distance(anchor, instance)
+        contrastive_loss = 0.5 * (labels.float() * torch.pow(distance, 2) +
+                                  (1 - labels.float()) * torch.pow(torch.clamp(self.margin - distance, min=0.0), 2))
+        return contrastive_loss.mean()

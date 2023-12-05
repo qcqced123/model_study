@@ -7,7 +7,7 @@ from einops.layers.torch import Rearrange
 
 def build_relative_position(x_size: int) -> Tensor:
     """
-    Build Relative Position Matrix for Disentangled Self-Attention in DeBERTa
+    Build Relative Position Matrix for Disentangled Self-attention in DeBERTa
     Args:
         x_size: sequence length of query matrix
     Reference:
@@ -21,7 +21,7 @@ def build_relative_position(x_size: int) -> Tensor:
 
 def disentangled_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tensor, dropout: torch.nn.Dropout, mask: Tensor = None) -> Tensor:
     """
-    Disentangled Self-Attention for DeBERTa, same role as Module "DisentangledSelfAttention" in official Repo
+    Disentangled Self-attention for DeBERTa, same role as Module "DisentangledSelfAttention" in official Repo
     Args:
         q: content query matrix, shape (batch_size, seq_len, dim_head)
         k: content key matrix, shape (batch_size, seq_len, dim_head)
@@ -34,8 +34,8 @@ def disentangled_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tens
         c2c = torch.matmul(q, k.transpose(-1, -2))  # A_c2c
         c2p = torch.gather(torch.matmul(q, kr.transpose(-1, -2)), dim=-1, index=c2p_pos)
         p2c = torch.gather(torch.matmul(qr, k.transpose(-1, -2)), dim=-2, index=c2p_pos)
-        Attention Matrix = c2c + c2p + p2c
-        A = softmax(Attention Matrix/sqrt(3*D_h)), SA(z) = Av
+        attention Matrix = c2c + c2p + p2c
+        A = softmax(attention Matrix/sqrt(3*D_h)), SA(z) = Av
     Notes:
         dot_scale(range 1 ~ 3): scale factor for Q•K^T result, sqrt(3*dim_head) from official paper by microsoft,
         3 means that use full attention matrix(c2c, c2p, p2c), same as number of using what kind of matrix
@@ -64,7 +64,7 @@ def disentangled_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tens
         scale_factor += 1
 
     dot_scale = torch.sqrt(torch.tensor(scale_factor * q.shape[2]))  # from official paper by microsoft
-    attention_matrix = (c2c + c2p + p2c) / dot_scale  # Attention Matrix = A_c2c + A_c2r + A_r2c
+    attention_matrix = (c2c + c2p + p2c) / dot_scale  # attention Matrix = A_c2c + A_c2r + A_r2c
     if mask is not None:
         attention_matrix = attention_matrix.masked_fill(mask == 0, float('-inf'))  # Padding Token Masking
     attention_dist = dropout(
@@ -83,8 +83,8 @@ class AttentionHead(nn.Module):
         dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
         dropout: dropout rate for attention matrix, default 0.1 from official paper
     Math:
-        Attention Matrix = c2c + c2p + p2c
-        A = softmax(Attention Matrix/sqrt(3*D_h)), SA(z) = Av
+        attention Matrix = c2c + c2p + p2c
+        A = softmax(attention Matrix/sqrt(3*D_h)), SA(z) = Av
     Reference:
         https://arxiv.org/abs/1706.03762
         https://arxiv.org/abs/2006.03654
@@ -111,7 +111,7 @@ class AttentionHead(nn.Module):
 
 class MultiHeadAttention(nn.Module):
     """
-    In this class, we implement workflow of Multi-Head Self-Attention for DeBERTa-Large
+    In this class, we implement workflow of Multi-Head Self-attention for DeBERTa-Large
     This class has same role as Module "BertAttention" in official Repo (bert.py)
     In official repo, they use post-layer norm, but we use pre-layer norm which is more stable & efficient for training
     Args:
@@ -120,8 +120,8 @@ class MultiHeadAttention(nn.Module):
         dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
         dropout: dropout rate, default 0.1
     Math:
-        Attention Matrix = c2c + c2p + p2c
-        A = softmax(Attention Matrix/sqrt(3*D_h)), SA(z) = Av
+        attention Matrix = c2c + c2p + p2c
+        A = softmax(attention Matrix/sqrt(3*D_h)), SA(z) = Av
     Reference:
         https://arxiv.org/abs/1706.03762
         https://arxiv.org/abs/2006.03654
@@ -174,7 +174,7 @@ class FeedForward(nn.Module):
 class DeBERTaEncoderLayer(nn.Module):
     """
     Class for encoder model module in DeBERTa-Large
-    In this class, we stack each encoder_model module (Multi-Head Attention, Residual-Connection, LayerNorm, FFN)
+    In this class, we stack each encoder_model module (Multi-Head attention, Residual-Connection, LayerNorm, FFN)
     This class has same role as Module "BertEncoder" in official Repo (bert.py)
     In official repo, they use post-layer norm, but we use pre-layer norm which is more stable & efficient for training
     References:
@@ -299,7 +299,7 @@ class EnhancedMaskDecoder(nn.Module):
 
 class DeBERTa(nn.Module):
     """
-    Main class for DeBERTa, having all of sub-blocks & modules such as Disentangled Self-Attention, DeBERTaEncoder, EMD
+    Main class for DeBERTa, having all of sub-blocks & modules such as Disentangled Self-attention, DeBERTaEncoder, EMD
     Init Scale of DeBERTa Hyper-Parameters, Embedding Layer, Encoder Blocks, EMD Blocks
     And then make 3-types of Embedding Layer, Word Embedding, Absolute Position Embedding, Relative Position Embedding
     Args:
@@ -375,7 +375,7 @@ class DeBERTa(nn.Module):
         )
         abs_pos_emb = self.abs_pos_emb(torch.arange(self.max_seq).repeat(inputs.shape[0]).to(inputs))  # "I" in paper
 
-        # Disentangled Self-Attention Encoder Layer
+        # Disentangled Self-attention Encoder Layer
         last_hidden_state, hidden_states = self.encoder(word_embeddings, rel_pos_emb, mask)
 
         # Enhanced Mask Decoder Layer

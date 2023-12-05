@@ -7,7 +7,7 @@ from einops.layers.torch import Rearrange
 
 def scaled_dot_product_attention(q: Tensor, k: Tensor, v: Tensor, dot_scale: Tensor, mask: Tensor = None) -> Tensor:
     """
-    Scaled Dot-Product Attention with Masking for Decoder
+    Scaled Dot-Product attention with Masking for Decoder
     Args:
         q: query matrix, shape (batch_size, seq_len, dim_head)
         k: key matrix, shape (batch_size, seq_len, dim_head)
@@ -15,8 +15,8 @@ def scaled_dot_product_attention(q: Tensor, k: Tensor, v: Tensor, dot_scale: Ten
         dot_scale: scale factor for Q•K^T result
         mask: there are three types of mask, mask matrix shape must be same as single attention head
               1) Encoder padded token
-              2) Decoder Masked-Self-Attention
-              3) Decoder's Encoder-Decoder Attention
+              2) Decoder Masked-Self-attention
+              3) Decoder's Encoder-Decoder attention
     Math:
         A = softmax(q•k^t/sqrt(D_h)), SA(z) = Av
     """
@@ -60,7 +60,7 @@ class AttentionHead(nn.Module):
 
 class MultiHeadAttention(nn.Module):
     """
-    In this class, we implement workflow of Multi-Head Self-Attention
+    In this class, we implement workflow of Multi-Head Self-attention
     Args:
         dim_model: dimension of model's latent vector space, default 512 from official paper
         num_heads: number of heads in MHSA, default 8 from official paper for Transformer
@@ -120,7 +120,7 @@ class FeedForward(nn.Module):
 class EncoderLayer(nn.Module):
     """
     Class for encoder model module in Transformer
-    In this class, we stack each encoder_model module (Multi-Head Attention, Residual-Connection, LayerNorm, FFN)
+    In this class, we stack each encoder_model module (Multi-Head attention, Residual-Connection, LayerNorm, FFN)
     We apply pre-layernorm, which is different from original paper
     In common sense, pre-layernorm are more effective & stable than post-layernorm
     """
@@ -197,7 +197,7 @@ class Encoder(nn.Module):
 class DecoderLayer(nn.Module):
     """
     Class for decoder model module in Transformer
-    In this class, we stack each decoder_model module (Masked Multi-Head Attention, Residual-Connection, LayerNorm, FFN)
+    In this class, we stack each decoder_model module (Masked Multi-Head attention, Residual-Connection, LayerNorm, FFN)
     We apply pre-layernorm, which is different from original paper
     References:
         https://arxiv.org/abs/1706.03762
@@ -281,7 +281,7 @@ class Decoder(nn.Module):
         """
         inputs: embedding from input sequence, shape => [BS, SEQ_LEN, DIM_MODEL]
         dec_mask: mask for Decoder padded token for Language Modeling
-        enc_dec_mask: mask for Encoder-Decoder Self-Attention, from encoder padded token
+        enc_dec_mask: mask for Encoder-Decoder Self-attention, from encoder padded token
         """
         layer_output = []
         pos_x = torch.arange(self.max_seq).repeat(inputs.shape[0]).to(inputs)
@@ -338,7 +338,7 @@ class Transformer(nn.Module):
 
     @staticmethod
     def dec_masking(x: Tensor, dec_pad_index: int) -> Tensor:
-        """ make masking matrix for Decoder Masked Multi-Head Self-Attention """
+        """ make masking matrix for Decoder Masked Multi-Head Self-attention """
         pad_mask = (x != dec_pad_index).int().repeat(1, x.shape[-1]).view(x.shape[0], x.shape[-1], x.shape[-1])
         lm_mask = torch.tril(torch.ones(x.shape[0], x.shape[-1], x.shape[-1]))
         dec_mask = pad_mask * lm_mask
@@ -346,7 +346,7 @@ class Transformer(nn.Module):
 
     @staticmethod
     def enc_dec_masking(enc_x: Tensor, dec_x: Tensor, enc_pad_index: int) -> Tensor:
-        """ make masking matrix for Encoder-Decoder Multi-Head Self-Attention in Decoder """
+        """ make masking matrix for Encoder-Decoder Multi-Head Self-attention in Decoder """
         enc_dec_mask = (enc_x != enc_pad_index).int().repeat(1, dec_x.shape[-1]).view(
             enc_x.shape[0], dec_x.shape[-1], enc_x.shape[-1]
         )

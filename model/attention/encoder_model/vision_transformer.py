@@ -7,7 +7,7 @@ from einops.layers.torch import Rearrange
 
 def scaled_dot_product_attention(q: Tensor, k: Tensor, v: Tensor, dot_scale: Tensor) -> Tensor:
     """
-    Scaled Dot-Product Attention
+    Scaled Dot-Product attention
     Args:
         q: query matrix, shape (batch_size, seq_len, dim_head)
         k: key matrix, shape (batch_size, seq_len, dim_head)
@@ -56,7 +56,7 @@ class AttentionHead(nn.Module):
 
 class MultiHeadAttention(nn.Module):
     """
-    In this class, we implement workflow of Multi-Head Self-Attention
+    In this class, we implement workflow of Multi-Head Self-attention
     Args:
         dim_model: dimension of model's latent vector space, default 1024 from official paper
         num_heads: number of heads in MHSA, default 16 from official paper for ViT-Large
@@ -115,7 +115,7 @@ class MLP(nn.Module):
 class VisionEncoderLayer(nn.Module):
     """
     Class for encoder_model module in ViT-Large
-    In this class, we stack each encoder_model module (Multi-Head Attention, Residual-Connection, Layer Normalization, MLP)
+    In this class, we stack each encoder_model module (Multi-Head attention, Residual-Connection, Layer Normalization, MLP)
     """
     def __init__(self, dim_model: int = 1024, num_heads: int = 16, dim_mlp: int = 4096, dropout: float = 0.1) -> None:
         super(VisionEncoderLayer, self).__init__()
@@ -195,7 +195,7 @@ class VisionTransformer(nn.Module):
         image_size: size of input image, default 512
         patch_size: size of patch, default 16 from official paper for ViT-Large
         extractor: option for feature extractor, default 'base' which is crop & just flatten with Linear Projection
-                   if you want to use Convolution for feature extractor, set extractor='cnn' named hybrid ver in paper
+                   if you want to use convolution for feature extractor, set extractor='cnn' named hybrid ver in paper
         classifier: option for pooling method, default token meaning that do cls pooling
                     if you want to use mean pooling, set classifier='mean'
         mode: option for train type, default fine-tune, if you want pretrain, set mode='pretrain'
@@ -242,7 +242,7 @@ class VisionTransformer(nn.Module):
             stride=self.patch_size
         )
 
-        # Encoder Multi-Head Self-Attention
+        # Encoder Multi-Head Self-attention
         self.encoder = VisionEncoder(
             self.num_patches,
             self.num_layers,

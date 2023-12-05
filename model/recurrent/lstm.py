@@ -30,7 +30,7 @@ class LSTMCell(nn.Module):
 
         # hidden states Weight Matrix, no bias for hidden state
         self.W_hf = nn.Linear(hidden_size, hidden_size, bias=False)  # forgot gate
-        self.W_hg = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.W_hg = nn.Linear(hidden_size, hidden_size, bias=False)  # candidate gate
         self.W_hi = nn.Linear(hidden_size, hidden_size, bias=False)  # input gate
         self.W_ho = nn.Linear(hidden_size, hidden_size, bias=False)  # output gate
 

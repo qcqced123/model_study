@@ -7,7 +7,7 @@ from typing import Tuple, List
 
 class GRUCell(nn.Module):
     """
-    Model class for GRU(Gated Recurrent Unit), Single GRU Cell
+    Model class for GRU(Gated recurrent Unit), Single GRU Cell
     Add Pre-LayerNorm, Dropout to improve performance
     Math:
         r_t = sigmoid(X_t * W_xr + h_t-1 * W_hr + b_r)
