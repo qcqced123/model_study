@@ -24,6 +24,7 @@ class BatchDotProductContrastiveLoss(nn.Module):
 
     @staticmethod
     def elementwise_labels(y: torch.Tensor) -> torch.Tensor:
+        """ Element-wise masking matrix generation for contrastive loss by label """
         f_mask = (y == 1) | (y == -1)
         t_mask = (y == 2) | (y == 0)
         y = y.unsqueeze(1)
@@ -63,6 +64,7 @@ class ContrastiveLoss(nn.Module):
     References:
         https://github.com/KevinMusgrave/pytorch-metric-learning
         https://github.com/UKPLab/sentence-transformers/blob/master/sentence_transformers/losses/ContrastiveLoss.py
+        https://www.youtube.com/watch?v=u-X_nZRsn5M&list=LL&index=3&t=10s&ab_channel=DeepFindr
     """
     def __init__(self, metric: str = 'cosine', margin: int = 1.0) -> None:
         super(ContrastiveLoss, self).__init__()
