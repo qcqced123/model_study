@@ -42,3 +42,5 @@ class ArcFace(nn.Module):
         loss *= self.s
         return loss
 
+
+
