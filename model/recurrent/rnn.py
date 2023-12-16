@@ -56,7 +56,7 @@ class Recurrent(nn.Module):
         self.dropout = dropout
         self.layers = nn.ModuleList(
             [RecurrentCell(input_size, hidden_size, hidden_size, dropout) for _ in range(num_layers)]
-        )  # stack N layers , 이 부분 생각좀 해보자
+        )  # num_layers same as nums of stacked RNN cells
         self.W_y = nn.Linear(hidden_size, output_dim)
 
     def forward(self, inputs: Tensor, hidden_states: Tensor) -> Tuple[Tensor, Tensor]:

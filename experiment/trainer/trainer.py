@@ -12,8 +12,7 @@ from torch import Tensor
 from typing import Tuple
 
 import dataset_class.dataclass as dataset_class
-import model.loss as model_loss
-import model.model as model_arch
+from experiment.model import model as model_loss, model as model_arch
 from configuration import CFG
 from dataset_class.preprocessing import load_data
 from trainer.trainer_utils import get_optimizer_grouped_parameters, get_scheduler, collate, one2many_collate

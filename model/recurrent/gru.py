@@ -60,3 +60,29 @@ class GRUCell(nn.Module):
         return h_t, y_t
 
 
+class GRU(nn.Module):
+    """
+    Model class for GRU(Gated recurrent Unit), Stacked GRU Cells
+    Args:
+        input_size: input dimension of each timestamp inputs`
+        hidden_size: hidden dimension of each timestamp hidden states
+        output_dim: output dimension of each timestamp outputs
+        num_layers: number of recurrent layers
+        dropout: dropout rate, default 0.1s
+    Notes:
+        num_layers same as nums of stacked GRU cells
+    """
+    def __init__(self, input_size: int, hidden_size: int, output_dim: int, num_layers: int, dropout: float = 0.1) -> None:
+        super(GRU, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.output_dim = output_dim
+        self.num_layers = num_layers
+        self.dropout = dropout
+        self.layers = nn.ModuleList(
+            [GRUCell(input_size, hidden_size, hidden_size, dropout) for _ in range(num_layers)]
+        )  # num_layers same as nums of stacked GRU cells
+
+    def forward(self) -> Tensor:
+        """ Forward pass for GRU with stacked GRU cells """
+        pass
