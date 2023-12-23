@@ -32,7 +32,7 @@ def disentangled_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tens
         mask: mask for attention matrix, shape (batch_size, seq_len, seq_len), apply before softmax layer
     Math:
         c2c = torch.matmul(q, k.transpose(-1, -2))  # A_c2c
-        c2p = torch.gather(torch.matmul(q, kr.transpose(-1, -2)), dim=-1, index=c2p_pos)
+        c2p = torch.gather(torch.matmul(q, kr.transpose(-1 z, -2)), dim=-1, index=c2p_pos)
         p2c = torch.gather(torch.matmul(qr, k.transpose(-1, -2)), dim=-2, index=c2p_pos)
         attention Matrix = c2c + c2p + p2c
         A = softmax(attention Matrix/sqrt(3*D_h)), SA(z) = Av
