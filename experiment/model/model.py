@@ -1,14 +1,11 @@
 import torch
 import torch.nn as nn
 from torch import Tensor
-from transformers import AutoConfig, AutoModel
+from transformers import AutoConfig
 from typing import List, Dict
-
-import models.attention as attention
-import experiment.configuration as configuration
-from tuner.clm import CLMHead
 from tuner.mlm import MLMHead
-
+from experiment.configuration import CFG
+from models.attention
 
 class MaskedLanguageModel(nn.Module):
     """
@@ -19,15 +16,9 @@ class MaskedLanguageModel(nn.Module):
         https://huggingface.co/docs/transformers/main/tasks/masked_language_modeling
         https://github.com/huggingface/transformers/blob/main/src/transformers/data/data_collator.py#L748
     """
-    def __init__(self, cfg: configuration.CFG) -> None:
+    def __init__(self, cfg: CFG) -> None:
         super(MaskedLanguageModel, self).__init__()
         self.cfg = cfg
-        self.auto_cfg = AutoConfig.from_pretrained(
-            cfg.model,
-            output_hidden_states=True
-        )
-        self.auto_cfg.attention_probs_dropout_prob = self.cfg.attention_probs_dropout_prob
-        self.auto_cfg.hidden_dropout_prob = self.cfg.hidden_dropout_prob
         self.model = getattr(attention, self.cfg.model)(self.cfg)
         self.mlm_head = MLMHead(cfg)
         if self.cfg.load_pretrained:

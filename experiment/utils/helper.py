@@ -1,5 +1,16 @@
 import torch, os, sys, random, json
 import numpy as np
+from pathlib import Path
+
+
+def select_model_file(base_path: str = 'models', arch: str = None, model: str = None) -> str:
+    """ Construct the full path using Pasth """
+    path = base_path + '/' + arch + '/' + model
+    full_path = Path(path)
+    if full_path.exists():
+        return str(full_path)
+    else:
+        raise FileNotFoundError(f"The file {model} does not exist in the specified path.")
 
 
 def check_device() -> bool:

@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -423,8 +422,3 @@ class DeBERTa(nn.Module):
         emd_hidden_states = hidden_states[-2]
         emd_last_hidden_state, emd_hidden_states = self.emd_encoder(emd_hidden_states, abs_pos_emb, rel_pos_emb, mask)
         return last_hidden_state, hidden_states, emd_last_hidden_state, emd_hidden_states
-
-
-if __name__ == "__main__":
-    test = DeBERTa(CFG)
-    print(test)

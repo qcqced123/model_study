@@ -1,18 +1,21 @@
 import torch
 from transformers import AutoTokenizer
-
+from utils.helper import select_model_file
 
 class CFG:
     """ Pipeline Setting """
     train, test = True, False
     checkpoint_dir = './saved/model'
     resume, load_pretrained,  state_dict = True, False, '/'
-    name = 'FBP3_Base_Train_Pipeline'
+    name = 'DeBERTa_MLM'
     loop = 'mpl_loop'
     dataset = 'FBPDataset'  # dataset_class.dataclass.py -> FBPDataset, MPLDataset
-    model_arch = 'FBPModel'  # model.model.py -> FBPModel, MPLModel
-    model = 'microsoft/deberta-v3-large'
-    tokenizer = AutoTokenizer.from_pretrained(model)
+    arch_name = 'attention'
+    model_name = 'deberta'
+    module_name = 'DeBERTa'
+    model = select_model_file(arch=arch_name, model=model_name)
+    tmp_model = 'microsoft/deberta-v3-large'
+    tokenizer = AutoTokenizer.from_pretrained(tmp_model)
     pooling = 'MeanPooling'  # mean, attention, max, weightedlayer, concat, conv1d, lstm
 
     """ Common Options """
@@ -93,3 +96,8 @@ class CFG:
     nth_awp_start_epoch = 10
     awp_eps = 1e-2
     awp_lr = 1e-4
+
+
+if __name__ == "__main__":
+    test = CFG
+    print(test.model)
