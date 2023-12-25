@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from typing import Tuple
+from typing import Tuple, List
 from einops.layers.torch import Rearrange
 from experiment.configuration import CFG
 
@@ -22,7 +22,7 @@ def build_relative_position(x_size: int) -> Tensor:
     return rel_pos
 
 
-def disentangled_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tensor, dropout: torch.nn.Dropout, mask: Tensor = None) -> Tensor:
+def disentangled_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tensor, attention_dropout: torch.nn.Dropout, mask: Tensor = None) -> Tensor:
     """
     Disentangled Self-attention for DeBERTa, same role as Module "DisentangledSelfAttention" in official Repo
     Args:
@@ -31,7 +31,7 @@ def disentangled_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tens
         v: content value matrix, shape (batch_size, seq_len, dim_head)
         qr: position query matrix, shape (batch_size, 2*max_relative_position, dim_head), r means relative position
         kr: position key matrix, shape (batch_size, 2*max_relative_position, dim_head), r means relative position
-        dropout: dropout for attention matrix, default rate is 0.1 from official paper
+        attention_dropout: dropout for attention matrix, default rate is 0.1 from official paper
         mask: mask for attention matrix, shape (batch_size, seq_len, seq_len), apply before softmax layer
     Math:
         c2c = torch.matmul(q, k.transpose(-1, -2))  # A_c2c
@@ -70,7 +70,7 @@ def disentangled_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tens
     attention_matrix = (c2c + c2p + p2c) / dot_scale  # attention Matrix = A_c2c + A_c2r + A_r2c
     if mask is not None:
         attention_matrix = attention_matrix.masked_fill(mask == 0, float('-inf'))  # Padding Token Masking
-    attention_dist = dropout(
+    attention_dist = attention_dropout(
         F.softmax(attention_matrix, dim=-1)
     )
     attention_matrix = torch.matmul(attention_dist, v)
@@ -92,12 +92,12 @@ class AttentionHead(nn.Module):
         https://arxiv.org/abs/1706.03762
         https://arxiv.org/abs/2006.03654
     """
-    def __init__(self, dim_model: int = 1024, dim_head: int = 64, dropout: float = 0.1) -> None:
+    def __init__(self, dim_model: int = 1024, dim_head: int = 64, attention_dropout_prob: float = 0.1) -> None:
         super(AttentionHead, self).__init__()
         self.dim_model = dim_model
         self.dim_head = dim_head  # 1024 / 16 = 64
         self.dot_scale = torch.sqrt(torch.tensor(self.dim_head))
-        self.dropout = nn.Dropout(dropout)
+        self.attention_dropout = nn.Dropout(p=attention_dropout_prob)
         self.fc_q = nn.Linear(self.dim_model, self.dim_head)
         self.fc_k = nn.Linear(self.dim_model, self.dim_head)
         self.fc_v = nn.Linear(self.dim_model, self.dim_head)
@@ -108,7 +108,7 @@ class AttentionHead(nn.Module):
         q, k, v, qr, kr = self.fc_q(x), self.fc_k(x), self.fc_v(x), self.fc_qr(pos_x), self.fc_kr(pos_x)
         if emd is not None:
             q = self.fc_q(emd)
-        attention_matrix = disentangled_attention(q, k, v, qr, kr, self.dropout, mask)
+        attention_matrix = disentangled_attention(q, k, v, qr, kr, self.attention_dropout, mask)
         return attention_matrix
 
 
@@ -121,7 +121,7 @@ class MultiHeadAttention(nn.Module):
         dim_model: dimension of model's latent vector space, default 1024 from official paper
         num_attention_heads: number of heads in MHSA, default 16 from official paper for Transformer
         dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
-        dropout: dropout rate, default 0.1
+        attention_dropout_prob: dropout rate, default 0.1
     Math:
         attention Matrix = c2c + c2p + p2c
         A = softmax(attention Matrix/sqrt(3*D_h)), SA(z) = Av
@@ -129,14 +129,14 @@ class MultiHeadAttention(nn.Module):
         https://arxiv.org/abs/1706.03762
         https://arxiv.org/abs/2006.03654
     """
-    def __init__(self, dim_model: int = 1024, num_attention_heads: int = 16, dim_head: int = 64, dropout: float = 0.1) -> None:
+    def __init__(self, dim_model: int = 1024, num_attention_heads: int = 16, dim_head: int = 64, attention_dropout_prob: float = 0.1) -> None:
         super(MultiHeadAttention, self).__init__()
         self.dim_model = dim_model
         self.num_attention_heads = num_attention_heads
         self.dim_head = dim_head
-        self.dropout = dropout
+        self.attention_dropout_prob = attention_dropout_prob
         self.attention_heads = nn.ModuleList(
-            [AttentionHead(self.dim_model, self.dim_head, self.dropout) for _ in range(self.num_attention_heads)]
+            [AttentionHead(self.dim_model, self.dim_head, self.attention_dropout_prob) for _ in range(self.num_attention_heads)]
         )
         self.fc_concat = nn.Linear(self.dim_model, self.dim_model)
 
@@ -156,18 +156,18 @@ class FeedForward(nn.Module):
     Args:
         dim_model: dimension of model's latent vector space, default 1024
         dim_ffn: dimension of FFN's hidden layer, default 4096 from official paper
-        dropout: dropout rate, default 0.1
+        hidden_dropout_prob: dropout rate, default 0.1
     Math:
         FeedForward(x) = FeedForward(LN(x))+x
     """
-    def __init__(self, dim_model: int = 1024, dim_ffn: int = 4096, dropout: float = 0.1) -> None:
+    def __init__(self, dim_model: int = 1024, dim_ffn: int = 4096, hidden_dropout_prob: float = 0.1) -> None:
         super(FeedForward, self).__init__()
         self.ffn = nn.Sequential(
             nn.Linear(dim_model, dim_ffn),
             nn.GELU(),
-            nn.Dropout(p=dropout),
+            nn.Dropout(p=hidden_dropout_prob),
             nn.Linear(dim_ffn, dim_model),
-            nn.Dropout(p=dropout),
+            nn.Dropout(p=hidden_dropout_prob),
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -183,27 +183,35 @@ class DeBERTaEncoderLayer(nn.Module):
     References:
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/bert.py
     """
-    def __init__(self, dim_model: int = 1024, num_attention_heads: int = 16, dim_ffn: int = 4096, dropout: float = 0.1) -> None:
+    def __init__(
+            self,
+            dim_model: int = 1024,
+            num_attention_heads: int = 16,
+            dim_ffn: int = 4096,
+            layer_norm_eps: float = 0.02,
+            attention_dropout_prob: float = 0.1,
+            hidden_dropout_prob: float = 0.1
+    ) -> None:
         super(DeBERTaEncoderLayer, self).__init__()
         self.self_attention = MultiHeadAttention(
             dim_model,
             num_attention_heads,
             int(dim_model / num_attention_heads),
-            dropout,
+            attention_dropout_prob,
         )
-        self.layer_norm1 = nn.LayerNorm(dim_model)
-        self.layer_norm2 = nn.LayerNorm(dim_model)
-        self.dropout = nn.Dropout(p=dropout)
+        self.layer_norm1 = nn.LayerNorm(dim_model, eps=layer_norm_eps)
+        self.layer_norm2 = nn.LayerNorm(dim_model, eps=layer_norm_eps)
+        self.hidden_dropout = nn.Dropout(p=hidden_dropout_prob)
         self.ffn = FeedForward(
             dim_model,
             dim_ffn,
-            dropout,
+            hidden_dropout_prob,
         )
 
     def forward(self, x: Tensor, pos_x: torch.nn.Embedding, mask: Tensor, emd: Tensor = None) -> Tensor:
         """ rel_pos_emb is fixed for all layer in same forward pass time """
         ln_x, ln_pos_x = self.layer_norm1(x), self.layer_norm1(pos_x)  # pre-layer norm, weight share
-        residual_x = self.dropout(self.self_attention(ln_x, ln_pos_x, mask, emd)) + x
+        residual_x = self.hidden_dropout(self.self_attention(ln_x, ln_pos_x, mask, emd)) + x
         ln_x = self.layer_norm2(residual_x)
         fx = self.ffn(ln_x) + residual_x
         return fx
@@ -224,18 +232,28 @@ class DeBERTaEncoder(nn.Module):
     References:
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/ops.py
     """
-    def __init__(self, max_seq: 512, num_layers: int = 24, dim_model: int = 1024, num_attention_heads: int = 16, dim_ffn: int = 4096, dropout: float = 0.1) -> None:
+    def __init__(
+            self,
+            max_seq: int = 512,
+            num_layers: int = 24,
+            dim_model: int = 1024,
+            num_attention_heads: int = 16,
+            dim_ffn: int = 4096,
+            layer_norm_eps: float = 0.02,
+            attention_dropout_prob: float = 0.1,
+            hidden_dropout_prob: float = 0.1
+    ) -> None:
         super(DeBERTaEncoder, self).__init__()
         self.max_seq = max_seq
         self.num_layers = num_layers
         self.dim_model = dim_model
         self.num_attention_heads = num_attention_heads
         self.dim_ffn = dim_ffn
-        self.dropout = nn.Dropout(p=dropout)  # dropout is not learnable
+        self.hidden_dropout = nn.Dropout(p=hidden_dropout_prob)  # dropout is not learnable
         self.encoder_layers = nn.ModuleList(
-            [DeBERTaEncoderLayer(dim_model, num_attention_heads, dim_ffn, dropout) for _ in range(self.num_layers)]
+            [DeBERTaEncoderLayer(dim_model, num_attention_heads, dim_ffn, layer_norm_eps, attention_dropout_prob, hidden_dropout_prob) for _ in range(self.num_layers)]
         )
-        self.layer_norm = nn.LayerNorm(dim_model)  # for final-Encoder output
+        self.layer_norm = nn.LayerNorm(dim_model, eps=layer_norm_eps)  # for final-Encoder output
 
     def forward(self, inputs: Tensor, rel_pos_emb: Tensor, mask: Tensor) -> tuple[Tensor, Tensor]:
         """
@@ -274,10 +292,10 @@ class EnhancedMaskDecoder(nn.Module):
         https://arxiv.org/abs/2111.09543
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/apps/models/masked_language_model.py
     """
-    def __init__(self, encoder: list[nn.ModuleList], dim_model: int = 1024) -> None:
+    def __init__(self, encoder: List[nn.ModuleList], dim_model: int = 1024, layer_norm_eps: float = 1e-7) -> None:
         super(EnhancedMaskDecoder, self).__init__()
         self.emd_layers = encoder
-        self.layer_norm = nn.LayerNorm(dim_model)
+        self.layer_norm = nn.LayerNorm(dim_model, eps=layer_norm_eps)
 
     def emd_context_layer(self, hidden_states, abs_pos_emb, rel_pos_emb, mask):
         outputs = []
@@ -372,6 +390,7 @@ class DeBERTa(nn.Module):
         self.num_emd = cfg.num_emd
         self.dim_model = cfg.dim_model
         self.dim_ffn = cfg.dim_ffn
+        self.layer_norm_eps = cfg.layer_norm_eps
         self.hidden_dropout_prob = cfg.hidden_dropout_prob
         self.attention_dropout_prob = cfg.attention_probs_dropout_prob
 
@@ -385,10 +404,12 @@ class DeBERTa(nn.Module):
             self.dim_model,
             self.num_attention_heads,
             self.dim_ffn,
-            self.hidden_dropout_prob
+            self.layer_norm_eps,
+            self.attention_dropout_prob,
+            self.hidden_dropout_prob,
         )
         self.emd_layers = [self.encoder.encoder_layers[-1] for _ in range(self.num_emd)]
-        self.emd_encoder = EnhancedMaskDecoder(self.emd_layers, self.dim_model)
+        self.emd_encoder = EnhancedMaskDecoder(self.emd_layers, self.dim_model, self.layer_norm_eps)
 
     def forward(self, inputs: Tensor, mask: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         assert inputs.ndim == 3, f'Expected (batch, sequence, vocab_size) got {inputs.shape}'
