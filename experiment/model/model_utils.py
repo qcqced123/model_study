@@ -1,3 +1,7 @@
+import torch.nn as nn
+from torch import Tensor
+
+
 def freeze(module) -> None:
     """
     Freezes module's parameters.

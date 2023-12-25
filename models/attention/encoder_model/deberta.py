@@ -1,8 +1,11 @@
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
+from typing import Tuple
 from einops.layers.torch import Rearrange
+from experiment.configuration import CFG
 
 
 def build_relative_position(x_size: int) -> Tensor:
@@ -116,7 +119,7 @@ class MultiHeadAttention(nn.Module):
     In official repo, they use post-layer norm, but we use pre-layer norm which is more stable & efficient for training
     Args:
         dim_model: dimension of model's latent vector space, default 1024 from official paper
-        num_heads: number of heads in MHSA, default 16 from official paper for Transformer
+        num_attention_heads: number of heads in MHSA, default 16 from official paper for Transformer
         dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
         dropout: dropout rate, default 0.1
     Math:
@@ -126,14 +129,14 @@ class MultiHeadAttention(nn.Module):
         https://arxiv.org/abs/1706.03762
         https://arxiv.org/abs/2006.03654
     """
-    def __init__(self, dim_model: int = 1024, num_heads: int = 16, dim_head: int = 64, dropout: float = 0.1) -> None:
+    def __init__(self, dim_model: int = 1024, num_attention_heads: int = 16, dim_head: int = 64, dropout: float = 0.1) -> None:
         super(MultiHeadAttention, self).__init__()
         self.dim_model = dim_model
-        self.num_heads = num_heads
+        self.num_attention_heads = num_attention_heads
         self.dim_head = dim_head
         self.dropout = dropout
         self.attention_heads = nn.ModuleList(
-            [AttentionHead(self.dim_model, self.dim_head, self.dropout) for _ in range(self.num_heads)]
+            [AttentionHead(self.dim_model, self.dim_head, self.dropout) for _ in range(self.num_attention_heads)]
         )
         self.fc_concat = nn.Linear(self.dim_model, self.dim_model)
 
@@ -180,12 +183,12 @@ class DeBERTaEncoderLayer(nn.Module):
     References:
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/bert.py
     """
-    def __init__(self, dim_model: int = 1024, num_heads: int = 16, dim_ffn: int = 4096, dropout: float = 0.1) -> None:
+    def __init__(self, dim_model: int = 1024, num_attention_heads: int = 16, dim_ffn: int = 4096, dropout: float = 0.1) -> None:
         super(DeBERTaEncoderLayer, self).__init__()
         self.self_attention = MultiHeadAttention(
             dim_model,
-            num_heads,
-            int(dim_model / num_heads),
+            num_attention_heads,
+            int(dim_model / num_attention_heads),
             dropout,
         )
         self.layer_norm1 = nn.LayerNorm(dim_model)
@@ -201,7 +204,6 @@ class DeBERTaEncoderLayer(nn.Module):
         """ rel_pos_emb is fixed for all layer in same forward pass time """
         ln_x, ln_pos_x = self.layer_norm1(x), self.layer_norm1(pos_x)  # pre-layer norm, weight share
         residual_x = self.dropout(self.self_attention(ln_x, ln_pos_x, mask, emd)) + x
-
         ln_x = self.layer_norm2(residual_x)
         fx = self.ffn(ln_x) + residual_x
         return fx
@@ -209,29 +211,29 @@ class DeBERTaEncoderLayer(nn.Module):
 
 class DeBERTaEncoder(nn.Module):
     """
-    In this class, 1) encode input sequence, 2) make relative position embedding, 3) stack N DeBERTaEncoderLayer
+    In this class, 1) encode input sequence, 2) make relative position embedding, 3) stack num_layers DeBERTaEncoderLayer
     This class's forward output is not integrated with EMD Layer's output
     Output have ONLY result of disentangled self-attention
     All ops order is from official paper & repo by microsoft, but ops operating is slightly different,
     Because they use custom ops, e.g. XDropout, XSoftmax, ..., we just apply pure pytorch ops
     Args:
         max_seq: maximum sequence length, named "max_position_embedding" in official repo, default 512, in official paper, this value is called 'k'
-        N: number of EncoderLayer, default 24 for large model
+        num_layers: number of EncoderLayer, default 24 for large model
     Notes:
         self.rel_pos_emb: P in paper, this matrix is fixed during forward pass in same time, all layer & all module must share this layer from official paper
     References:
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/ops.py
     """
-    def __init__(self, max_seq: 512, N: int = 24, dim_model: int = 1024, num_heads: int = 16, dim_ffn: int = 4096, dropout: float = 0.1) -> None:
+    def __init__(self, max_seq: 512, num_layers: int = 24, dim_model: int = 1024, num_attention_heads: int = 16, dim_ffn: int = 4096, dropout: float = 0.1) -> None:
         super(DeBERTaEncoder, self).__init__()
         self.max_seq = max_seq
-        self.num_layers = N
+        self.num_layers = num_layers
         self.dim_model = dim_model
-        self.num_heads = num_heads
+        self.num_attention_heads = num_attention_heads
         self.dim_ffn = dim_ffn
         self.dropout = nn.Dropout(p=dropout)  # dropout is not learnable
         self.encoder_layers = nn.ModuleList(
-            [DeBERTaEncoderLayer(dim_model, num_heads, dim_ffn, dropout) for _ in range(self.num_layers)]
+            [DeBERTaEncoderLayer(dim_model, num_attention_heads, dim_ffn, dropout) for _ in range(self.num_layers)]
         )
         self.layer_norm = nn.LayerNorm(dim_model)  # for final-Encoder output
 
@@ -247,7 +249,7 @@ class DeBERTaEncoder(nn.Module):
             x = layer(x, pos_x, mask)
             layer_output.append(x)
         last_hidden_state = self.layer_norm(x)  # because of applying pre-layer norm
-        hidden_states = torch.stack(layer_output, dim=0).to(x.device)  # shape: [N, BS, SEQ_LEN, DIM_Model]
+        hidden_states = torch.stack(layer_output, dim=0).to(x.device)  # shape: [num_layers, BS, SEQ_LEN, DIM_Model]
         return last_hidden_state, hidden_states
 
 
@@ -266,7 +268,7 @@ class EnhancedMaskDecoder(nn.Module):
         Also we temporarily implement only extract token embedding, not calculating logit, loss for MLM Task yet
         MLM Task will be implemented ASAP
     Args:
-        encoder: list of nn.ModuleList, which is (N_EMD * last encoder layer) from DeBERTaEncoder
+        encoder: list of nn.ModuleList, which is (num_emd * last encoder layer) from DeBERTaEncoder
     References:
         https://arxiv.org/abs/2006.03654
         https://arxiv.org/abs/2111.09543
@@ -297,19 +299,56 @@ class EnhancedMaskDecoder(nn.Module):
         return last_hidden_state, emd_hidden_states
 
 
+class Embedding(nn.Module):
+    """ DeBERTa Embedding Module class
+    This Module set & initialize 3 Embedding Layers:
+        1) Word Embedding. 2) Relative Positional Embedding, 3) Absolute Positional Embedding
+    Args:
+        cfg: configuration.py
+    Notes:
+        Absolute Positional Embedding does not add at bottom layers
+        It will be added in top layer of encoder before hidden states are passed into Enhanced Mask Decoder
+        And Relative Positional Embedding also doesn't add with Word Embedding
+    """
+    def __init__(self, cfg: CFG) -> None:
+        super(Embedding, self).__init__()
+        self.max_seq = cfg.max_seq
+        self.max_rel_pos = 2 * self.max_seq
+        self.word_embedding = nn.Embedding(cfg.vocab_size, cfg.dim_model)  # Word Embedding which is not add Absolute Position
+        self.rel_pos_emb = nn.Embedding(self.max_rel_pos, cfg.dim_model)  # Relative Position Embedding
+        self.abs_pos_emb = nn.Embedding(cfg.max_seq, cfg.dim_model)  # Absolute Position Embedding for EMD Layer
+        self.layer_norm1 = nn.LayerNorm(cfg.dim_model, eps=cfg.layer_norm_eps)  # for word embedding
+        self.layer_norm2 = nn.LayerNorm(cfg.dim_model, eps=cfg.layer_norm_eps)  # for rel_pos_emb
+        self.hidden_dropout = nn.Dropout(p=cfg.hidden_dropout_prob)
+
+    def forward(self, inputs: Tensor) -> Tuple[nn.Embedding, nn.Embedding, nn.Embedding]:
+        word_embeddings = self.hidden_dropout(
+            self.layer_norm1(self.word_embedding(inputs))
+        )
+        rel_pos_emb = self.hidden_dropout(
+            self.layer_norm2(self.rel_pos_emb(torch.arange(self.max_rel_pos).repeat(inputs.shape[0]).to(inputs)))
+        )
+        abs_pos_emb = self.abs_pos_emb(torch.arange(self.max_seq).repeat(inputs.shape[0]).to(inputs))  # "I" in paper
+        return word_embeddings, rel_pos_emb, abs_pos_emb
+
+
 class DeBERTa(nn.Module):
     """
     Main class for DeBERTa, having all of sub-blocks & modules such as Disentangled Self-attention, DeBERTaEncoder, EMD
     Init Scale of DeBERTa Hyper-Parameters, Embedding Layer, Encoder Blocks, EMD Blocks
     And then make 3-types of Embedding Layer, Word Embedding, Absolute Position Embedding, Relative Position Embedding
-    Args:
+    Var:
+        vocab_size: size of vocab in DeBERTa's Native Tokenizer
         max_seq: maximum sequence length
-        N: number of Disentangled-Encoder layers
-        N_EMD: number of EMD layers
+        max_rel_pos: max_seq x2 for build relative position embedding
+        num_layers: number of Disentangled-Encoder layers
+        num_attention_heads: number of attention heads
+        num_emd: number of EMD layers
         dim_model: dimension of model
-        num_heads: number of heads in multi-head attention
+        num_attention_heads: number of heads in multi-head attention
         dim_ffn: dimension of feed-forward network, same as intermediate size in official repo
-        dropout: dropout rate
+        hidden_dropout_prob: dropout rate for embedding, hidden layer
+        attention_probs_dropout_prob: dropout rate for attention
     Notes:
         MLM Task is not implemented yet, will be implemented ASAP, but you can get token encode output (embedding)
     References:
@@ -322,58 +361,39 @@ class DeBERTa(nn.Module):
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/disentangled_attention.py
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/apps/models/masked_language_model.py
     """
-    def __init__(
-            self,
-            vocab_size: int,
-            max_seq: 512,
-            N: int = 24,
-            N_EMD: int = 2,
-            dim_model: int = 1024,
-            num_heads: int = 16,
-            dim_ffn: int = 4096,
-            dropout: float = 0.1
-    ) -> None:
+    def __init__(self, cfg: CFG) -> None:
         super(DeBERTa, self).__init__()
-        # Init Scale of DeBERTa
-        self.max_seq = max_seq
+        # Init Scale of DeBERTa Module
+        self.vocab_size = cfg.vocab_size
+        self.max_seq = cfg.max_seq
         self.max_rel_pos = 2 * self.max_seq
-        self.N = N
-        self.N_EMD = N_EMD
-        self.dim_model = dim_model
-        self.num_heads = num_heads
-        self.dim_ffn = dim_ffn
-        self.dropout_prob = dropout
+        self.num_layers = cfg.num_layers
+        self.num_attention_heads = cfg.num_attention_heads
+        self.num_emd = cfg.num_emd
+        self.dim_model = cfg.dim_model
+        self.dim_ffn = cfg.dim_ffn
+        self.hidden_dropout_prob = cfg.hidden_dropout_prob
+        self.attention_dropout_prob = cfg.attention_probs_dropout_prob
 
         # Init Embedding Layer
-        self.word_embedding = nn.Embedding(vocab_size, dim_model)  # Word Embedding which is not add Absolute Position
-        self.rel_pos_emb = nn.Embedding(self.max_rel_pos, dim_model)  # Relative Position Embedding
-        self.abs_pos_emb = nn.Embedding(max_seq, dim_model)  # Absolute Position Embedding for EMD Layer
-        self.layer_norm1 = nn.LayerNorm(dim_model)  # for word embedding
-        self.layer_norm2 = nn.LayerNorm(dim_model)  # for rel_pos_emb
-        self.dropout = nn.Dropout(p=self.dropout_prob)
+        self.embedding = Embedding(cfg)
 
-        # Init Sub-Blocks & Modules
+        # Init Encoder Blocks & Modules
         self.encoder = DeBERTaEncoder(
             self.max_seq,
-            self.N,
+            self.num_layers,
             self.dim_model,
-            self.num_heads,
+            self.num_attention_heads,
             self.dim_ffn,
-            self.dropout_prob
+            self.hidden_dropout_prob
         )
-        self.emd_layers = [self.encoder.encoder_layers[-1] for _ in range(self.N_EMD)]
+        self.emd_layers = [self.encoder.encoder_layers[-1] for _ in range(self.num_emd)]
         self.emd_encoder = EnhancedMaskDecoder(self.emd_layers, self.dim_model)
 
-    def forward(self, inputs: Tensor, mask: Tensor):
+    def forward(self, inputs: Tensor, mask: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         assert inputs.ndim == 3, f'Expected (batch, sequence, vocab_size) got {inputs.shape}'
         # Embedding Layer
-        word_embeddings = self.dropout(
-            self.layer_norm1(self.word_embedding(inputs))
-        )
-        rel_pos_emb = self.dropout(
-            self.layer_norm2(self.rel_pos_emb(torch.arange(self.max_rel_pos).repeat(inputs.shape[0]).to(inputs)))
-        )
-        abs_pos_emb = self.abs_pos_emb(torch.arange(self.max_seq).repeat(inputs.shape[0]).to(inputs))  # "I" in paper
+        word_embeddings, rel_pos_emb, abs_pos_emb = self.embedding(inputs)
 
         # Disentangled Self-attention Encoder Layer
         last_hidden_state, hidden_states = self.encoder(word_embeddings, rel_pos_emb, mask)
@@ -383,3 +403,7 @@ class DeBERTa(nn.Module):
         emd_last_hidden_state, emd_hidden_states = self.emd_encoder(emd_hidden_states, abs_pos_emb, rel_pos_emb, mask)
         return last_hidden_state, hidden_states, emd_last_hidden_state, emd_hidden_states
 
+
+if __name__ == "__main__":
+    test = DeBERTa(CFG)
+    print(test)

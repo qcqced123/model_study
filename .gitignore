@@ -9,8 +9,8 @@
 .DS_Store
 *.xml
 *.iml
-!/model/attention/seq2seq/(NoteTaking_Ver)Transformer.ipynb
-!/model/attention/encoder_model/implementation_test.ipynb
+!/models/attention/seq2seq/(NoteTaking_Ver)Transformer.ipynb
+!/models/attention/encoder_model/implementation_test.ipynb
 # Created by https://www.toptal.com/developers/gitignore/api/linux,macos,windows,python,pycharm,jupyternotebooks,visualstudiocode
 # Edit at https://www.toptal.com/developers/gitignore?templates=linux,macos,windows,python,pycharm,jupyternotebooks,visualstudiocode
 
@@ -404,5 +404,5 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/linux,macos,windows,python,pycharm,jupyternotebooks,visualstudiocode!/Attention/encoder_model/implementation_test.ipynb
-!/model/attention/seq2seq/(NoteTaking_Ver)Transformer.ipynb
+!/models/attention/seq2seq/(NoteTaking_Ver)Transformer.ipynb
 *.ipynb

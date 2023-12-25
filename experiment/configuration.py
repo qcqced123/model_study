@@ -1,6 +1,5 @@
 import torch
 from transformers import AutoTokenizer
-# from model.metric import *
 
 
 class CFG:
@@ -18,8 +17,7 @@ class CFG:
 
     """ Common Options """
     wandb = True
-    optuna = False  # if you want to tune hyperparameter, set True
-    competition = 'FB3'
+    optuna = False
     seed = 42
     cfg_name = 'CFG'
     n_gpu = 1
@@ -72,10 +70,20 @@ class CFG:
     anneal_epochs = 4
     anneal_strategy = 'cos'  # default = cos, available option: linear
 
-    """ Model_Utils Options """
-    attention_probs_dropout_prob = 0.007
-    hidden_dropout_prob = 0.007
-    init_weight = 'normal'
+    """ Model Options """
+    vocab_size = tokenizer.vocab_size
+    max_seq = 512
+    num_layers = 12
+    num_emd = 2
+    num_attention_heads = 12
+    dim_model = 768
+    dim_ffn = 2048
+    hidden_act = 'gelu'
+    layer_norm_eps = 1e-7
+    attention_probs_dropout_prob = 0.1
+    hidden_dropout_prob = 0.1
+    init_weight = 'orthogonal'  # options: normal, xavier_uniform, xavier_normal, kaiming_uniform, kaiming_normal
+    initializer_range = 0.02
     stop_mode = 'min'
     freeze = False
     num_freeze = 2
