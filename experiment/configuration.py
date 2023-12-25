@@ -1,6 +1,5 @@
 import torch
 from transformers import AutoTokenizer
-from utils.helper import select_model_file
 
 
 class CFG:
@@ -9,27 +8,30 @@ class CFG:
     checkpoint_dir = './saved/model'
     resume, load_pretrained,  state_dict = True, False, '/'
     name = 'DeBERTa_MLM'
-    loop = 'mpl_loop'
-    dataset = 'FBPDataset'  # dataset_class.dataclass.py -> FBPDataset, MPLDataset
+    loop = 'train_loop'
+    hf_dataset = 'wikimedia/wikipedia'
+    language = '20231101.en'
+    dataset = 'MLMDataset'  # dataset_class.dataclass.py -> MLMDataset, CLMDataset ... etc
     arch_name = 'attention'
     model_name = 'deberta'
     module_name = 'DeBERTa'
-    model = select_model_file(arch=arch_name, model=model_name)
-    tmp_model = 'microsoft/deberta-v3-large'
+    tmp_model = 'microsoft/deberta-v3-large'  # later, remove this line
     tokenizer = AutoTokenizer.from_pretrained(tmp_model)
-    pooling = 'MeanPooling'  # mean, attention, max, weightedlayer, concat, conv1d, lstm
+    task = 'MaskedLanguageModel'  # options: MaskedLanguageModel, CasualLanguageModel
+    pooling = 'MeanPooling'
 
     """ Common Options """
     wandb = True
     optuna = False
-    seed = 42
     cfg_name = 'CFG'
+    seed = 42
     n_gpu = 1
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     gpu_id = 0
-    num_workers = 0
+    num_workers = 4
 
     """ Data Options """
+    split_ratio = 0.2
     n_folds = 5
     max_len = 512
     epochs = 180
@@ -37,24 +39,22 @@ class CFG:
     smart_batch = False
 
     """ Gradient Options """
-    amp_scaler = False
-    gradient_checkpoint = True  # save parameter
-    clipping_grad = True  # clip_grad_norm
+    amp_scaler = True
+    gradient_checkpoint = True
+    clipping_grad = True
     n_gradient_accumulation_steps = 1
-    max_grad_norm = 1000
+    max_grad_norm = 1
 
     """ Loss & Metrics Options """
-    loss_fn = 'SmoothL1Loss'
-    val_loss_fn = 'WeightedMSELoss'
+    loss_fn = 'CrossEntropyLoss'
+    val_loss_fn = 'CrossEntropyLoss'
     reduction = 'mean'
-    content_weight = 0.45
-    wording_weight = 0.55
-    metrics = ['MCRMSE', 'f_beta', 'recall']
+    metrics = 'accuracy'
 
     """ Optimizer with LLRD Options """
     optimizer = 'AdamW'  # options: SWA, AdamW
     llrd = True
-    layerwise_lr = 5e-6
+    layerwise_lr = 5e-5
     layerwise_lr_decay = 0.9
     layerwise_weight_decay = 1e-2
     layerwise_adam_epsilon = 1e-6
@@ -81,7 +81,7 @@ class CFG:
     num_emd = 2
     num_attention_heads = 12
     dim_model = 768
-    dim_ffn = 2048
+    dim_ffn = 3072
     hidden_act = 'gelu'
     layer_norm_eps = 1e-7
     attention_probs_dropout_prob = 0.1

@@ -632,7 +632,7 @@ class OneToManyTrainer:
         return losses.avg, c_losses.avg, w_losses.avg, grad_norm, scheduler.get_lr()[0]
 
     def valid_fn(self, loader_valid, model, val_criterion) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """function for validation loop, cv metric same as cv loss, so no need to implement further more"""
+        """function for validation loop, cv metrics same as cv loss, so no need to implement further more"""
         valid_losses, c_losses, w_losses = AverageMeter(), AverageMeter(), AverageMeter()
         model.eval()
         with torch.no_grad():

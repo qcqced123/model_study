@@ -2,7 +2,7 @@
     "pipeline_setting": {
         "train": true,
         "test": false,
-        "checkpoint_dir": "./checkpoint/model/fold4_one2one/",
+        "checkpoint_dir": "./saved/model",
         "load_pretrained": false,
         "resume": false,
         "state_dict": "",

@@ -186,7 +186,7 @@ class ContrastiveLoss(nn.Module):
 class BatchDotProductContrastiveLoss(nn.Module):
     """
     Batch Embedding Inner-Product based Contrastive Loss Function
-    This metric request just one input batch, not two input batches for calculating loss
+    This metrics request just one input batch, not two input batches for calculating loss
     Args:
         metric: distance metrics, default: cosine
         margin: margin for negative pairs, default: 1.0

@@ -4,7 +4,7 @@ import pandas as pd
 from pathlib import Path
 from itertools import repeat
 from collections import OrderedDict
-from configuration import CFG
+from experiment.configuration import CFG
 
 
 def ensure_dir(dirname):

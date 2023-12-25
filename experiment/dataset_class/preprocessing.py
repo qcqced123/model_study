@@ -2,17 +2,39 @@ import re, gc
 import pandas as pd
 import numpy as np
 import torch
-import configuration as configuration
+import experiment.configuration as configuration
+from datasets import load_dataset
 from sklearn.model_selection import StratifiedKFold, GroupKFold
 from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
 from nltk.tokenize import word_tokenize
 from autocorrect import Speller
 from spellchecker import SpellChecker
 from tqdm.auto import tqdm
-from typing import List
+from typing import List, Tuple, Union
 
 speller = Speller(lang='en')
 spellchecker = SpellChecker()
+
+
+def hf_load_dataset(cfg: configuration.CFG) -> Union:
+    """ Load dataset from Huggingface Datasets
+    Notes:
+        This function is temporary just fit-able for Wikipedia dataset
+    References:
+        https://github.com/huggingface/datasets/blob/main/src/datasets/load.py#2247
+    """
+    dataset = load_dataset(cfg.hf_dataset, cfg.language)
+    return dataset
+
+
+def hf_split_dataset(cfg: configuration.CFG, dataset: Union) -> Tuple[Union, Union]:
+    """ Split dataset from Huggingface Datasets
+    Notes:
+        This function is temporary just fit-able for Wikipedia dataset & MLM Task
+    """
+    dataset = dataset.train_test_split(cfg.split_ratio, seed=cfg.seed)
+    train, valid = dataset['train'], dataset['test']
+    return train, valid
 
 
 def group_kfold(df: pd.DataFrame, cfg: configuration.CFG) -> pd.DataFrame:
@@ -87,6 +109,42 @@ def add_anchor_token(cfg: configuration.CFG, token: str) -> None:
     setattr(cfg.tokenizer, 'anchor_token', f'{special_token}')
     setattr(cfg.tokenizer, 'anchor_token_id', anchor_token_id)
     cfg.tokenizer.save_pretrained(f'{cfg.checkpoint_dir}/tokenizer/')
+
+
+def chunking(cfg: configuration.CFG, sequences: List) -> List[str]:
+    """ Chunking sentence to token using pretrained tokenizer
+    Args:
+        cfg: configuration.CFG, needed to load pretrained tokenizer
+        sequences: list, sentence to chunking
+    References:
+        https://huggingface.co/docs/transformers/main/tasks/masked_language_modeling
+    """
+    return cfg.tokenizer([" ".join(x) for x in sequences])
+
+
+def group_texts(sequences: List):
+    # Concatenate all texts.
+    concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
+    total_length = len(concatenated_examples[list(examples.keys())[0]])
+    # We drop the small remainder, we could add padding if the model supported it instead of this drop, you can
+    # customize this part to your needs.
+    if total_length >= block_size:
+        total_length = (total_length // block_size) * block_size
+    # Split by chunks of block_size.
+    result = {
+        k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
+        for k, t in concatenated_examples.items()
+    }
+    return result
+
+
+def apply_preprocess():
+    """ Apply preprocessing to text data, which is using huggingface dataset method "map()"
+    Args:
+
+    References:
+        https://huggingface.co/docs/transformers/main/tasks/masked_language_modeling
+    """
 
 
 def tokenizing(cfg: configuration.CFG, text: str, padding: bool or str = 'max_length') -> any:

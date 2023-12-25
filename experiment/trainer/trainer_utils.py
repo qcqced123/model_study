@@ -365,9 +365,9 @@ class AverageMeter(object):
 
 
 class EarlyStopping(object):
-    """ Monitor a metric and stop training when it stops improving.
+    """ Monitor a metrics and stop training when it stops improving.
     Args:
-        mode: 'min' for loss base val_score for loss, 'max' for metric base val_score
+        mode: 'min' for loss base val_score for loss, 'max' for metrics base val_score
         patience: number of checks with no improvement, default = 3
         min_delta: minimum change in the monitored quantity to qualify as an improvement, i.e. an absolute
             change of less than or equal to `min_delta`, will count as no improvement. default = 0.0
