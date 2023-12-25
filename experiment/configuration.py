@@ -2,6 +2,7 @@ import torch
 from transformers import AutoTokenizer
 from utils.helper import select_model_file
 
+
 class CFG:
     """ Pipeline Setting """
     train, test = True, False
