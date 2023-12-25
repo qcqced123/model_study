@@ -47,7 +47,7 @@ class RMSELoss(nn.Module):
 
 class MCRMSELoss(nn.Module):
     """
-    Mean Column-wise Root Mean Squared Error Loss, which is used in this competition
+    Mean Column-wise Root Mean Squared Error Loss
     Calculate RMSE per target values(columns), and then calculate mean of each column's RMSE Result
     Args:
         reduction: str, reduction method of loss
@@ -72,7 +72,7 @@ class WeightMCRMSELoss(nn.Module):
     References:
         https://www.kaggle.com/competitions/feedback-prize-english-language-learning/discussion/369609
     """
-    def __init__(self, reduction, num_scored=2):
+    def __init__(self, reduction, num_scored=6):
         super(WeightMCRMSELoss, self).__init__()
         self.RMSE = RMSELoss(reduction=reduction)
         self.num_scored = num_scored
@@ -86,9 +86,8 @@ class WeightMCRMSELoss(nn.Module):
 
 
 class WeightedMSELoss(nn.Module):
-    """
-    Weighted MSE Loss
-    Refercnes:
+    """ Weighted MSE Loss
+    Reference:
         https://www.kaggle.com/competitions/feedback-prize-english-language-learning/discussion/369793
     """
     def __init__(self, reduction, task_num=1) -> None:
