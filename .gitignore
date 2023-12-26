@@ -406,3 +406,4 @@ $RECYCLE.BIN/
 # End of https://www.toptal.com/developers/gitignore/api/linux,macos,windows,python,pycharm,jupyternotebooks,visualstudiocode!/Attention/encoder_model/implementation_test.ipynb
 !/models/attention/seq2seq/(NoteTaking_Ver)Transformer.ipynb
 *.ipynb
+*.pkl

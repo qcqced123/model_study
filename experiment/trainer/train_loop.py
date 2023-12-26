@@ -30,9 +30,9 @@ def train_loop(cfg: CFG) -> None:
         early_stopping.detecting_anomaly()
 
         val_score_max = np.inf
-        train_input = getattr(trainer, cfg.name)(cfg, g)  # init object
-        loader_train, loader_valid, train = train_input.make_batch(fold)
-        model, criterion, val_criterion, optimizer, lr_scheduler, awp, swa_model, swa_scheduler = train_input.model_setting(len(train))
+        train_input = getattr(trainer, cfg.trainer)(cfg, g)  # init object
+        loader_train, loader_valid, len_train = train_input.make_batch(fold)
+        model, criterion, val_criterion, optimizer, lr_scheduler, awp, swa_model, swa_scheduler = train_input.model_setting(len_train)
 
         for epoch in range(cfg.epochs):
             print(f'[{epoch + 1}/{cfg.epochs}] Train & Validation')

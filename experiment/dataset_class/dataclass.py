@@ -1,24 +1,24 @@
-import gc, ast, sys, random
-import numpy as np
 import torch
-import torch.nn as nn
 from torch.utils.data import Dataset
+from torch import Tensor
 from typing import Dict, List, Tuple
-
-from experiment.configuration import CFG
-from experiment.dataset_class.preprocessing import tokenizing
 
 
 class MLMDataset(Dataset):
     """ Custom Dataset for Masked Language Modeling
     Args:
-
+        inputs: inputs from tokenizing by tokenizer, which is a dictionary of input_ids, attention_mask, token_type_ids
     """
-    def __init__(self) -> None:
-        pass
+    def __init__(self, inputs: Dict) -> None:
+        self.inputs = inputs
+        self.input_ids = inputs['input_ids']
 
     def __len__(self) -> int:
-        pass
+        return len(self.input_ids)
 
-    def __getitem__(self, idx: int) -> Dict:
-        pass
+    def __getitem__(self, item: int) -> Dict[str, Tensor]:
+        batch_inputs = {k: v[item] for k, v in self.inputs.items()}
+        for k, v in batch_inputs.items():
+            batch_inputs[k] = torch.as_tensor(v[item])  # reduce memory usage by defending copying tensor
+        return batch_inputs
+

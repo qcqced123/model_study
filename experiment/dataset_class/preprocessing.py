@@ -1,22 +1,22 @@
-import re, gc
+import re, gc, pickle
 import pandas as pd
 import numpy as np
 import torch
 import experiment.configuration as configuration
-from datasets import load_dataset
-from sklearn.model_selection import StratifiedKFold, GroupKFold
+from datasets import load_dataset, Dataset, DatasetDict
+from sklearn.model_selection import StratifiedKFold, GroupKFold, train_test_split
 from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
 from nltk.tokenize import word_tokenize
 from autocorrect import Speller
 from spellchecker import SpellChecker
 from tqdm.auto import tqdm
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Dict, Callable, Any
 
 speller = Speller(lang='en')
 spellchecker = SpellChecker()
 
 
-def hf_load_dataset(cfg: configuration.CFG) -> Union:
+def hf_load_dataset(cfg: configuration.CFG) -> DatasetDict:
     """ Load dataset from Huggingface Datasets
     Notes:
         This function is temporary just fit-able for Wikipedia dataset
@@ -27,14 +27,38 @@ def hf_load_dataset(cfg: configuration.CFG) -> Union:
     return dataset
 
 
-def hf_split_dataset(cfg: configuration.CFG, dataset: Union) -> Tuple[Union, Union]:
-    """ Split dataset from Huggingface Datasets
+def hf_split_dataset(cfg: configuration.CFG, dataset: Dataset) -> Tuple[Dataset, Dataset]:
+    """ Split dataset from Huggingface Datasets with huggingface method "train_test_split"
+    Args:
+        cfg: configuration.CFG, needed to load split ratio, seed value
+        dataset: Huggingface Datasets object, dataset from Huggingface Datasets
     Notes:
         This function is temporary just fit-able for Wikipedia dataset & MLM Task
     """
     dataset = dataset.train_test_split(cfg.split_ratio, seed=cfg.seed)
     train, valid = dataset['train'], dataset['test']
     return train, valid
+
+
+def dataset_split(cfg: configuration.CFG, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """ Split dataset from pandas.DataFrame with sklearn.train_test_split
+    Args:
+        cfg: configuration.CFG, needed to load split ratio, seed value
+        df: pandas.DataFrame, dataset from csv file
+    """
+    train, valid = train_test_split(
+        df,
+        test_size=cfg.split_ratio,
+        random_state=cfg.seed,
+        shuffle=True,
+    )
+    return train, valid
+
+
+def dict2df(dataset: Dict) -> pd.DataFrame:
+    """ Convert dictionary to pandas.DataFrame """
+    df = pd.DataFrame(dataset)
+    return df
 
 
 def group_kfold(df: pd.DataFrame, cfg: configuration.CFG) -> pd.DataFrame:
@@ -111,7 +135,7 @@ def add_anchor_token(cfg: configuration.CFG, token: str) -> None:
     cfg.tokenizer.save_pretrained(f'{cfg.checkpoint_dir}/tokenizer/')
 
 
-def chunking(cfg: configuration.CFG, sequences: List) -> List[str]:
+def chunking(cfg: configuration.CFG, sequences: Dict) -> List[str]:
     """ Chunking sentence to token using pretrained tokenizer
     Args:
         cfg: configuration.CFG, needed to load pretrained tokenizer
@@ -119,32 +143,47 @@ def chunking(cfg: configuration.CFG, sequences: List) -> List[str]:
     References:
         https://huggingface.co/docs/transformers/main/tasks/masked_language_modeling
     """
-    return cfg.tokenizer([" ".join(x) for x in sequences])
+    return cfg.tokenizer([" ".join(x) for x in sequences['text']])
 
 
-def group_texts(sequences: List):
-    # Concatenate all texts.
-    concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
-    total_length = len(concatenated_examples[list(examples.keys())[0]])
-    # We drop the small remainder, we could add padding if the model supported it instead of this drop, you can
-    # customize this part to your needs.
-    if total_length >= block_size:
-        total_length = (total_length // block_size) * block_size
-    # Split by chunks of block_size.
+def group_texts(cfg: configuration.CFG, sequences: Dict) -> Dict:
+    """ Dealing Problem: some of data instances are longer than the maximum input length for the model,
+    This function is ONLY used to HF Dataset Object
+    1) Concatenate all texts
+    2) We drop the small remainder, we could add padding if the model supported it instead of this drop, you can
+    3) customize this part to your needs
+    4) Split by chunks of max_len
+    """
+    concatenated_sequences = {k: sum(sequences[k], []) for k in sequences.keys()}
+    total_length = len(concatenated_sequences[list(sequences.keys())[0]])
+    if total_length >= cfg.max_seq:
+        total_length = (total_length // cfg.max_seq) * cfg.max_seq
     result = {
-        k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
-        for k, t in concatenated_examples.items()
+        k: [t[i: i + cfg.max_seq] for i in range(0, total_length, cfg.max_seq)]
+        for k, t in concatenated_sequences.items()
     }
     return result
 
 
-def apply_preprocess():
+def apply_preprocess(dataset: Dataset, function: Callable, batched: bool = True, num_proc: int = 4, remove_columns: any = None) -> Dataset:
     """ Apply preprocessing to text data, which is using huggingface dataset method "map()"
+    for pretrained training (MLM, CLM)
     Args:
-
+        dataset: Huggingface Datasets object, dataset from Huggingface Datasets
+        function: Callable, function that you want to apply
+        batched: bool, default True, if you want to apply function to batched data, set True
+        num_proc: int, default 4, number of process for multiprocessing
+        remove_columns: any, default None, if you want to remove some columns, set column name
     References:
         https://huggingface.co/docs/transformers/main/tasks/masked_language_modeling
     """
+    mapped_dataset = dataset.map(
+        function,
+        batched=batched,
+        num_proc=num_proc,
+        remove_columns=remove_columns,
+    )
+    return mapped_dataset
 
 
 def tokenizing(cfg: configuration.CFG, text: str, padding: bool or str = 'max_length') -> any:
@@ -275,8 +314,7 @@ def check_null(df: pd.DataFrame) -> pd.Series:
 
 
 def load_data(data_path: str) -> pd.DataFrame:
-    """
-    Load data_folder from csv file like as train.csv, test.csv, val.csv
+    """ Load data_folder from csv file like as train.csv, test.csv, val.csv
     """
     df = pd.read_csv(data_path)
     return df
@@ -287,10 +325,6 @@ def no_char(text):
     text = re.sub(r"\^[a-zA-Z]\s+", " ", text)
     text = re.sub(r"\s+[a-zA-Z]$", " ", text)
     return text
-
-
-def no_html_tags(text):
-    return re.sub("<.*?>", " ", text)
 
 
 def no_multi_spaces(text):
@@ -304,7 +338,8 @@ def underscore_to_space(text: str):
 
 
 def preprocess_text(source):
-    # Remove all the special characters
+    """ Remove all the special characters
+    """
     source = re.sub(r'\W', ' ', str(source))
     source = re.sub(r'^b\s+', '', source)
     source = source.lower()
@@ -312,10 +347,55 @@ def preprocess_text(source):
 
 
 def cleaning_words(text: str) -> str:
-    """ Apply all of cleaning process to text data """
-    tmp_text = no_html_tags(text)
-    tmp_text = underscore_to_space(tmp_text)
+    """ Apply all of cleaning process to text data
+    """
+    tmp_text = underscore_to_space(text)
     tmp_text = no_char(tmp_text)
     tmp_text = preprocess_text(tmp_text)
     tmp_text = no_multi_spaces(tmp_text)
     return tmp_text
+
+
+def split_token(inputs: str):
+    """ Convert malform list to Python List Object & elementwise type casting
+    """
+    inputs = cleaning_words(inputs)
+    tmp = inputs.split()
+    result = list(map(int, tmp))
+    return result
+
+
+def split_list(inputs: List, max_length: int) -> List[List]:
+    """ Split List into sub shorter list, which is longer than max_length
+    """
+    result = [inputs[i:i + max_length] for i in range(0, len(inputs), max_length)]
+    return result
+
+
+def flatten_sublist(inputs: List[List[str]], max_length: int = 512) -> List[List]:
+    """ Flatten Nested List to 1D-List """
+    result = []
+    for instance in tqdm(inputs):
+        tmp = split_token(instance)
+        if len(tmp) > max_length:
+            tmp = split_list(tmp, max_length)
+            for i in range(len(tmp)):
+                result.append(tmp)
+        else:
+            result.append(tmp)
+    return result
+
+
+def save_pkl(input_dict: Any, filename: str) -> None:
+    with open(f'{filename}.pkl', 'wb') as file:
+        pickle.dump(input_dict, file)
+
+
+def load_pkl(filepath: str) -> Any:
+    """  Load pickle file
+    Examples:
+        filepath = './dataset_class/data_folder/train'
+    """
+    with open(f'{filepath}.pkl', 'rb') as file:
+        output = pickle.load(file)
+    return output

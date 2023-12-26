@@ -8,6 +8,8 @@ class CFG:
     checkpoint_dir = './saved/model'
     resume, load_pretrained,  state_dict = True, False, '/'
     name = 'DeBERTa_MLM'
+    datafolder = 'wikipedia_en'
+    trainer = 'PreTrainTuner'
     loop = 'train_loop'
     hf_dataset = 'wikimedia/wikipedia'
     language = '20231101.en'
@@ -97,8 +99,3 @@ class CFG:
     nth_awp_start_epoch = 10
     awp_eps = 1e-2
     awp_lr = 1e-4
-
-
-if __name__ == "__main__":
-    test = CFG
-    print(test.model)

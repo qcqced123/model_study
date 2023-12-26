@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from models.abstract_model import AbstractModel
 from torch import Tensor
 from typing import Tuple, List
 from einops.layers.torch import Rearrange
@@ -216,7 +217,7 @@ class DeBERTaEncoderLayer(nn.Module):
         return fx
 
 
-class DeBERTaEncoder(nn.Module):
+class DeBERTaEncoder(nn.Module, AbstractModel):
     """
     In this class, 1) encode input sequence, 2) make relative position embedding, 3) stack num_layers DeBERTaEncoderLayer
     This class's forward output is not integrated with EMD Layer's output
@@ -240,9 +241,10 @@ class DeBERTaEncoder(nn.Module):
             dim_ffn: int = 4096,
             layer_norm_eps: float = 0.02,
             attention_dropout_prob: float = 0.1,
-            hidden_dropout_prob: float = 0.1
+            hidden_dropout_prob: float = 0.1,
+            gradient_checkpointing: bool = False
     ) -> None:
-        super(DeBERTaEncoder, self).__init__()
+        super().__init__()
         self.max_seq = max_seq
         self.num_layers = num_layers
         self.dim_model = dim_model
@@ -253,6 +255,7 @@ class DeBERTaEncoder(nn.Module):
             [DeBERTaEncoderLayer(dim_model, num_attention_heads, dim_ffn, layer_norm_eps, attention_dropout_prob, hidden_dropout_prob) for _ in range(self.num_layers)]
         )
         self.layer_norm = nn.LayerNorm(dim_model, eps=layer_norm_eps)  # for final-Encoder output
+        self.gradient_checkpointing = gradient_checkpointing
 
     def forward(self, inputs: Tensor, rel_pos_emb: Tensor, mask: Tensor) -> tuple[Tensor, Tensor]:
         """
@@ -263,14 +266,17 @@ class DeBERTaEncoder(nn.Module):
         layer_output = []
         x, pos_x = inputs, rel_pos_emb  # x is same as word_embeddings or embeddings in official repo
         for layer in self.encoder_layers:
-            x = layer(x, pos_x, mask)
+            if self.gradient_checkpointing:
+                x = self._gradient_checkpointing(layer.__call__, x, pos_x, mask)
+            else:
+                x = layer(x, pos_x, mask)
             layer_output.append(x)
         last_hidden_state = self.layer_norm(x)  # because of applying pre-layer norm
         hidden_states = torch.stack(layer_output, dim=0).to(x.device)  # shape: [num_layers, BS, SEQ_LEN, DIM_Model]
         return last_hidden_state, hidden_states
 
 
-class EnhancedMaskDecoder(nn.Module):
+class EnhancedMaskDecoder(nn.Module, AbstractModel):
     """
     Class for Enhanced Mask Decoder module in DeBERTa, which is used for Masked Language Model (Pretrain Task)
     Word 'Decoder' means that denoise masked token by predicting masked token
@@ -282,25 +288,30 @@ class EnhancedMaskDecoder(nn.Module):
     In official repo, they implement this layer so hard coding that we can't understand directly & easily
     So, we implement this layer with our own style, as closely as possible to paper statement
     Notes:
-        Also we temporarily implement only extract token embedding, not calculating logit, loss for MLM Task yet
+        Also we temporarily implement only extract token embedding, not calculating logit, losses for MLM Task yet
         MLM Task will be implemented ASAP
     Args:
         encoder: list of nn.ModuleList, which is (num_emd * last encoder layer) from DeBERTaEncoder
+        gradient_checkpointing: whether to use gradient checkpointing or not, default False
     References:
         https://arxiv.org/abs/2006.03654
         https://arxiv.org/abs/2111.09543
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/apps/models/masked_language_model.py
     """
-    def __init__(self, encoder: List[nn.ModuleList], dim_model: int = 1024, layer_norm_eps: float = 1e-7) -> None:
-        super(EnhancedMaskDecoder, self).__init__()
+    def __init__(self, encoder: List[nn.ModuleList], dim_model: int = 1024, layer_norm_eps: float = 1e-7, gradient_checkpointing: bool = False) -> None:
+        super().__init__()
         self.emd_layers = encoder
         self.layer_norm = nn.LayerNorm(dim_model, eps=layer_norm_eps)
+        self.gradient_checkpointing = gradient_checkpointing
 
     def emd_context_layer(self, hidden_states, abs_pos_emb, rel_pos_emb, mask):
         outputs = []
         query_states = hidden_states + abs_pos_emb  # "I" in official paper,
         for emd_layer in self.emd_layers:
-            query_states = emd_layer(x=hidden_states, pos_x=rel_pos_emb, mask=mask, emd=query_states)
+            if self.gradient_checkpointing:
+                query_states = self._gradient_checkpointing(emd_layer, query_states, rel_pos_emb, mask)
+            else:
+                query_states = emd_layer(x=hidden_states, pos_x=rel_pos_emb, mask=mask, emd=query_states)
             outputs.append(query_states)
         last_hidden_state = self.layer_norm(query_states)  # because of applying pre-layer norm
         hidden_states = torch.stack(outputs, dim=0).to(hidden_states.device)
@@ -349,7 +360,7 @@ class Embedding(nn.Module):
         return word_embeddings, rel_pos_emb, abs_pos_emb
 
 
-class DeBERTa(nn.Module):
+class DeBERTa(nn.Module, AbstractModel):
     """
     Main class for DeBERTa, having all of sub-blocks & modules such as Disentangled Self-attention, DeBERTaEncoder, EMD
     Init Scale of DeBERTa Hyper-Parameters, Embedding Layer, Encoder Blocks, EMD Blocks
@@ -392,6 +403,7 @@ class DeBERTa(nn.Module):
         self.layer_norm_eps = cfg.layer_norm_eps
         self.hidden_dropout_prob = cfg.hidden_dropout_prob
         self.attention_dropout_prob = cfg.attention_probs_dropout_prob
+        self.gradient_checkpointing = cfg.gradient_checkpoint
 
         # Init Embedding Layer
         self.embedding = Embedding(cfg)
@@ -406,9 +418,15 @@ class DeBERTa(nn.Module):
             self.layer_norm_eps,
             self.attention_dropout_prob,
             self.hidden_dropout_prob,
+            self.gradient_checkpointing
         )
         self.emd_layers = [self.encoder.encoder_layers[-1] for _ in range(self.num_emd)]
-        self.emd_encoder = EnhancedMaskDecoder(self.emd_layers, self.dim_model, self.layer_norm_eps)
+        self.emd_encoder = EnhancedMaskDecoder(
+            self.emd_layers,
+            self.dim_model,
+            self.layer_norm_eps,
+            self.gradient_checkpointing
+        )
 
     def forward(self, inputs: Tensor, mask: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         assert inputs.ndim == 3, f'Expected (batch, sequence, vocab_size) got {inputs.shape}'

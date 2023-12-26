@@ -32,7 +32,7 @@ class MSELoss(nn.Module):
 class RMSELoss(nn.Module):
     """ Root Mean Squared Error Loss in Pytorch
     Args:
-        reduction: str, reduction method of loss
+        reduction: str, reduction method of losses
         eps: float, epsilon value for numerical stability (Defending Underflow, Zero Division)
     """
     def __init__(self, reduction: str = 'mean', eps=1e-8) -> None:
@@ -50,7 +50,7 @@ class MCRMSELoss(nn.Module):
     Mean Column-wise Root Mean Squared Error Loss
     Calculate RMSE per target values(columns), and then calculate mean of each column's RMSE Result
     Args:
-        reduction: str, reduction method of loss
+        reduction: str, reduction method of losses
         num_scored: int, number of scored target values, default 1 same as RMSELoss
     """
     def __init__(self, reduction: str, num_scored: int = 1) -> None:
@@ -67,7 +67,7 @@ class MCRMSELoss(nn.Module):
 
 class WeightMCRMSELoss(nn.Module):
     """
-    Apply loss rate per target classes
+    Apply losses rate per target classes
     Weighted Loss can transfer original label data's distribution to pseudo label data
     References:
         https://www.kaggle.com/competitions/feedback-prize-english-language-learning/discussion/369609
@@ -186,12 +186,12 @@ class ContrastiveLoss(nn.Module):
 class BatchDotProductContrastiveLoss(nn.Module):
     """
     Batch Embedding Inner-Product based Contrastive Loss Function
-    This metrics request just one input batch, not two input batches for calculating loss
+    This metrics request just one input batch, not two input batches for calculating losses
     Args:
         metric: distance metrics, default: cosine
         margin: margin for negative pairs, default: 1.0
     Maths:
-        loss(x, y) = 0.5 * (y * distance(x1, x2) + (1 - y) * max(margin - distance(x1, x2), 0))
+        losses(x, y) = 0.5 * (y * distance(x1, x2) + (1 - y) * max(margin - distance(x1, x2), 0))
     """
     def __init__(self, metric: str = 'cosine', margin: int = 1.0) -> None:
         super(BatchDotProductContrastiveLoss, self).__init__()
@@ -200,7 +200,7 @@ class BatchDotProductContrastiveLoss(nn.Module):
 
     @staticmethod
     def elementwise_labels(y: torch.Tensor) -> torch.Tensor:
-        """ Element-wise masking matrix generation for contrastive loss by label """
+        """ Element-wise masking matrix generation for contrastive losses by label """
         f_mask = (y == 1) | (y == -1)
         t_mask = (y == 2) | (y == 0)
         y = y.unsqueeze(1)

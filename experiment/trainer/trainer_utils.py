@@ -83,7 +83,7 @@ def get_dataloader(
             generator=generator,
             num_workers=cfg.num_workers,
             pin_memory=True,
-            drop_last=drop_last,
+            drop_last=drop_last
     )
     return dataloader
 
@@ -269,7 +269,7 @@ class AWP:
     Adversarial Weight Perturbation for OneToOne Trainer
     Args:
         model: model instance from customizing model
-        criterion: loss function for training, you must pass instance which is inheritance of torch.nn.Module
+        criterion: losses function for training, you must pass instance which is inheritance of torch.nn.Module
         optimizer: optimizer for training, you must pass instance which is inheritance of torch.optim or transformers.optimization
         apex: if you use apex, you must pass True
         adv_param: parameter name for adversarial weight perturbation, default is 'weight'
@@ -367,7 +367,7 @@ class AverageMeter(object):
 class EarlyStopping(object):
     """ Monitor a metrics and stop training when it stops improving.
     Args:
-        mode: 'min' for loss base val_score for loss, 'max' for metrics base val_score
+        mode: 'min' for losses base val_score for losses, 'max' for metrics base val_score
         patience: number of checks with no improvement, default = 3
         min_delta: minimum change in the monitored quantity to qualify as an improvement, i.e. an absolute
             change of less than or equal to `min_delta`, will count as no improvement. default = 0.0

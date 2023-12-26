@@ -1,15 +1,14 @@
 import torch
 import torch.nn as nn
 from torch import Tensor
-from transformers import AutoConfig
 from typing import List, Dict
 from tuner.mlm import MLMHead
 from experiment.configuration import CFG
-from models.attention
+from models.attention.deberta import DeBERTa
+
 
 class MaskedLanguageModel(nn.Module):
-    """
-    Custom Model for MLM Task, which is used for pre-training Auto-Encoding Model (AE)
+    """ Custom Model for MLM Task, which is used for pre-training Auto-Encoding Model (AE)
     Args:
         cfg: configuration.CFG
     References:
@@ -19,13 +18,15 @@ class MaskedLanguageModel(nn.Module):
     def __init__(self, cfg: CFG) -> None:
         super(MaskedLanguageModel, self).__init__()
         self.cfg = cfg
-        self.model = getattr(attention, self.cfg.model)(self.cfg)
+        self.model = DeBERTa(self.cfg)  # later, change this line to getattr
         self.mlm_head = MLMHead(cfg)
         if self.cfg.load_pretrained:
             self.model.load_state_dict(
                 torch.load(cfg.checkpoint_dir + cfg.state_dict),
                 strict=True
             )
+        if self.cfg.gradient_checkpoint:
+            self.model.gradient_checkpointing_enable()
 
     def _init_weights(self, module) -> None:
         """ over-ride initializes weights of the given module function (+initializes LayerNorm) """
@@ -53,7 +54,7 @@ class MaskedLanguageModel(nn.Module):
             module.weight.data.fill_(1.0)
             module.bias.data.zero_()
 
-    def feature(self, inputs: dict):
+    def feature(self, inputs: Dict) -> Tensor:
         outputs = self.model(**inputs)
         return outputs
 

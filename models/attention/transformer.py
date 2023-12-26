@@ -301,7 +301,7 @@ class Transformer(nn.Module):
     Main class for Pure Transformer, Pytorch implementation
     There are two Masking Method for padding token
         1) Row & Column masking
-        2) Column masking only at forward time, Row masking at calculating loss time
+        2) Column masking only at forward time, Row masking at calculating losses time
     second method is more efficient than first method, first method is complex & difficult to implement
     Args:
         enc_vocab_size: size of vocabulary for Encoder Input Sequence
