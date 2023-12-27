@@ -245,7 +245,7 @@ class DeBERTaEncoder(nn.Module, AbstractModel):
             hidden_dropout_prob: float = 0.1,
             gradient_checkpointing: bool = False
     ) -> None:
-        super().__init__()
+        super(DeBERTaEncoder, self).__init__()
         self.max_seq = max_seq
         self.num_layers = num_layers
         self.dim_model = dim_model
@@ -268,7 +268,7 @@ class DeBERTaEncoder(nn.Module, AbstractModel):
         layer_output = []
         x, pos_x = inputs, rel_pos_emb  # x is same as word_embeddings or embeddings in official repo
         for layer in self.layer:
-            if self.gradient_checkpointing:
+            if self.gradient_checkpointing and self.cfg.train:
                 x = self._gradient_checkpointing(layer.__call__, x, pos_x, padding_mask)
             else:
                 x = layer(x, pos_x, padding_mask, attention_mask)
@@ -357,10 +357,13 @@ class Embedding(nn.Module):
         word_embeddings = self.hidden_dropout(
             self.layer_norm1(self.word_embedding(inputs))
         )
+        print(word_embeddings.shape)
         rel_pos_emb = self.hidden_dropout(
-            self.layer_norm2(self.rel_pos_emb(torch.arange(self.max_rel_pos).repeat(inputs.shape[0]).to(inputs)))
+            self.layer_norm2(self.rel_pos_emb(torch.arange(self.max_rel_pos, device='cuda').repeat(inputs.shape[0]).to(inputs)))
         )
-        abs_pos_emb = self.abs_pos_emb(torch.arange(self.max_seq).repeat(inputs.shape[0]).to(inputs))  # "I" in paper
+        abs_pos_emb = self.abs_pos_emb(torch.arange(self.max_seq, device='cuda').repeat(inputs.shape[0]).to(inputs))  # "I" in paper
+        print(rel_pos_emb.shape)
+        print(abs_pos_emb.shape)
         return word_embeddings, rel_pos_emb, abs_pos_emb
 
 
