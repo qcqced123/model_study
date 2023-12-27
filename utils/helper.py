@@ -1,4 +1,3 @@
-import models as models
 import torch, os, sys, random, json
 import numpy as np
 from pathlib import Path

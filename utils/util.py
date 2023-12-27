@@ -4,7 +4,7 @@ import pandas as pd
 from pathlib import Path
 from itertools import repeat
 from collections import OrderedDict
-from experiment.configuration import CFG
+from configuration import CFG
 
 
 def ensure_dir(dirname):
@@ -81,42 +81,48 @@ def sync_config(json_config: json) -> None:
     CFG.load_pretrained = json_config.pipeline_setting.load_pretrained
     CFG.resume, CFG.state_dict = json_config.pipeline_setting.resume, json_config.pipeline_setting.state_dict
     CFG.name = json_config.pipeline_setting.name
+    CFG.datafolder = json_config.pipeline_setting.datafolder
+    CFG.trainer = json_config.pipeline_setting.trainer
     CFG.loop = json_config.pipeline_setting.loop
+    CFG.hf_dataset = json_config.pipeline_setting.hf_dataset
+    CFG.language = json_config.pipeline_setting.language
     CFG.dataset = json_config.pipeline_setting.dataset
-    CFG.model_arch = json_config.pipeline_setting.model_arch
-    CFG.model = json_config.pipeline_setting.model
+    CFG.arch_name = json_config.pipeline_setting.arch_name
+    CFG.model_name = json_config.pipeline_setting.model_name
+    CFG.module_name = json_config.pipeline_setting.module_name
+    CFG.tmp_model = json_config.pipeline_setting.tmp_model
+    CFG.task = json_config.pipeline_setting.task
     CFG.pooling = json_config.pipeline_setting.pooling
 
     """ Common Options """
     CFG.wandb = json_config.common_settings.wandb
     CFG.optuna = json_config.common_settings.optuna
-    CFG.competition = json_config.common_settings.competition
     CFG.seed = json_config.common_settings.seed
     CFG.n_gpu = json_config.common_settings.n_gpu
     CFG.gpu_id = json_config.common_settings.gpu_id
     CFG.num_workers = json_config.common_settings.num_workers
 
     """ Data Options """
+    CFG.split_ratio = json_config.data_settings.split_ratio
     CFG.n_folds = json_config.data_settings.n_folds
     CFG.max_len = json_config.data_settings.max_len
     CFG.epochs = json_config.data_settings.epochs
     CFG.batch_size = json_config.data_settings.batch_size
     CFG.val_batch_size = json_config.data_settings.val_batch_size
     CFG.smart_batch = json_config.data_settings.val_batch_size  # default False
+    CFG.val_check = json_config.data_settings.val_check
 
     """ Gradient Options """
     CFG.amp_scaler = json_config.gradient_settings.amp_scaler
     CFG.gradient_checkpoint = json_config.gradient_settings.gradient_checkpoint
     CFG.clipping_grad = json_config.gradient_settings.clipping_grad
+    CFG.n_gradient_accumulation_steps = json_config.gradient_settings.n_gradient_accumulation_steps
     CFG.max_grad_norm = json_config.gradient_settings.max_grad_norm
 
     """ Loss Options """
     CFG.loss_fn = json_config.loss_options.loss_fn
     CFG.val_loss_fn = json_config.loss_options.val_loss_fn
     CFG.reduction = json_config.loss_options.reduction
-    CFG.content_weight = json_config.loss_options.content_weight
-    CFG.wording_weight = json_config.loss_options.wording_weight
-
 
     """ Metrics Options """
     CFG.metrics = json_config.metrics_options.metrics
@@ -145,9 +151,18 @@ def sync_config(json_config: json) -> None:
     CFG.anneal_strategy = json_config.swa_options.anneal_strategy
 
     """ model_utils """
+    CFG.max_seq = json_config.model_utils.max_seq
+    CFG.num_layers = json_config.model_utils.num_layers
+    CFG.num_emd = json_config.model_utils.num_emd
+    CFG.num_attention_heads = json_config.model_utils.num_attention_heads
+    CFG.dim_model = json_config.model_utils.dim_model
+    CFG.dim_ffn = json_config.model_utils.dim_ffn
+    CFG.hidden_act = json_config.model_utils.hidden_act
+    CFG.layer_norm_eps = json_config.model_utils.layer_norm_eps
     CFG.attention_probs_dropout_prob = json_config.model_utils.attention_probs_dropout_prob
     CFG.hidden_dropout_prob = json_config.model_utils.hidden_dropout_prob
     CFG.init_weight = json_config.model_utils.init_weight
+    CFG.initializer_range = json_config.model_utils.initializer_range
     CFG.stop_mode = json_config.model_utils.stop_mode
     CFG.reinit = json_config.model_utils.reinit
     CFG.num_freeze = json_config.model_utils.num_freeze

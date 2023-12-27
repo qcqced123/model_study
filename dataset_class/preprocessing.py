@@ -2,7 +2,7 @@ import re, gc, pickle
 import pandas as pd
 import numpy as np
 import torch
-import experiment.configuration as configuration
+import configuration as configuration
 from datasets import load_dataset, Dataset, DatasetDict
 from sklearn.model_selection import StratifiedKFold, GroupKFold, train_test_split
 from iterstrat.ml_stratifiers import MultilabelStratifiedKFold

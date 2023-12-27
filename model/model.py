@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from typing import List, Dict
-from tuner.mlm import MLMHead
-from experiment.configuration import CFG
-from models.attention.deberta import DeBERTa
+from experiment.tuner.mlm import MLMHead
+from configuration import CFG
+from experiment.models.attention.deberta import DeBERTa
 
 
 class MaskedLanguageModel(nn.Module):
@@ -54,11 +54,11 @@ class MaskedLanguageModel(nn.Module):
             module.weight.data.fill_(1.0)
             module.bias.data.zero_()
 
-    def feature(self, inputs: Dict) -> Tensor:
-        outputs = self.model(**inputs)
+    def feature(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
+        outputs = self.model(inputs, padding_mask)
         return outputs
 
-    def forward(self, inputs: Dict) -> List[Tensor]:
-        hidden_states = self.feature(inputs)
+    def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> List[Tensor]:
+        hidden_states = self.feature(inputs, padding_mask)
         logit = self.mlm_head(hidden_states)
         return logit

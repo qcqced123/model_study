@@ -1,4 +1,4 @@
-import experiment.configuration as configuration
+import configuration as configuration
 import torch
 import torch.nn as nn
 import numpy as np
@@ -7,7 +7,7 @@ import more_itertools
 from torch.utils.data import Sampler, Dataset, DataLoader
 from torch import Tensor
 from typing import List, Tuple, Dict, Type, Union
-from experiment.utils.helper import seed_worker
+from utils.helper import seed_worker
 
 
 def get_optimizer_grouped_parameters(
@@ -249,7 +249,7 @@ class MiniBatchCollate(object):
     def __init__(self, batch: torch.utils.data.DataLoader) -> None:
         self.batch = batch
 
-    def __call__(self) -> Tuple[Dict[Tensor, Tensor, Tensor], Tensor, Tensor]:
+    def __call__(self) -> Tuple[Dict[Tensor, Tensor], Tensor, Tensor]:
         inputs, labels, position_list = self.batch
         labels = torch.nn.utils.rnn.pad_sequence(
             labels,
@@ -282,7 +282,7 @@ class AWP:
         self,
         model: nn.Module,
         criterion: Type[nn.Module],
-        optimizer: Union[torch.optim.Optimizer, torch.optim.swa_utils.SWALR, transformers.optimization],
+        optimizer: torch.optim.Optimizer,
         apex: bool,
         adv_param: str = "weight",
         adv_lr: float = 1.0,
@@ -298,11 +298,11 @@ class AWP:
         self.backup = {}
         self.backup_eps = {}
 
-    def attack_backward(self, inputs: dict, label: Tensor) -> Tensor:
+    def attack_backward(self, inputs: Dict, padding_mask: Tensor, label: Tensor) -> Tensor:
         with torch.cuda.amp.autocast(enabled=self.apex):
             self._save()
             self._attack_step()
-            y_preds = self.model(inputs)
+            y_preds = self.model(inputs, padding_mask)
             adv_loss = self.criterion(
                 y_preds.view(-1, 1), label.view(-1, 1))
             mask = (label.view(-1, 1) != -1)

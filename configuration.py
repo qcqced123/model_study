@@ -5,9 +5,9 @@ from transformers import AutoTokenizer
 class CFG:
     """ Pipeline Setting """
     train, test = True, False
-    checkpoint_dir = './saved/model'
-    resume, load_pretrained,  state_dict = True, False, '/'
-    name = 'DeBERTa_MLM'
+    checkpoint_dir = 'saved/model'
+    resume, load_pretrained, state_dict = True, False, '/'
+    name = 'MaskedLanguageModel'
     datafolder = 'wikipedia_en'
     trainer = 'PreTrainTuner'
     loop = 'train_loop'
@@ -36,9 +36,10 @@ class CFG:
     split_ratio = 0.2
     n_folds = 5
     max_len = 512
-    epochs = 180
+    epochs = 10
     batch_size = 64
     smart_batch = False
+    val_check = 1000  # setting for validation check frequency (unit: step)
 
     """ Gradient Options """
     amp_scaler = True
@@ -51,7 +52,7 @@ class CFG:
     loss_fn = 'CrossEntropyLoss'
     val_loss_fn = 'CrossEntropyLoss'
     reduction = 'mean'
-    metrics = 'accuracy'
+    metrics = ['accuracy', 'precision', 'recall']
 
     """ Optimizer with LLRD Options """
     optimizer = 'AdamW'  # options: SWA, AdamW

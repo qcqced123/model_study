@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
 from torch import Tensor
 from typing import Dict, List, Tuple, Union, Optional, Any
-from experiment.configuration import CFG
+from configuration import CFG
 
 
 class PreTrainingCollator(nn.Module):
@@ -22,7 +22,6 @@ class PreTrainingCollator(nn.Module):
     def get_mask_tokens(self, input_ids: Tensor, mlm_probability: float = 0.15, special_tokens_mask: Optional[Any] = None):
         input_ids = input_ids.clone()
         labels = input_ids.clone()
-
         probability_matrix = torch.full(labels.shape, mlm_probability)
         if special_tokens_mask is None:
             special_tokens_mask = [
@@ -48,7 +47,7 @@ class PreTrainingCollator(nn.Module):
         )
 
         random_words = torch.randint(
-            self.tokenizer.get_vocab_size(), labels.shape, dtype=torch.long
+            self.tokenizer.vocab_size, labels.shape, dtype=torch.long
         )
         input_ids[indices_random] = random_words[indices_random]
 
@@ -56,29 +55,40 @@ class PreTrainingCollator(nn.Module):
 
 
 class MLMCollator(PreTrainingCollator):
+    """ Custom Collator for MLM Task, which is used for pre-training Auto-Encoding Model (AE)
+    Dataloader returns a list to collator, so collator should be able to handle list of tensors
+    Args:
+        cfg: configuration.CFG
+        special_tokens_mask: special tokens mask for masking
+    """
     def __init__(self, cfg: CFG, special_tokens_mask: Optional[Any] = None):
-        super(PreTrainingCollator).__init__(cfg)
+        super(MLMCollator, self).__init__(cfg)
         self.special_tokens_mask = special_tokens_mask
 
-    def __call__(self, batched: Dict[str, Tensor]):
-        input_ids = batched["input_ids"]
+    def __call__(self, batched: List[Dict[str, Tensor]]):
+        input_ids = [torch.tensor(x["input_ids"]) for x in batched]
+        token_type_ids = [torch.tensor(x["token_type_ids"]) for x in batched]
+        attention_mask = [torch.tensor(x["attention_mask"]) for x in batched]
+
         padding_mask = [self.get_padding_mask(x) for x in input_ids]
         input_ids = pad_sequence(input_ids, batch_first=True, padding_value=0)
         input_ids, labels = self.get_mask_tokens(
-            input_ids, self.tokenizer, special_tokens_mask=self.special_tokens_mask
+            input_ids, 0.15, special_tokens_mask=self.special_tokens_mask
         )
         padding_mask = pad_sequence(padding_mask, batch_first=True, padding_value=True)
         return {
             "input_ids": input_ids,
             "labels": labels,
             "padding_mask": padding_mask,
+            "token_type_ids": token_type_ids,
+            "attention_mask": attention_mask
         }
 
 
 class MLMHead(nn.Module):
     """
     Custom Masked Language Model Head for MLM Task, which is used for pre-training Auto-Encoding Model (AE)
-    For Encoder, Such as BERT, RoBERTa, ELECTRA, DeBERTa, ...
+    For Encoder, Such as BERT, RoBERTa, ELECTRA, DeBERTa, ... etc
     Args:
         cfg: configuration.CFG
     Notes:

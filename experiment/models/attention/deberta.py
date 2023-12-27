@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models.abstract_model import AbstractModel
+from experiment.models.abstract_model import AbstractModel
 from torch import Tensor
 from typing import Tuple, List
 from einops.layers.torch import Rearrange
-from experiment.configuration import CFG
+from configuration import CFG
 
 
 def build_relative_position(x_size: int) -> Tensor:
@@ -22,7 +22,7 @@ def build_relative_position(x_size: int) -> Tensor:
     return rel_pos
 
 
-def disentangled_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tensor, attention_dropout: torch.nn.Dropout, mask: Tensor = None) -> Tensor:
+def disentangled_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tensor, attention_dropout: torch.nn.Dropout, padding_mask: Tensor = None, attention_mask: Tensor = None) -> Tensor:
     """
     Disentangled Self-attention for DeBERTa, same role as Module "DisentangledSelfAttention" in official Repo
     Args:
@@ -32,7 +32,8 @@ def disentangled_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tens
         qr: position query matrix, shape (batch_size, 2*max_relative_position, dim_head), r means relative position
         kr: position key matrix, shape (batch_size, 2*max_relative_position, dim_head), r means relative position
         attention_dropout: dropout for attention matrix, default rate is 0.1 from official paper
-        mask: mask for attention matrix, shape (batch_size, seq_len, seq_len), apply before softmax layer
+        padding_mask: mask for attention matrix for MLM
+        attention_mask: mask for attention matrix for CLM
     Math:
         c2c = torch.matmul(q, k.transpose(-1, -2))  # A_c2c
         c2p = torch.gather(torch.matmul(q, kr.transpose(-1 z, -2)), dim=-1, index=c2p_pos)
@@ -68,8 +69,8 @@ def disentangled_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tens
 
     dot_scale = torch.sqrt(torch.tensor(scale_factor * q.shape[2]))  # from official paper by microsoft
     attention_matrix = (c2c + c2p + p2c) / dot_scale  # attention Matrix = A_c2c + A_c2r + A_r2c
-    if mask is not None:
-        attention_matrix = attention_matrix.masked_fill(mask == 0, float('-inf'))  # Padding Token Masking
+    if padding_mask is not None:
+        attention_matrix = attention_matrix.masked_fill(padding_mask == 0, float('-inf'))  # Padding Token Masking
     attention_dist = attention_dropout(
         F.softmax(attention_matrix, dim=-1)
     )
@@ -104,11 +105,11 @@ class AttentionHead(nn.Module):
         self.fc_qr = nn.Linear(self.dim_model, self.dim_head)  # projector for Relative Position Query matrix
         self.fc_kr = nn.Linear(self.dim_model, self.dim_head)  # projector for Relative Position Key matrix
 
-    def forward(self, x: Tensor, pos_x: Tensor, mask: Tensor, emd: Tensor = None) -> Tensor:
+    def forward(self, x: Tensor, pos_x: Tensor, padding_mask: Tensor, attention_mask: Tensor = None, emd: Tensor = None) -> Tensor:
         q, k, v, qr, kr = self.fc_q(x), self.fc_k(x), self.fc_v(x), self.fc_qr(pos_x), self.fc_kr(pos_x)
         if emd is not None:
             q = self.fc_q(emd)
-        attention_matrix = disentangled_attention(q, k, v, qr, kr, self.attention_dropout, mask)
+        attention_matrix = disentangled_attention(q, k, v, qr, kr, self.attention_dropout, padding_mask, attention_mask)
         return attention_matrix
 
 
@@ -140,11 +141,11 @@ class MultiHeadAttention(nn.Module):
         )
         self.fc_concat = nn.Linear(self.dim_model, self.dim_model)
 
-    def forward(self, x: Tensor, rel_pos_emb: Tensor, mask: Tensor, emd: Tensor = None) -> Tensor:
+    def forward(self, x: Tensor, rel_pos_emb: Tensor, padding_mask: Tensor, attention_mask: Tensor = None, emd: Tensor = None) -> Tensor:
         """ x is already passed nn.Layernorm """
         assert x.ndim == 3, f'Expected (batch, seq, hidden) got {x.shape}'
         attention_output = self.fc_concat(
-            torch.cat([head(x, rel_pos_emb, mask, emd) for head in self.attention_heads], dim=-1)
+            torch.cat([head(x, rel_pos_emb, padding_mask, attention_mask, emd) for head in self.attention_heads], dim=-1)
         )
         return attention_output
 
@@ -208,10 +209,10 @@ class DeBERTaEncoderLayer(nn.Module):
             hidden_dropout_prob,
         )
 
-    def forward(self, x: Tensor, pos_x: torch.nn.Embedding, mask: Tensor, emd: Tensor = None) -> Tensor:
+    def forward(self, x: Tensor, pos_x: torch.nn.Embedding, padding_mask: Tensor, attention_mask: Tensor = None, emd: Tensor = None) -> Tensor:
         """ rel_pos_emb is fixed for all layer in same forward pass time """
         ln_x, ln_pos_x = self.layer_norm1(x), self.layer_norm1(pos_x)  # pre-layer norm, weight share
-        residual_x = self.hidden_dropout(self.self_attention(ln_x, ln_pos_x, mask, emd)) + x
+        residual_x = self.hidden_dropout(self.self_attention(ln_x, ln_pos_x, padding_mask, attention_mask, emd)) + x
         ln_x = self.layer_norm2(residual_x)
         fx = self.ffn(ln_x) + residual_x
         return fx
@@ -251,25 +252,26 @@ class DeBERTaEncoder(nn.Module, AbstractModel):
         self.num_attention_heads = num_attention_heads
         self.dim_ffn = dim_ffn
         self.hidden_dropout = nn.Dropout(p=hidden_dropout_prob)  # dropout is not learnable
-        self.encoder_layers = nn.ModuleList(
+        self.layer = nn.ModuleList(
             [DeBERTaEncoderLayer(dim_model, num_attention_heads, dim_ffn, layer_norm_eps, attention_dropout_prob, hidden_dropout_prob) for _ in range(self.num_layers)]
         )
         self.layer_norm = nn.LayerNorm(dim_model, eps=layer_norm_eps)  # for final-Encoder output
         self.gradient_checkpointing = gradient_checkpointing
 
-    def forward(self, inputs: Tensor, rel_pos_emb: Tensor, mask: Tensor) -> tuple[Tensor, Tensor]:
+    def forward(self, inputs: Tensor, rel_pos_emb: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> tuple[Tensor, Tensor]:
         """
         inputs: embedding from input sequence
         rel_pos_emb: relative position embedding
-        mask: mask for Encoder padded token for speeding up to calculate attention score
+        padding_mask: mask for Encoder padded token for speeding up to calculate attention score or MLM
+        attention_mask: mask for CLM
         """
         layer_output = []
         x, pos_x = inputs, rel_pos_emb  # x is same as word_embeddings or embeddings in official repo
-        for layer in self.encoder_layers:
+        for layer in self.layer:
             if self.gradient_checkpointing:
-                x = self._gradient_checkpointing(layer.__call__, x, pos_x, mask)
+                x = self._gradient_checkpointing(layer.__call__, x, pos_x, padding_mask)
             else:
-                x = layer(x, pos_x, mask)
+                x = layer(x, pos_x, padding_mask, attention_mask)
             layer_output.append(x)
         last_hidden_state = self.layer_norm(x)  # because of applying pre-layer norm
         hidden_states = torch.stack(layer_output, dim=0).to(x.device)  # shape: [num_layers, BS, SEQ_LEN, DIM_Model]
@@ -304,26 +306,28 @@ class EnhancedMaskDecoder(nn.Module, AbstractModel):
         self.layer_norm = nn.LayerNorm(dim_model, eps=layer_norm_eps)
         self.gradient_checkpointing = gradient_checkpointing
 
-    def emd_context_layer(self, hidden_states, abs_pos_emb, rel_pos_emb, mask):
+    def emd_context_layer(self, hidden_states: Tensor, abs_pos_emb: nn.Embedding, rel_pos_emb: nn.Embedding, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
         outputs = []
         query_states = hidden_states + abs_pos_emb  # "I" in official paper,
         for emd_layer in self.emd_layers:
             if self.gradient_checkpointing:
-                query_states = self._gradient_checkpointing(emd_layer, query_states, rel_pos_emb, mask)
+                query_states = self._gradient_checkpointing(emd_layer, query_states, rel_pos_emb, padding_mask)
             else:
-                query_states = emd_layer(x=hidden_states, pos_x=rel_pos_emb, mask=mask, emd=query_states)
+                query_states = emd_layer(x=hidden_states, pos_x=rel_pos_emb, mask=padding_mask, emd=query_states)
             outputs.append(query_states)
         last_hidden_state = self.layer_norm(query_states)  # because of applying pre-layer norm
         hidden_states = torch.stack(outputs, dim=0).to(hidden_states.device)
         return last_hidden_state, hidden_states
 
-    def forward(self, hidden_states: Tensor, abs_pos_emb: Tensor, rel_pos_emb, mask: Tensor) -> tuple[Tensor, Tensor]:
+    def forward(self, hidden_states: Tensor, abs_pos_emb: nn.Embedding, rel_pos_emb, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
         """
         hidden_states: output from last disentangled self-attention encoder layer
         abs_pos_emb: absolute position embedding
         rel_pos_emb: relative position embedding
+        padding_mask: mask for Encoder padded token for speeding up to calculate attention score or MLM
+        attention_mask: mask for CLM
         """
-        last_hidden_state, emd_hidden_states = self.emd_context_layer(hidden_states, abs_pos_emb, rel_pos_emb, mask)
+        last_hidden_state, emd_hidden_states = self.emd_context_layer(hidden_states, abs_pos_emb, rel_pos_emb, padding_mask, attention_mask)
         return last_hidden_state, emd_hidden_states
 
 
@@ -406,7 +410,7 @@ class DeBERTa(nn.Module, AbstractModel):
         self.gradient_checkpointing = cfg.gradient_checkpoint
 
         # Init Embedding Layer
-        self.embedding = Embedding(cfg)
+        self.embeddings = Embedding(cfg)
 
         # Init Encoder Blocks & Modules
         self.encoder = DeBERTaEncoder(
@@ -420,7 +424,7 @@ class DeBERTa(nn.Module, AbstractModel):
             self.hidden_dropout_prob,
             self.gradient_checkpointing
         )
-        self.emd_layers = [self.encoder.encoder_layers[-1] for _ in range(self.num_emd)]
+        self.emd_layers = [self.encoder.layer[-1] for _ in range(self.num_emd)]
         self.emd_encoder = EnhancedMaskDecoder(
             self.emd_layers,
             self.dim_model,
@@ -428,15 +432,18 @@ class DeBERTa(nn.Module, AbstractModel):
             self.gradient_checkpointing
         )
 
-    def forward(self, inputs: Tensor, mask: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
-        assert inputs.ndim == 3, f'Expected (batch, sequence, vocab_size) got {inputs.shape}'
-        # Embedding Layer
-        word_embeddings, rel_pos_emb, abs_pos_emb = self.embedding(inputs)
+    def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+        """
+        Args:
+            inputs: input sequence, shape (batch_size, sequence)
+            padding_mask: padding mask for MLM or padding token
+            attention_mask: attention mask for CLM, default None
+        """
+        assert inputs.ndim == 2, f'Expected (batch, sequence) got {inputs.shape}'
 
-        # Disentangled Self-attention Encoder Layer
-        last_hidden_state, hidden_states = self.encoder(word_embeddings, rel_pos_emb, mask)
+        word_embeddings, rel_pos_emb, abs_pos_emb = self.embeddings(inputs)
+        last_hidden_state, hidden_states = self.encoder(word_embeddings, rel_pos_emb, padding_mask, attention_mask)
 
-        # Enhanced Mask Decoder Layer
         emd_hidden_states = hidden_states[-2]
-        emd_last_hidden_state, emd_hidden_states = self.emd_encoder(emd_hidden_states, abs_pos_emb, rel_pos_emb, mask)
+        emd_last_hidden_state, emd_hidden_states = self.emd_encoder(emd_hidden_states, abs_pos_emb, rel_pos_emb, padding_mask, attention_mask)
         return last_hidden_state, hidden_states, emd_last_hidden_state, emd_hidden_states

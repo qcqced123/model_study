@@ -6,63 +6,77 @@
         "load_pretrained": false,
         "resume": false,
         "state_dict": "",
-        "name": "OneToOneTrainer",
+        "name": "MaskedLanguageModel",
+        "datafolder": "wikipedia_en",
+        "trainer": "PreTrainTuner",
         "loop": "train_loop",
-        "dataset": "OneToOneDataset",
-        "model_arch": "OneToOneModel",
-        "model": "microsoft/deberta-v3-large",
+        "hf_dataset": "wikimedia/wikipedia",
+        "language": "20231101.en",
+        "dataset": "MLMDataset",
+        "arch_name": "attention",
+        "model_name": "deberta",
+        "module_name": "DeBERTa",
+        "tmp_model": "microsoft/deberta-v3-large",
+        "task": "MaskedLanguageModel",
         "pooling": "MeanPooling"
     },
+
     "common_settings": {
         "wandb": true,
         "optuna": false,
-        "competition": "CommonLit",
         "seed": 42,
         "n_gpu": 1,
         "gpu_id": 0,
-        "num_workers": 4
+        "num_workers": 0
     },
+
     "data_settings": {
+        "split_ratio": 0.2,
         "n_folds": 4,
-        "max_len": 1024,
+        "max_len": 512,
         "epochs": 20,
-        "batch_size": 32,
-        "val_batch_size": 32,
-        "smart_batch": false
+        "batch_size": 4,
+        "val_batch_size": 4,
+        "smart_batch": false,
+        "val_check": 1000
     },
+
     "gradient_settings": {
-        "amp_scaler": false,
-        "gradient_checkpoint": true,
+        "amp_scaler": true,
+        "gradient_checkpoint": false,
         "clipping_grad": true,
         "n_gradient_accumulation_steps": 1,
-        "max_grad_norm": 1000
+        "max_grad_norm": 1
     },
-   "loss_options": {
-        "loss_fn": "RMSELoss",
-        "val_loss_fn": "RMSELoss",
-        "reduction": "mean",
-        "content_weight": 1,
-        "wording_weight": 1
-   },
+
+    "loss_options": {
+        "loss_fn": "CrossEntropyLoss",
+        "val_loss_fn": "CrossEntropyLoss",
+        "reduction": "mean"
+    },
+
     "metrics_options": {
-        "metrics": "MCRMSELoss"
+        "metrics": ["accuracy", "precision", "recall"]
     },
+
     "optimizer_options": {
         "optimizer": "AdamW",
         "llrd": true,
         "layerwise_lr": 5e-5,
         "layerwise_lr_decay": 0.9,
-        "layerwise_weight_decay": 1e-3,
-        "layerwise_adam_epsilon": 1e-8,
+        "layerwise_weight_decay": 1e-2,
+        "layerwise_adam_epsilon": 1e-6,
         "layerwise_use_bertadam": false,
         "betas": [0.9, 0.999]
     },
+
     "scheduler_options": {
         "scheduler": "cosine_annealing",
         "batch_scheduler": true,
         "num_cycles": 2,
         "warmup_ratio": 0.05
     },
+
     "swa_options": {
         "swa": true,
         "swa_start": 2,
@@ -70,14 +84,24 @@
         "anneal_epochs": 2,
         "anneal_strategy": "cos"
     },
+
     "model_utils": {
-        "attention_probs_dropout_prob": 0.007,
+        "max_seq": 512,
+        "num_layers": 12,
+        "num_emd": 2,
+        "num_attention_heads": 12,
+        "dim_model": 768,
+        "dim_ffn": 3072,
+        "hidden_act": "gelu",
+        "layer_norm_eps": 1e-7,
+        "attention_probs_dropout_prob": 0.1,
         "hidden_dropout_prob": 0.1,
-        "init_weight": "kaiming_normal",
+        "init_weight": "orthogonal",
+        "initializer_range": 0.02,
         "stop_mode": "min",
         "freeze": false,
         "num_freeze": 1,
-        "reinit": true,
+        "reinit": false,
         "num_reinit": 1,
         "awp": false,
         "nth_awp_start_epoch": 1,

@@ -4,7 +4,7 @@ from torch.utils.checkpoint import checkpoint
 from typing import Dict, List, Tuple, Union, Callable
 
 
-class AbstractModel(nn.Module):
+class AbstractModel:
     def __init__(self):
         super(AbstractModel, self).__init__()
 

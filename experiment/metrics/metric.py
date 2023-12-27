@@ -7,7 +7,7 @@ def accuracy(y_true: np.array, y_pred: np.array) -> float:
     pred = np.argmax(y_pred, dim=1)
     assert pred.shape[0] == len(y_true)
     correct += np.sum(pred == y_true).item()
-    return correct / len(y_true)
+    return round(correct / len(y_true), 4)
 
 
 def top_k_acc(y_true: np.array, y_pred: np.array, k: int = 3) -> float:
@@ -17,7 +17,7 @@ def top_k_acc(y_true: np.array, y_pred: np.array, k: int = 3) -> float:
     assert pred.shape[0] == len(y_true)
     for i in range(k):
         correct += np.sum(pred[pred[:, i] == y_true]).item()
-    return correct / len(y_true)
+    return round(correct / len(y_true), 4)
 
 
 def pearson_score(y_true: np.array, y_pred: np.array) -> float:
