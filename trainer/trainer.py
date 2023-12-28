@@ -171,7 +171,6 @@ class PreTrainTuner:
                 scaler.step(optimizer)
                 scaler.update()
                 scheduler.step()
-
             del inputs, labels, loss
             torch.cuda.empty_cache()
             gc.collect()
@@ -181,8 +180,9 @@ class PreTrainTuner:
             grad_norm = grad_norm.detach().cpu().numpy()
 
             wandb.log({
-                '<Step> Gradient Norm': grad_norm,
-                '<Step> lr': lr,
+                '<Per Step> Train Loss': losses.avg,
+                '<Per Step> Gradient Norm': grad_norm,
+                '<Per Step> lr': lr,
             })
 
             # validate for each size of batch*N Steps
@@ -196,8 +196,8 @@ class PreTrainTuner:
                     wandb.log({f'<Step> Valid {metric_name}': score_list[i]})
 
                 wandb.log({
-                    '<Step> Train Loss': losses.avg,
-                    '<Step> Valid Loss': valid_loss,
+                    '<Train & Valid> Train Loss': losses.avg,
+                    '<Train & Valid> Valid Loss': valid_loss,
                 })
 
                 if val_score_max >= valid_loss:
