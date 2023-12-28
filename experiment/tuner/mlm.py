@@ -60,9 +60,14 @@ class MLMCollator(PreTrainingCollator):
     Args:
         cfg: configuration.CFG
         special_tokens_mask: special tokens mask for masking
+    References:
+        https://huggingface.co/docs/transformers/v4.32.0/ko/tasks/masked_language_modeling
+        https://github.com/huggingface/transformers/blob/main/src/transformers/data/data_collator.py#L607
+        https://github.com/huggingface/transformers/blob/main/src/transformers/data/data_collator.py#L748
     """
     def __init__(self, cfg: CFG, special_tokens_mask: Optional[Any] = None):
         super(MLMCollator, self).__init__(cfg)
+        self.cfg = cfg
         self.special_tokens_mask = special_tokens_mask
 
     def __call__(self, batched: List[Dict[str, Tensor]]):
@@ -73,7 +78,7 @@ class MLMCollator(PreTrainingCollator):
         padding_mask = [self.get_padding_mask(x) for x in input_ids]
         input_ids = pad_sequence(input_ids, batch_first=True, padding_value=0)
         input_ids, labels = self.get_mask_tokens(
-            input_ids, 0.15, special_tokens_mask=self.special_tokens_mask
+            input_ids, self.cfg.mlm_probability, special_tokens_mask=self.special_tokens_mask
         )
         padding_mask = pad_sequence(padding_mask, batch_first=True, padding_value=True)
         return {

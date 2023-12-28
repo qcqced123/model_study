@@ -91,6 +91,7 @@ class CFG:
     hidden_dropout_prob = 0.1
     init_weight = 'orthogonal'  # options: normal, xavier_uniform, xavier_normal, kaiming_uniform, kaiming_normal
     initializer_range = 0.02
+    mlm_probability = 0.15
     stop_mode = 'min'
     freeze = False
     num_freeze = 2
