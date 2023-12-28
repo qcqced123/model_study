@@ -372,7 +372,7 @@ def split_list(inputs: List, max_length: int) -> List[List]:
     return result
 
 
-def flatten_sublist(inputs: List[List[str]], max_length: int = 512) -> List[List]:
+def flatten_sublist(inputs: List[List], max_length: int = 512) -> List[List]:
     """ Flatten Nested List to 1D-List """
     result = []
     for instance in tqdm(inputs):
@@ -380,10 +380,33 @@ def flatten_sublist(inputs: List[List[str]], max_length: int = 512) -> List[List
         if len(tmp) > max_length:
             tmp = split_list(tmp, max_length)
             for i in range(len(tmp)):
-                result.append(tmp)
+                result.append(tmp[i])
         else:
             result.append(tmp)
     return result
+
+
+def preprocess4tokenizer(input_ids: List, token_type_ids: List, attention_mask: List):
+    for i, inputs in tqdm(enumerate(input_ids)):
+        if inputs[0] != 1:
+            inputs.insert(0, 1)
+            token_type_ids[i].insert(0, 0)
+            attention_mask[i].insert(0, 1)
+        if inputs[-1] != 2:
+            inputs.append(2)
+            token_type_ids[i].append(0)
+            attention_mask[i].append(1)
+    return input_ids, token_type_ids, attention_mask
+
+
+def cut_instance(input_ids: List, token_type_ids: List, attention_mask: List, min_length: int = 256):
+    n_input_ids, n_token_type_ids, n_attention_mask = [], [], []
+    for i, inputs in tqdm(enumerate(input_ids)):
+        if len(inputs) >= min_length:
+            n_input_ids.append(inputs)
+            n_token_type_ids.append(token_type_ids[i])
+            n_attention_mask.append(attention_mask[i])
+    return n_input_ids, n_token_type_ids, n_attention_mask
 
 
 def save_pkl(input_dict: Any, filename: str) -> None:

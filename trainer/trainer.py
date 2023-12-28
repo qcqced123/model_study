@@ -39,8 +39,8 @@ class PreTrainTuner:
 
     def make_batch(self) -> Tuple[DataLoader, DataLoader, int]:
         """ Function for making batch instance """
-        train = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/train')
-        valid = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/valid')
+        train = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_train')
+        valid = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_valid')
 
         # 1) Custom Datasets
         train_dataset = getattr(dataset_class, self.cfg.dataset)(train)
@@ -149,7 +149,6 @@ class PreTrainTuner:
 
             if self.cfg.n_gradient_accumulation_steps > 1:
                 loss = loss / self.cfg.n_gradient_accumulation_steps
-
             scaler.scale(loss).backward()
             losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
 
@@ -206,7 +205,7 @@ class PreTrainTuner:
                     print(f'Best Score: {valid_loss}')
                     torch.save(
                         model.state_dict(),
-                        f'{self.cfg.checkpoint_dir}_{self.cfg.max_len}_{get_name(self.cfg)}_state_dict.pth'
+                        f'{self.cfg.checkpoint_dir}_{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
                     )
                     val_score_max = valid_loss
                 del valid_loss
@@ -220,11 +219,11 @@ class PreTrainTuner:
         scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
         losses = AverageMeter()
         model.train()
-        for step, (inputs, labels, padding_mask, _, _) in enumerate(tqdm(loader_train)):
+        for step, batch in enumerate(tqdm(loader_train)):
             optimizer.zero_grad()
-            inputs = inputs.to(self.cfg.device)
-            labels = labels.to(self.cfg.device)  # Two target values to GPU
-            padding_mask = padding_mask.to(self.cfg.device)  # padding mask to GPU
+            inputs = batch['input_ids'].to(self.cfg.device)
+            labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
+            padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
             batch_size = inputs.size(0)
 
             with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
@@ -270,19 +269,18 @@ class PreTrainTuner:
         valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
         model.eval()
         with torch.no_grad():
-            for step, (inputs, labels, padding_mask, _, _) in enumerate(tqdm(loader_valid)):
-                inputs = inputs.to(self.cfg.device)
-                labels = labels.to(self.cfg.device)  # Two target values to GPU
-                padding_mask = padding_mask.to(self.cfg.device)  # padding mask to GPU
+            for step, batch in enumerate(tqdm(loader_valid)):
+                inputs = batch['input_ids'].to(self.cfg.device)
+                labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
+                padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
                 batch_size = inputs.size(0)
 
                 logit = model(inputs, padding_mask)
                 loss = val_criterion(logit.view(-1, self.cfg.vocab_size), labels.view(-1))
-                for i, metric_fn in enumerate(val_metric_list):
-                    scores = metric_fn(logit, labels)
-                    valid_metrics[self.metric_list[i]].update(scores.detach().cpu().numpy(), batch_size)
-
                 valid_losses.update(loss.detach().cpu().numpy(), batch_size)
+                for i, metric_fn in enumerate(val_metric_list):
+                    scores = metric_fn(logit.detach().cpu().numpy(), labels.detach().cpu().numpy())
+                    valid_metrics[self.metric_list[i]].update(scores, batch_size)
 
             del inputs, labels, loss, scores
             torch.cuda.empty_cache()

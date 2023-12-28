@@ -17,7 +17,7 @@ def build_relative_position(x_size: int) -> Tensor:
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/da_utils.py#L29
         https://arxiv.org/abs/2006.03654
     """
-    x_index, y_index = torch.arange(x_size), torch.arange(x_size)  # same as rel_pos in official repo
+    x_index, y_index = torch.arange(x_size, device="cuda"), torch.arange(x_size, device="cuda")  # same as rel_pos in official repo
     rel_pos = x_index.view(-1, 1) - y_index.view(1, -1)
     return rel_pos
 
@@ -54,23 +54,24 @@ def disentangled_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tens
     """
     scale_factor = 1
     c2c = torch.matmul(q, k.transpose(-1, -2))  # A_c2c
-
     c2p_att = torch.matmul(q, kr.transpose(-1, -2))
     c2p_pos = build_relative_position(q.shape[1]) + kr.shape[1] / 2  # same as rel_pos in official repo
-    c2p_pos = torch.clamp(c2p_pos, 0, kr.shape[1] - 1).repeat(q.shape[0], 1, 1)
+    c2p_pos = torch.clamp(c2p_pos, 0, kr.shape[1] - 1).repeat(q.shape[0], 1, 1).long()
     c2p = torch.gather(c2p_att, dim=-1, index=c2p_pos)
     if c2p is not None:
         scale_factor += 1
 
     p2c_att = torch.matmul(qr, k.transpose(-1, -2))
     p2c = torch.gather(p2c_att, dim=-2, index=c2p_pos)  # same as torch.gather(k•qr^t, dim=-1, index=c2p_pos)
+
     if p2c is not None:
         scale_factor += 1
 
     dot_scale = torch.sqrt(torch.tensor(scale_factor * q.shape[2]))  # from official paper by microsoft
     attention_matrix = (c2c + c2p + p2c) / dot_scale  # attention Matrix = A_c2c + A_c2r + A_r2c
     if padding_mask is not None:
-        attention_matrix = attention_matrix.masked_fill(padding_mask == 0, float('-inf'))  # Padding Token Masking
+        padding_mask = padding_mask.unsqueeze(1)
+        attention_matrix = attention_matrix.masked_fill(padding_mask == 1, float('-inf'))  # Padding Token Masking
     attention_dist = attention_dropout(
         F.softmax(attention_matrix, dim=-1)
     )
@@ -235,6 +236,7 @@ class DeBERTaEncoder(nn.Module, AbstractModel):
     """
     def __init__(
             self,
+            cfg: CFG,
             max_seq: int = 512,
             num_layers: int = 24,
             dim_model: int = 1024,
@@ -246,6 +248,7 @@ class DeBERTaEncoder(nn.Module, AbstractModel):
             gradient_checkpointing: bool = False
     ) -> None:
         super(DeBERTaEncoder, self).__init__()
+        self.cfg = cfg
         self.max_seq = max_seq
         self.num_layers = num_layers
         self.dim_model = dim_model
@@ -269,7 +272,7 @@ class DeBERTaEncoder(nn.Module, AbstractModel):
         x, pos_x = inputs, rel_pos_emb  # x is same as word_embeddings or embeddings in official repo
         for layer in self.layer:
             if self.gradient_checkpointing and self.cfg.train:
-                x = self._gradient_checkpointing(layer.__call__, x, pos_x, padding_mask)
+                x = self._gradient_checkpointing_func(layer.__call__, x, pos_x, padding_mask)
             else:
                 x = layer(x, pos_x, padding_mask, attention_mask)
             layer_output.append(x)
@@ -300,20 +303,28 @@ class EnhancedMaskDecoder(nn.Module, AbstractModel):
         https://arxiv.org/abs/2111.09543
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/apps/models/masked_language_model.py
     """
-    def __init__(self, encoder: List[nn.ModuleList], dim_model: int = 1024, layer_norm_eps: float = 1e-7, gradient_checkpointing: bool = False) -> None:
+    def __init__(
+            self,
+            cfg: CFG,
+            encoder: List[nn.ModuleList],
+            dim_model: int = 1024,
+            layer_norm_eps: float = 1e-7,
+            gradient_checkpointing: bool = False
+    ) -> None:
         super().__init__()
+        self.cfg = cfg
         self.emd_layers = encoder
         self.layer_norm = nn.LayerNorm(dim_model, eps=layer_norm_eps)
         self.gradient_checkpointing = gradient_checkpointing
 
     def emd_context_layer(self, hidden_states: Tensor, abs_pos_emb: nn.Embedding, rel_pos_emb: nn.Embedding, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
         outputs = []
-        query_states = hidden_states + abs_pos_emb  # "I" in official paper,
+        query_states = hidden_states + abs_pos_emb  # "I" in official paper
         for emd_layer in self.emd_layers:
-            if self.gradient_checkpointing:
-                query_states = self._gradient_checkpointing(emd_layer, query_states, rel_pos_emb, padding_mask)
+            if self.gradient_checkpointing and self.cfg.train:
+                query_states = self._gradient_checkpointing_func(emd_layer, query_states, rel_pos_emb, padding_mask)
             else:
-                query_states = emd_layer(x=hidden_states, pos_x=rel_pos_emb, mask=padding_mask, emd=query_states)
+                query_states = emd_layer(x=hidden_states, pos_x=rel_pos_emb, padding_mask=padding_mask, emd=query_states)
             outputs.append(query_states)
         last_hidden_state = self.layer_norm(query_states)  # because of applying pre-layer norm
         hidden_states = torch.stack(outputs, dim=0).to(hidden_states.device)
@@ -346,24 +357,18 @@ class Embedding(nn.Module):
         super(Embedding, self).__init__()
         self.max_seq = cfg.max_seq
         self.max_rel_pos = 2 * self.max_seq
-        self.word_embedding = nn.Embedding(cfg.vocab_size, cfg.dim_model)  # Word Embedding which is not add Absolute Position
+        self.word_embedding = nn.Embedding(len(cfg.tokenizer), cfg.dim_model)  # Word Embedding which is not add Absolute Position
         self.rel_pos_emb = nn.Embedding(self.max_rel_pos, cfg.dim_model)  # Relative Position Embedding
         self.abs_pos_emb = nn.Embedding(cfg.max_seq, cfg.dim_model)  # Absolute Position Embedding for EMD Layer
         self.layer_norm1 = nn.LayerNorm(cfg.dim_model, eps=cfg.layer_norm_eps)  # for word embedding
         self.layer_norm2 = nn.LayerNorm(cfg.dim_model, eps=cfg.layer_norm_eps)  # for rel_pos_emb
+        self.layer_norm3 = nn.LayerNorm(cfg.dim_model, eps=cfg.layer_norm_eps)  # for abs_pos_emb
         self.hidden_dropout = nn.Dropout(p=cfg.hidden_dropout_prob)
 
     def forward(self, inputs: Tensor) -> Tuple[nn.Embedding, nn.Embedding, nn.Embedding]:
-        word_embeddings = self.hidden_dropout(
-            self.layer_norm1(self.word_embedding(inputs))
-        )
-        print(word_embeddings.shape)
-        rel_pos_emb = self.hidden_dropout(
-            self.layer_norm2(self.rel_pos_emb(torch.arange(self.max_rel_pos, device='cuda').repeat(inputs.shape[0]).to(inputs)))
-        )
-        abs_pos_emb = self.abs_pos_emb(torch.arange(self.max_seq, device='cuda').repeat(inputs.shape[0]).to(inputs))  # "I" in paper
-        print(rel_pos_emb.shape)
-        print(abs_pos_emb.shape)
+        word_embeddings = self.hidden_dropout(self.layer_norm1(self.word_embedding(inputs)))
+        rel_pos_emb = self.hidden_dropout(self.layer_norm2(self.rel_pos_emb(torch.arange(inputs.shape[1]).repeat(inputs.shape[0]).view(inputs.shape[0], -1).to(inputs))))
+        abs_pos_emb = self.hidden_dropout(self.layer_norm3(self.abs_pos_emb(torch.arange(inputs.shape[1]).repeat(inputs.shape[0]).view(inputs.shape[0], -1).to(inputs))))  # "I" in paper)
         return word_embeddings, rel_pos_emb, abs_pos_emb
 
 
@@ -399,6 +404,7 @@ class DeBERTa(nn.Module, AbstractModel):
     def __init__(self, cfg: CFG) -> None:
         super(DeBERTa, self).__init__()
         # Init Scale of DeBERTa Module
+        self.cfg = cfg
         self.vocab_size = cfg.vocab_size
         self.max_seq = cfg.max_seq
         self.max_rel_pos = 2 * self.max_seq
@@ -417,6 +423,7 @@ class DeBERTa(nn.Module, AbstractModel):
 
         # Init Encoder Blocks & Modules
         self.encoder = DeBERTaEncoder(
+            self.cfg,
             self.max_seq,
             self.num_layers,
             self.dim_model,
@@ -429,6 +436,7 @@ class DeBERTa(nn.Module, AbstractModel):
         )
         self.emd_layers = [self.encoder.layer[-1] for _ in range(self.num_emd)]
         self.emd_encoder = EnhancedMaskDecoder(
+            self.cfg,
             self.emd_layers,
             self.dim_model,
             self.layer_norm_eps,

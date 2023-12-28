@@ -4,7 +4,7 @@ import numpy as np
 def accuracy(y_true: np.array, y_pred: np.array) -> float:
     """ accuracy """
     correct = 0
-    pred = np.argmax(y_pred, dim=1)
+    pred = np.argmax(y_pred, axis=1)
     assert pred.shape[0] == len(y_true)
     correct += np.sum(pred == y_true).item()
     return round(correct / len(y_true), 4)

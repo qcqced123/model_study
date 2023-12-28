@@ -59,6 +59,6 @@ class MaskedLanguageModel(nn.Module):
         return outputs
 
     def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> List[Tensor]:
-        hidden_states = self.feature(inputs, padding_mask)
-        logit = self.mlm_head(hidden_states)
+        _, _, last_hidden_states, _ = self.feature(inputs, padding_mask)
+        logit = self.mlm_head(last_hidden_states)
         return logit
