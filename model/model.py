@@ -4,10 +4,11 @@ from torch import Tensor
 from typing import List, Dict
 from experiment.tuner.mlm import MLMHead
 from configuration import CFG
+from abstract_task import AbstractTask
 from experiment.models.attention.deberta import DeBERTa
 
 
-class MaskedLanguageModel(nn.Module):
+class MaskedLanguageModel(nn.Module, AbstractTask):
     """ Custom Model for MLM Task, which is used for pre-training Auto-Encoding Model (AE)
     Args:
         cfg: configuration.CFG
@@ -28,7 +29,7 @@ class MaskedLanguageModel(nn.Module):
         if self.cfg.gradient_checkpoint:
             self.model.gradient_checkpointing_enable()
 
-    def _init_weights(self, module) -> None:
+    def _init_weights(self, module: nn.Module) -> None:
         """ over-ride initializes weights of the given module function (+initializes LayerNorm) """
         if isinstance(module, nn.Linear):
             if self.cfg.init_weight == 'normal':

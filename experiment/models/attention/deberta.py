@@ -272,9 +272,19 @@ class DeBERTaEncoder(nn.Module, AbstractModel):
         x, pos_x = inputs, rel_pos_emb  # x is same as word_embeddings or embeddings in official repo
         for layer in self.layer:
             if self.gradient_checkpointing and self.cfg.train:
-                x = self._gradient_checkpointing_func(layer.__call__, x, pos_x, padding_mask)
+                x = self._gradient_checkpointing_func(
+                    layer.__call__,  # same as __forward__ call, torch reference recommend to use __call__ instead of forward
+                    x,
+                    pos_x,
+                    padding_mask
+                )
             else:
-                x = layer(x, pos_x, padding_mask, attention_mask)
+                x = layer(
+                    x,
+                    pos_x,
+                    padding_mask,
+                    attention_mask
+                )
             layer_output.append(x)
         last_hidden_state = self.layer_norm(x)  # because of applying pre-layer norm
         hidden_states = torch.stack(layer_output, dim=0).to(x.device)  # shape: [num_layers, BS, SEQ_LEN, DIM_Model]
@@ -322,9 +332,19 @@ class EnhancedMaskDecoder(nn.Module, AbstractModel):
         query_states = hidden_states + abs_pos_emb  # "I" in official paper
         for emd_layer in self.emd_layers:
             if self.gradient_checkpointing and self.cfg.train:
-                query_states = self._gradient_checkpointing_func(emd_layer, query_states, rel_pos_emb, padding_mask)
+                query_states = self._gradient_checkpointing_func(
+                    emd_layer.__call__,  # same as __forward__ call, torch reference recommend to use __call__ instead of forward
+                    query_states,
+                    rel_pos_emb,
+                    padding_mask
+                )
             else:
-                query_states = emd_layer(x=hidden_states, pos_x=rel_pos_emb, padding_mask=padding_mask, emd=query_states)
+                query_states = emd_layer(
+                    x=hidden_states,
+                    pos_x=rel_pos_emb,
+                    padding_mask=padding_mask,
+                    emd=query_states
+                )
             outputs.append(query_states)
         last_hidden_state = self.layer_norm(query_states)  # because of applying pre-layer norm
         hidden_states = torch.stack(outputs, dim=0).to(hidden_states.device)

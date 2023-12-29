@@ -5,15 +5,20 @@ from typing import Dict, List, Tuple, Union, Callable
 
 
 class AbstractModel:
+    """ Abstract Model Class for all models in this project
+    Each model should inherit this class for using common functionalities
+    Functions:
+        1) Gradient Checkpointing
+    """
     def __init__(self):
         super(AbstractModel, self).__init__()
 
-    def _set_gradient_checkpointing(self, enable: bool = True, gradient_checkpointing_func: Callable = checkpoint):
+    def _set_gradient_checkpointing(self, enable: bool = False, gradient_checkpointing_func: Callable = checkpoint):
         """ Set Flag for gradient checkpointing for the current model, and then apply it
         Args:
             model (:obj:`torch.nn.Module`):
                 The model to enable gradient checkpointing for
-            enable (:obj:`bool`, `optional`, defaults to :obj:`True`):
+            enable (:obj: bool, optional, default False):
                 Whether or not to enable gradient checkpointing for the model.
             gradient_checkpointing_func:
                 The gradient checkpointing function to use. Defaults to :obj:`torch.utils.checkpoint.checkpoint`.

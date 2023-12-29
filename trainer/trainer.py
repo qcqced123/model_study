@@ -175,7 +175,7 @@ class PreTrainTuner:
             torch.cuda.empty_cache()
             gc.collect()
 
-            # logging gradient norm & lr to wandb
+            # logging train loss, gradient norm, lr to wandb
             lr = scheduler.get_lr()[0]
             grad_norm = grad_norm.detach().cpu().numpy()
 
@@ -288,23 +288,27 @@ class PreTrainTuner:
         avg_scores = [valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
         return valid_losses.avg, avg_scores
 
-    def swa_fn(self, loader_valid, swa_model, val_criterion):
+    def swa_fn(self, loader_valid, swa_model, val_criterion, val_metric_list: List[Callable]) -> Tuple[np.ndarray, List]:
         """ Stochastic Weight Averaging, it consumes more GPU VRAM & training times """
         swa_model.eval()
         valid_losses = AverageMeter()
+        valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
         with torch.no_grad():
-            for step, (inputs, labels, padding_mask, _, _) in enumerate(tqdm(loader_valid)):
-                inputs = inputs.to(self.cfg.device)
-                labels = labels.to(self.cfg.device)  # Two target values to GPU
-                padding_mask = padding_mask.to(self.cfg.device)  # padding mask to GPU
+            for step, batch in enumerate(tqdm(loader_valid)):
+                inputs = batch['input_ids'].to(self.cfg.device)
+                labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
+                padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
                 batch_size = inputs.size(0)
 
                 logit = swa_model(inputs, padding_mask)
                 loss = val_criterion(logit.view(-1, self.cfg.vocab_size), labels.view(-1))
-
                 valid_losses.update(loss.detach().cpu().numpy(), batch_size)
+                for i, metric_fn in enumerate(val_metric_list):
+                    scores = metric_fn(logit.detach().cpu().numpy(), labels.detach().cpu().numpy())
+                    valid_metrics[self.metric_list[i]].update(scores, batch_size)
 
-            del inputs, labels, loss
+            del inputs, labels, loss, scores
             torch.cuda.empty_cache()
             gc.collect()
-        return valid_losses.avg
+        avg_scores = [valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
+        return valid_losses.avg, avg_scores

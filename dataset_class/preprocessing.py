@@ -356,8 +356,8 @@ def cleaning_words(text: str) -> str:
     return tmp_text
 
 
-def split_token(inputs: str):
-    """ Convert malform list to Python List Object & elementwise type casting
+def split_token(inputs: str) -> List:
+    """ Convert mal form list (ex. string list in pd.DataFrame) to Python List object & elementwise type casting
     """
     inputs = cleaning_words(inputs)
     tmp = inputs.split()
@@ -387,6 +387,11 @@ def flatten_sublist(inputs: List[List], max_length: int = 512) -> List[List]:
 
 
 def preprocess4tokenizer(input_ids: List, token_type_ids: List, attention_mask: List):
+    """ Preprocess function for handling exception in inputs data instance
+    which is some of input_ids, token_type_ids, attention_mask are not started with [CLS] token
+    or
+    are not ended with [SEP] token
+    """
     for i, inputs in tqdm(enumerate(input_ids)):
         if inputs[0] != 1:
             inputs.insert(0, 1)
@@ -400,6 +405,8 @@ def preprocess4tokenizer(input_ids: List, token_type_ids: List, attention_mask: 
 
 
 def cut_instance(input_ids: List, token_type_ids: List, attention_mask: List, min_length: int = 256):
+    """ Function for cutting instance which is shorter than min_length
+    """
     n_input_ids, n_token_type_ids, n_attention_mask = [], [], []
     for i, inputs in tqdm(enumerate(input_ids)):
         if len(inputs) >= min_length:
@@ -410,6 +417,8 @@ def cut_instance(input_ids: List, token_type_ids: List, attention_mask: List, mi
 
 
 def save_pkl(input_dict: Any, filename: str) -> None:
+    """ Save pickle file
+    """
     with open(f'{filename}.pkl', 'wb') as file:
         pickle.dump(input_dict, file)
 
