@@ -68,7 +68,7 @@ class CFG:
     scheduler = 'cosine_annealing'  # options: cosine, linear, cosine_annealing, linear_annealing
     batch_scheduler = True
     num_cycles = 0.5  # num_warmup_steps = 0
-    warmup_ratio = 0.1  # options: 0.05, 0.1
+    warmup_ratio = 0.1  # if you select per step, you should consider size of epoch
 
     """ SWA Options """
     swa = True
