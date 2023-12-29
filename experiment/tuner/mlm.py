@@ -8,6 +8,11 @@ from configuration import CFG
 
 class PreTrainingCollator(nn.Module):
     """ Custom Collator for Pretraining
+    Masked Language Modeling Algorithm
+        1) 15% of input tokens are selected at random for prediction
+        2) 80% of the selected tokens are replaced with [MASK] token
+        3) 10% of the selected tokens are replaced with random token in vocabulary
+        4) The remaining 10% are left unchanged
     Args:
         cfg: configuration.CFG
     """
@@ -19,9 +24,18 @@ class PreTrainingCollator(nn.Module):
     def get_padding_mask(input_id: Tensor) -> Tensor:
         return torch.zeros(input_id.shape).bool()
 
-    def get_mask_tokens(self, input_ids: Tensor, mlm_probability: float = 0.15, special_tokens_mask: Optional[Any] = None):
+    def get_mask_tokens(
+        self,
+        input_ids: Tensor,
+        mlm_probability: float = 0.15,
+        special_tokens_mask: Optional[Any] = None
+    ) -> Tuple[Tensor, Tensor]:
+        """ Get Masked Tokens for MLM Task
+        """
         input_ids = input_ids.clone()
         labels = input_ids.clone()
+
+        # 1) 15% of input tokens are selected at random for prediction
         probability_matrix = torch.full(labels.shape, mlm_probability)
         if special_tokens_mask is None:
             special_tokens_mask = [
@@ -35,6 +49,7 @@ class PreTrainingCollator(nn.Module):
         masked_indices = torch.bernoulli(probability_matrix).bool()
         labels[~masked_indices] = -100
 
+        # 2) 80% of the selected tokens are replaced with [MASK] token
         indices_replaced = (
                 torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
         )
@@ -45,7 +60,7 @@ class PreTrainingCollator(nn.Module):
                 & masked_indices
                 & ~indices_replaced
         )
-
+        # 3) 10% of the selected tokens are replaced with random token in vocabulary
         random_words = torch.randint(
             self.tokenizer.vocab_size, labels.shape, dtype=torch.long
         )

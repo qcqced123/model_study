@@ -10,6 +10,7 @@ class AbstractTask:
     Functions:
         1) Init Gradient Checkpointing Flag
         2) Weight Initialization
+            - Pytorch Default Weight Initialization: He Initialization (Kaiming Initialization)
     """
     def __init__(self):
         super(AbstractTask, self).__init__()

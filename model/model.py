@@ -29,6 +29,9 @@ class MaskedLanguageModel(nn.Module, AbstractTask):
         if self.cfg.gradient_checkpoint:
             self.model.gradient_checkpointing_enable()
 
+        self._init_weights(self.model)
+        self._init_weights(self.mlm_head)
+
     def _init_weights(self, module: nn.Module) -> None:
         """ over-ride initializes weights of the given module function (+initializes LayerNorm) """
         if isinstance(module, nn.Linear):
