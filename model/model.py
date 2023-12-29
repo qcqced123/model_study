@@ -4,7 +4,7 @@ from torch import Tensor
 from typing import List, Dict
 from experiment.tuner.mlm import MLMHead
 from configuration import CFG
-from abstract_task import AbstractTask
+from model.abstract_task import AbstractTask
 from experiment.models.attention.deberta import DeBERTa
 
 

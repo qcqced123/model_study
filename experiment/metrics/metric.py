@@ -2,10 +2,13 @@ import numpy as np
 
 
 def accuracy(y_true: np.array, y_pred: np.array) -> float:
-    """ accuracy """
+    """ accuracy metric function
+    Args:
+        y_true: ground truth, 1D Array for MLM Task (batch_size*seq_len)
+        y_pred: prediction, must be 2D Array for MLM Task (batch_size*seq_len, vocab size)
+    """
     correct = 0
-    pred = np.argmax(y_pred, axis=1)
-    assert pred.shape[0] == len(y_true)
+    pred = np.argmax(y_pred, axis=-1)  # return index of max value
     correct += np.sum(pred == y_true).item()
     return round(correct / len(y_true), 4)
 

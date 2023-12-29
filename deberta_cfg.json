@@ -2,10 +2,10 @@
     "pipeline_setting": {
         "train": true,
         "test": false,
-        "checkpoint_dir": "./saved/model",
+        "checkpoint_dir": "./saved",
+        "state_dict": "/model_512_DeBERTa_state_dict.pth",
         "load_pretrained": false,
-        "resume": false,
-        "state_dict": "",
+        "resume": true,
         "name": "MaskedLanguageModel",
         "datafolder": "wikipedia_en",
         "trainer": "PreTrainTuner",
@@ -74,7 +74,7 @@
         "scheduler": "cosine_annealing",
         "batch_scheduler": true,
         "num_cycles": 2,
-        "warmup_ratio": 0.05
+        "warmup_ratio": 0.025
     },
 
     "swa_options": {
