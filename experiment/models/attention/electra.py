@@ -7,7 +7,7 @@ from typing import Tuple, List
 from einops.layers.torch import Rearrange
 from experiment.tuner.mlm import MLMHead
 from experiment.tuner.rtd import post_processing, RTDHead
-from deberta import DeBERTa
+from .deberta import DeBERTa
 from configuration import CFG
 
 

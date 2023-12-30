@@ -99,17 +99,36 @@ def get_scheduler(
         optimizer: torch.optim.Optimizer
         len_train: length of training dataset for calculating total steps
     """
+    lr_scheduler = None
     scheduler_dict = {
         'cosine_annealing': 'get_cosine_with_hard_restarts_schedule_with_warmup',
         'cosine': 'get_cosine_schedule_with_warmup',
-        'linear': 'get_linear_schedule_with_warmup'
+        'linear': 'get_linear_schedule_with_warmup',
+        'constant': 'get_constant_schedule',
+        'constant_with_warmup': 'get_constant_schedule_with_warmup',
     }
-    lr_scheduler = getattr(transformers, scheduler_dict[cfg.scheduler])(
-        optimizer,
-        num_warmup_steps=int(len_train/cfg.batch_size * cfg.epochs/cfg.n_gradient_accumulation_steps) * cfg.warmup_ratio,
-        num_training_steps=int(len_train/cfg.batch_size * cfg.epochs/cfg.n_gradient_accumulation_steps),
-        num_cycles=cfg.num_cycles
-    )
+    if cfg.scheduler == 'cosine_annealing' or cfg.scheduler == 'cosine':
+        lr_scheduler = getattr(transformers, scheduler_dict[cfg.scheduler])(
+            optimizer,
+            num_warmup_steps=int(len_train / cfg.batch_size * cfg.epochs / cfg.n_gradient_accumulation_steps) * cfg.warmup_ratio,
+            num_training_steps=int(len_train / cfg.batch_size * cfg.epochs / cfg.n_gradient_accumulation_steps),
+            num_cycles=cfg.num_cycles
+        )
+    elif cfg.scheduler == 'linear':
+        lr_scheduler = getattr(transformers, scheduler_dict[cfg.scheduler])(
+            optimizer,
+            num_warmup_steps=int(len_train / cfg.batch_size * cfg.epochs / cfg.n_gradient_accumulation_steps) * cfg.warmup_ratio,
+            num_training_steps=int(len_train / cfg.batch_size * cfg.epochs / cfg.n_gradient_accumulation_steps)
+        )
+    elif cfg.scheduler == 'constant':
+        lr_scheduler = getattr(transformers, scheduler_dict[cfg.scheduler])(
+            optimizer
+        )
+    elif cfg.scheduler == 'constant_with_warmup':
+        lr_scheduler = getattr(transformers, scheduler_dict[cfg.scheduler])(
+            optimizer,
+            num_warmup_steps=int(len_train / cfg.batch_size * cfg.epochs / cfg.n_gradient_accumulation_steps) * cfg.warmup_ratio
+        )
     return lr_scheduler
 
 

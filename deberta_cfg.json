@@ -35,10 +35,10 @@
         "n_folds": 4,
         "max_len": 512,
         "epochs": 20,
-        "batch_size": 16,
+        "batch_size": 20,
         "val_batch_size": 16,
         "smart_batch": false,
-        "val_check": 10
+        "val_check": 10000
     },
 
     "gradient_settings": {
@@ -62,7 +62,7 @@
     "optimizer_options": {
         "optimizer": "AdamW",
         "llrd": true,
-        "layerwise_lr": 2e-4,
+        "layerwise_lr": 1.5e-4,
         "layerwise_lr_decay": 0.9,
         "layerwise_weight_decay": 1e-2,
         "layerwise_adam_epsilon": 1e-6,
@@ -71,10 +71,10 @@
     },
 
     "scheduler_options": {
-        "scheduler": "cosine_annealing",
+        "scheduler": "constant",
         "batch_scheduler": true,
         "num_cycles": 2,
-        "warmup_ratio": 0.025
+        "warmup_ratio": 0.1
     },
 
     "swa_options": {
