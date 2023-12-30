@@ -7,7 +7,14 @@ from configuration import CFG
 
 
 def post_processing(x: Tensor) -> Tensor:
-    """ Post Processing for Replaced Token Detection Task """
+    """ Post Processing for Replaced Token Detection Task
+    1) get index of the highest probability of [MASK] token
+    2) convert [MASK] token to prediction token
+    3) make label for Discriminator
+    returns:
+        inputs: Tensor
+        label: Tensor
+    """
     pass
 
 
