@@ -475,6 +475,6 @@ class DeBERTa(nn.Module, AbstractModel):
         word_embeddings, rel_pos_emb, abs_pos_emb = self.embeddings(inputs)
         last_hidden_state, hidden_states = self.encoder(word_embeddings, rel_pos_emb, padding_mask, attention_mask)
 
-        emd_hidden_states = hidden_states[-2]
+        emd_hidden_states = hidden_states[-self.cfg.num_emd]
         emd_last_hidden_state, emd_hidden_states = self.emd_encoder(emd_hidden_states, abs_pos_emb, rel_pos_emb, padding_mask, attention_mask)
         return last_hidden_state, hidden_states, emd_last_hidden_state, emd_hidden_states
