@@ -38,7 +38,7 @@
         "batch_size": 16,
         "val_batch_size": 16,
         "smart_batch": false,
-        "val_check": 10000
+        "val_check": 10
     },
 
     "gradient_settings": {

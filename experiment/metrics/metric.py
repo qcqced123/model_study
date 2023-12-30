@@ -2,15 +2,15 @@ import numpy as np
 
 
 def accuracy(y_true: np.array, y_pred: np.array) -> float:
-    """ accuracy metric function
+    """ accuracy metric function for Masked Langauge Model
     Args:
         y_true: ground truth, 1D Array for MLM Task (batch_size*seq_len)
         y_pred: prediction, must be 2D Array for MLM Task (batch_size*seq_len, vocab size)
     """
-    correct = 0
+    correct, len_label = 0, len(y_true[y_true != -100])
     pred = np.argmax(y_pred, axis=-1)  # return index of max value
     correct += np.sum(pred == y_true).item()
-    return round(correct / len(y_true), 4)
+    return round(correct / len_label, 4)
 
 
 def top_k_acc(y_true: np.array, y_pred: np.array, k: int = 3) -> float:

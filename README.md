@@ -30,19 +30,19 @@ Experiment Application
 │	├── tokenizer
 │	│
 │	└── tuner
-│		├── mlm.py
-│		├── clm.py
-│		├── rtd.py
-│		├── sbo.py
-│	    └── p_tuning.py
+│	    ├── mlm.py  # Masked Language Model
+│	    ├── clm.py  # Causal Language Model
+│	    ├── rtd.py  # Replaced Token Detection
+│	    ├── sbo.py  # Span Boundary Objective
+│	    └── p_tuning.py 
 │
 ├── dataset_class
-│	├── data_folder  # input your dataset
-│	├── dataclass.py
+│   ├── data_folder  # input your dataset
+│   ├── dataclass.py
 │   └── preprocessing.py
 │  
 ├── model
-│	├── abstract_task.py
+│   ├── abstract_task.py
 │   ├── model.py
 │   └── model_utils.py
 │
