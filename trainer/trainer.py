@@ -20,7 +20,7 @@ from experiment.metrics import metric
 from model import model as task
 from configuration import CFG
 from dataset_class.preprocessing import load_pkl
-from trainer.trainer_utils import get_optimizer_grouped_parameters, get_scheduler, get_name
+from trainer.trainer_utils import get_optimizer_grouped_parameters, get_scheduler
 from trainer.trainer_utils import AverageMeter, AWP, get_dataloader, get_swa_scheduler
 
 
@@ -40,11 +40,8 @@ class PreTrainTuner:
 
     def make_batch(self) -> Tuple[DataLoader, DataLoader, int]:
         """ Function for making batch instance """
-        train = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_train').items()
+        train = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_train')
         valid = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_valid')
-
-        # tmp
-        train = {k: v[160000:] for k, v in train}
 
         # 1) Custom Datasets
         train_dataset = getattr(dataset_class, self.cfg.dataset)(train)
@@ -125,18 +122,18 @@ class PreTrainTuner:
     def train_val_fn(
             self,
             loader_train,
-            model,
-            criterion,
+            model: nn.Module,
+            criterion: nn.Module,
             optimizer,
             scheduler,
             loader_valid,
-            val_criterion,
+            val_criterion: nn.Module,
             val_metric_list: List[Callable],
             val_score_max: float,
             epoch: int,
-            awp=None,
-            swa_model=None,
-            swa_start=None,
+            awp: nn.Module = None,
+            swa_model: nn.Module = None,
+            swa_start: int = None,
             swa_scheduler=None
     ) -> Tuple[Any, Union[float, ndarray, ndarray]]:
         """ function for train loop with validation for each batch*N Steps """

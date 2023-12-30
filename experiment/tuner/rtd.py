@@ -21,8 +21,8 @@ def post_processing(x: Tensor) -> Tensor:
 class RTDCollator(nn.Module):
     """ Replaced Token Detection Collator (RTD) for Pretraining
     from ELECTRA original paper
-
     """
+    pass
 
 
 class RTDHead(nn.Module):
