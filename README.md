@@ -46,13 +46,10 @@ Experiment Application
 │   ├── model.py
 │   └── model_utils.py
 │
-├── trainer
-│   ├── train_loop.py
-│   ├── trainer.py
-│   └── trainer_utils.py
-│
-└── Experiment 
-    └──  테스트 수행 과정 및 결과 소개**
+└── trainer
+    ├── train_loop.py
+    ├── trainer.py
+    └── trainer_utils.py    
 ```
 
 ### Attention
