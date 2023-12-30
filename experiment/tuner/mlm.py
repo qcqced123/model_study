@@ -8,7 +8,7 @@ from configuration import CFG
 
 class PreTrainingCollator(nn.Module):
     """ Custom Collator for Pretraining
-    Masked Language Modeling Algorithm
+    Masked Language Modeling Algorithm with Dynamic Masking from RoBERTa
         1) 15% of input tokens are selected at random for prediction
         2) 80% of the selected tokens are replaced with [MASK] token
         3) 10% of the selected tokens are replaced with random token in vocabulary

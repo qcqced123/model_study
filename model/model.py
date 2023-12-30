@@ -6,6 +6,7 @@ from experiment.tuner.mlm import MLMHead
 from configuration import CFG
 from model.abstract_task import AbstractTask
 from experiment.models.attention.deberta import DeBERTa
+from experiment.models.attention.electra import ELECTRA
 
 
 class MaskedLanguageModel(nn.Module, AbstractTask):
@@ -66,3 +67,15 @@ class MaskedLanguageModel(nn.Module, AbstractTask):
         _, _, last_hidden_states, _ = self.feature(inputs, padding_mask)
         logit = self.mlm_head(last_hidden_states)
         return logit
+
+
+class ReplacedTokenDetection(nn.Module, AbstractTask):
+    """ Custom Model for RTD Task, which is used for pre-training Auto-Encoding Model (AE)
+    Args:
+        cfg: configuration.CFG
+    References:
+    """
+    def __init__(self, cfg: CFG) -> None:
+        super(ReplacedTokenDetection, self).__init__()
+        self.cfg = cfg
+        self.model = ELECTRA(self.cfg)
