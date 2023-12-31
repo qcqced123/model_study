@@ -12,7 +12,11 @@ from configuration import CFG
 
 
 class Generator(nn.Module):
-    """ Backbone model with MLM Head for Generator
+    """ Generator Module in ELECTRA, this module has two parts:
+        1) backbone model (ex. BERT, RoBERTa, DeBERTa, ...)
+        2) mlm head
+    In original paper, BERT is used as backbone model but we select DeBERTa as backbone model
+    you can change backbone model to any other model easily, just passing other model name to cfg.generator
     Args:
         cfg: configuration.CFG
     """
@@ -47,7 +51,11 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    """ Backbone model for Discriminator
+    """ Discriminator Module in ELECTRA, this module also has two parts:
+        1) backbone model (ex. BERT, RoBERTa, DeBERTa, ...)
+        2) binary classifier head
+    In original paper, BERT is used as backbone model but we select DeBERTa as backbone model
+    you can change backbone model to any other model easily, just passing other model name to cfg.generator
     Args:
         cfg: configuration.CFG
     """
@@ -84,7 +92,7 @@ class Discriminator(nn.Module):
 class ELECTRA(nn.Module, AbstractModel):
     """ Main class for ELECTRA, having all of sub-blocks & modules such as Generator & Discriminator
     Init Scale of ELECTRA Hyper-Parameters, Embedding Layer, Encoder Blocks of Generator, Discriminator
-    You can select any other backbone model architecture for Generator & Discriminator, in oringinal paper, BERT is used
+    You can select any other backbone model architecture for Generator & Discriminator, in original paper, BERT is used
     Var:
         cfg: configuration.CFG
         generator: Generator, which is used for generating replaced tokens for RTD
@@ -110,6 +118,7 @@ class ELECTRA(nn.Module, AbstractModel):
         g_logit = self.generator(
             inputs,
             padding_mask,
+            attention_mask
         )
         d_inputs, d_labels = get_discriminator_input(
             inputs,

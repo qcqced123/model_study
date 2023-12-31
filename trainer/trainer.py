@@ -73,7 +73,7 @@ class PreTrainTuner:
 
     def model_setting(self, len_train: int):
         """ Function for init backbone's configuration & train utils setting,
-        the design is inspired by the Builder pattern.
+        The design is inspired by the Builder Pattern
         """
         model = getattr(task, self.cfg.task)(self.cfg)
         # load checkpoint when you set 'resume' to True

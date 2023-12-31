@@ -1,14 +1,13 @@
 import torch
 import torch.nn as nn
-from torch.nn.utils.rnn import pad_sequence
 from torch import Tensor
-from typing import Dict, List, Tuple, Union, Optional, Any
+from typing import Tuple
 from configuration import CFG
 
 
 def get_discriminator_input(inputs: Tensor, labels: Tensor, pred: Tensor) -> Tuple[Tensor, Tensor]:
     """ Post Processing for Replaced Token Detection Task
-    1) get index of the highest probability of [MASK] token
+    1) get index of the highest probability of [MASK] token in pred tensor
     2) convert [MASK] token to prediction token
     3) make label for Discriminator
     Args:
@@ -16,8 +15,8 @@ def get_discriminator_input(inputs: Tensor, labels: Tensor, pred: Tensor) -> Tup
         labels: labels for masked language modeling
         pred: prediction tensor from Generator
     returns:
-        inputs: Tensor
-        label: Tensor
+        d_inputs: torch.Tensor, shape of [Batch, Sequence], for Discriminator inputs
+        d_labels: torch.Tensor, shape of [Sequence], for Discriminator labels
     """
     # 1) flatten pred to 2D Tensor
     d_inputs, d_labels = inputs.clone().view(-1), None
