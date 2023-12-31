@@ -22,4 +22,27 @@ class AbstractTask:
             module (:obj:`torch.nn.Module`):
                 The module to initialize weights for
         """
-        pass
+        """ over-ride initializes weights of the given module function (+initializes LayerNorm) """
+        if isinstance(module, nn.Linear):
+            if self.cfg.init_weight == 'normal':
+                module.weight.data.normal_(mean=0.0, std=self.cfg.initializer_range)
+            elif self.cfg.init_weight == 'xavier_uniform':
+                module.weight.data = nn.init.xavier_uniform_(module.weight.data)
+            elif self.cfg.init_weight == 'xavier_normal':
+                module.weight.data = nn.init.xavier_normal_(module.weight.data)
+            elif self.cfg.init_weight == 'kaiming_uniform':
+                module.weight.data = nn.init.kaiming_uniform_(module.weight.data)
+            elif self.cfg.init_weight == 'kaiming_normal':
+                module.weight.data = nn.init.kaiming_normal_(module.weight.data)
+            elif self.cfg.init_weight == 'orthogonal':
+                module.weight.data = nn.init.orthogonal_(module.weight.data)
+            if module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, nn.Embedding):
+            module.weight.data.normal_(mean=0.0, std=self.cfg.initializer_range)
+            if module.padding_idx is not None:
+                module.weight.data[module.padding_idx].zero_()
+        elif isinstance(module, nn.LayerNorm):
+            """ reference from torch.nn.Layernorm with elementwise_affine=True """
+            module.weight.data.fill_(1.0)
+            module.bias.data.zero_()

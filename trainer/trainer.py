@@ -243,8 +243,7 @@ class PreTrainTuner:
                 scaler.scale(adv_loss).backward()
                 awp._restore()
 
-            if self.cfg.clipping_grad and (
-                    step + 1) % self.cfg.n_gradient_accumulation_steps == 0 or self.cfg.n_gradient_accumulation_steps == 1:
+            if self.cfg.clipping_grad and (step + 1) % self.cfg.n_gradient_accumulation_steps == 0 or self.cfg.n_gradient_accumulation_steps == 1:
                 scaler.unscale_(optimizer)
                 grad_norm = torch.nn.utils.clip_grad_norm(
                     model.parameters(),
