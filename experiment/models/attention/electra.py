@@ -6,7 +6,7 @@ from torch import Tensor
 from typing import Tuple, List
 from einops.layers.torch import Rearrange
 from experiment.tuner.mlm import MLMHead
-from experiment.tuner.rtd import post_processing, RTDHead
+from experiment.tuner.rtd import get_discriminator_input, RTDHead
 from .deberta import DeBERTa
 from configuration import CFG
 
@@ -105,11 +105,20 @@ class ELECTRA(nn.Module, AbstractModel):
         if self.share_embedding:
             self.discriminator.discriminator.embeddings = self.generator.generator.embeddings
 
-    def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
+    def forward(self, inputs: Tensor, labels: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor, Tensor]:
         assert inputs.ndim == 2, f'Expected (batch, sequence) got {inputs.shape}'
-        logit = self.generator(
+        g_logit = self.generator(
             inputs,
+            padding_mask,
+        )
+        d_inputs, d_labels = get_discriminator_input(
+            inputs,
+            labels,
+            g_logit,
+        )
+        d_logit = self.discriminator(
+            d_inputs,
             padding_mask,
             attention_mask
         )
-        post_processing(logit)
+        return g_logit, d_logit, d_labels
