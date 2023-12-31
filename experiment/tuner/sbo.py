@@ -24,7 +24,7 @@ class SpanCollator(nn.Module):
 
 
 class SBOHead(nn.Module):
-    """ Custom Head for Span Boundary Objective Task
+    """ Custom Head for Span Boundary Objective Task, this module return logit value for each token
     Args:
         cfg: configuration.CFG
     References:

@@ -4,8 +4,8 @@ import numpy as np
 def accuracy(y_true: np.array, y_pred: np.array) -> float:
     """ accuracy metric function for Masked Langauge Model
     Args:
-        y_true: ground truth, 1D Array for MLM Task (batch_size*seq_len)
-        y_pred: prediction, must be 2D Array for MLM Task (batch_size*seq_len, vocab size)
+        y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
+        y_pred: prediction, must be 2D Array for MLM Task (batch_size*sequence, vocab size)
     """
     correct, len_label = 0, len(y_true[y_true != -100])
     pred = np.argmax(y_pred, axis=-1)  # return index of max value
