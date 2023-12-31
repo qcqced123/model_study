@@ -110,6 +110,7 @@ class ELECTRA(nn.Module, AbstractModel):
         self.share_embedding = self.cfg.share_embedding
         if self.share_embedding:
             self.discriminator.discriminator.embeddings = self.generator.generator.embeddings
+        self.gradient_checkpointing = self.cfg.gradient_checkpoint
 
     def forward(self, inputs: Tensor, labels: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor, Tensor]:
         assert inputs.ndim == 2, f'Expected (batch, sequence) got {inputs.shape}'

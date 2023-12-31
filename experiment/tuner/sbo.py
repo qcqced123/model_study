@@ -27,6 +27,8 @@ class SBOHead(nn.Module):
     """ Custom Head for Span Boundary Objective Task
     Args:
         cfg: configuration.CFG
+    References:
+        https://arxiv.org/pdf/1907.10529.pdf
     """
     def __init__(self, cfg: CFG) -> None:
         super(SBOHead, self).__init__()
@@ -35,9 +37,13 @@ class SBOHead(nn.Module):
             nn.Linear(self.cfg.dim_model, self.cfg.dim_ffn, bias=False),
             nn.GELU(),
             nn.LayerNorm(self.cfg.dim_ffn),
-            nn.Linear(self.cfg.dim_ffn, 1, bias=False),
+            nn.Linear(self.cfg.dim_ffn, self.cfg.dim_model, bias=False),
+            nn.GELU(),
+            nn.LayerNorm(self.cfg.dim_model),
         )
-
+        self.classifier = nn.Linear(self.cfg.dim_model, self.cfg.vocab_size, bias=False)
 
     def forward(self, hidden_states: Tensor) -> Tensor:
-        pass
+        z = self.head(hidden_states)
+        logit = self.classifier(z)
+        return logit

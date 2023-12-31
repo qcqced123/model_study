@@ -82,7 +82,7 @@ class SpanBoundaryObjective(nn.Module, AbstractTask):
     Args:
         cfg: configuration.CFG
     References:
-
+        https://arxiv.org/pdf/1907.10529.pdf
     """
     def __init__(self, cfg: CFG) -> None:
         super(SpanBoundaryObjective, self).__init__()
@@ -102,5 +102,7 @@ class SpanBoundaryObjective(nn.Module, AbstractTask):
         self._init_weights(self.mlm_head)
         self._init_weights(self.sbo_head)
 
-    def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
-        pass
+    def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
+        g_logit, s_logit = None, None
+        return g_logit, s_logit
+

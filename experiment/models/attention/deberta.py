@@ -358,7 +358,13 @@ class EnhancedMaskDecoder(nn.Module, AbstractModel):
         padding_mask: mask for Encoder padded token for speeding up to calculate attention score or MLM
         attention_mask: mask for CLM
         """
-        last_hidden_state, emd_hidden_states = self.emd_context_layer(hidden_states, abs_pos_emb, rel_pos_emb, padding_mask, attention_mask)
+        last_hidden_state, emd_hidden_states = self.emd_context_layer(
+            hidden_states,
+            abs_pos_emb,
+            rel_pos_emb,
+            padding_mask,
+            attention_mask
+        )
         return last_hidden_state, emd_hidden_states
 
 
@@ -386,9 +392,15 @@ class Embedding(nn.Module):
         self.hidden_dropout = nn.Dropout(p=cfg.hidden_dropout_prob)
 
     def forward(self, inputs: Tensor) -> Tuple[nn.Embedding, nn.Embedding, nn.Embedding]:
-        word_embeddings = self.hidden_dropout(self.layer_norm1(self.word_embedding(inputs)))
-        rel_pos_emb = self.hidden_dropout(self.layer_norm2(self.rel_pos_emb(torch.arange(inputs.shape[1]).repeat(inputs.shape[0]).view(inputs.shape[0], -1).to(inputs))))
-        abs_pos_emb = self.hidden_dropout(self.layer_norm3(self.abs_pos_emb(torch.arange(inputs.shape[1]).repeat(inputs.shape[0]).view(inputs.shape[0], -1).to(inputs))))  # "I" in paper)
+        word_embeddings = self.hidden_dropout(
+            self.layer_norm1(self.word_embedding(inputs))
+        )
+        rel_pos_emb = self.hidden_dropout(
+            self.layer_norm2(self.rel_pos_emb(torch.arange(inputs.shape[1]).repeat(inputs.shape[0]).view(inputs.shape[0], -1).to(inputs)))
+        )
+        abs_pos_emb = self.hidden_dropout(
+            self.layer_norm3(self.abs_pos_emb(torch.arange(inputs.shape[1]).repeat(inputs.shape[0]).view(inputs.shape[0], -1).to(inputs)))
+        )  # "I" in paper)
         return word_embeddings, rel_pos_emb, abs_pos_emb
 
 
