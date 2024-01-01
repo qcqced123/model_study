@@ -408,3 +408,4 @@ $RECYCLE.BIN/
 !/experiment/models/attention/seq2seq/(NoteTaking_Ver)Transformer.ipynb
 *.ipynb
 *.pkl
+*.pth
