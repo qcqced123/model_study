@@ -20,3 +20,4 @@ class SpanBERT(nn.Module, AbstractModel):
 
     def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
         pass
+

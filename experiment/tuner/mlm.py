@@ -1,3 +1,4 @@
+import random
 import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
@@ -6,7 +7,25 @@ from typing import Dict, List, Tuple, Union, Optional, Any
 from configuration import CFG
 
 
-class PreTrainingCollator(nn.Module):
+class PretrainingMaskingCollator(nn.Module):
+    """ Abstract Collator class for Pre-training
+    """
+    def __init__(self):
+        super(PretrainingMaskingCollator, self).__init__()
+        self.pad_to_multiple_of = None
+
+    def get_padding_mask(self, input_id: Tensor) -> Tensor:
+        return torch.zeros(input_id.shape).bool()
+
+    def get_mask_tokens(self, inputs: Any, mask_labels: Any) -> Tuple[Any, Any]:
+        raise NotImplementedError
+
+    def forward(self, batched: List[Dict[str, Tensor]]) -> Dict:
+        """ Abstract Method for Collator, you must implement this method in child class """
+        pass
+
+
+class SubWordMaskingCollator(PretrainingMaskingCollator):
     """ Custom Collator for Pretraining
     Masked Language Modeling Algorithm with Dynamic Masking from RoBERTa
         1) 15% of input tokens are selected at random for prediction
@@ -17,12 +36,8 @@ class PreTrainingCollator(nn.Module):
         cfg: configuration.CFG
     """
     def __init__(self, cfg: CFG) -> None:
-        super(PreTrainingCollator, self).__init__()
+        super(SubWordMaskingCollator, self).__init__()
         self.tokenizer = cfg.tokenizer
-
-    @staticmethod
-    def get_padding_mask(input_id: Tensor) -> Tensor:
-        return torch.zeros(input_id.shape).bool()
 
     def get_mask_tokens(
         self,
@@ -30,8 +45,7 @@ class PreTrainingCollator(nn.Module):
         mlm_probability: float = 0.15,
         special_tokens_mask: Optional[Any] = None
     ) -> Tuple[Tensor, Tensor]:
-        """ Get Masked Tokens for MLM Task
-        """
+        """ Get Masked Tokens for MLM Task """
         input_ids = input_ids.clone()
         labels = input_ids.clone()
 
@@ -68,24 +82,8 @@ class PreTrainingCollator(nn.Module):
 
         return input_ids, labels
 
-
-class MLMCollator(PreTrainingCollator):
-    """ Custom Collator for MLM Task, which is used for pre-training Auto-Encoding Model (AE)
-    Dataloader returns a list to collator, so collator should be able to handle list of tensors
-    Args:
-        cfg: configuration.CFG
-        special_tokens_mask: special tokens mask for masking
-    References:
-        https://huggingface.co/docs/transformers/v4.32.0/ko/tasks/masked_language_modeling
-        https://github.com/huggingface/transformers/blob/main/src/transformers/data/data_collator.py#L607
-        https://github.com/huggingface/transformers/blob/main/src/transformers/data/data_collator.py#L748
-    """
-    def __init__(self, cfg: CFG, special_tokens_mask: Optional[Any] = None):
-        super(MLMCollator, self).__init__(cfg)
-        self.cfg = cfg
-        self.special_tokens_mask = special_tokens_mask
-
-    def __call__(self, batched: List[Dict[str, Tensor]]):
+    def forward(self, batched: List[Dict[str, Tensor]]) -> Dict:
+        """ Masking for MLM with sub-word tokenizing """
         input_ids = [torch.tensor(x["input_ids"]) for x in batched]
         token_type_ids = [torch.tensor(x["token_type_ids"]) for x in batched]
         attention_mask = [torch.tensor(x["attention_mask"]) for x in batched]
@@ -103,6 +101,150 @@ class MLMCollator(PreTrainingCollator):
             "token_type_ids": token_type_ids,
             "attention_mask": attention_mask
         }
+
+
+class WholeWorldMaskingCollator(PretrainingMaskingCollator):
+    """ Module for Whole Word Masking Task (WWM), basic concept is similar to MLM Task which is using sub-word tokenizer
+    But, WWM do not allow sub-word tokenizing. Instead masking whole word-level token.
+    Example:
+        1) sub-word mlm masking: pretrained => pre##, ##train, ##ing => pre##, [MASK], ##ing
+        2) whole-word mlm masking: pretrained => [MASK]
+    References:
+        https://github.com/huggingface/transformers/blob/main/src/transformers/data/data_collator.py#L748
+    """
+    def __init__(self, cfg: CFG) -> None:
+        super(WholeWorldMaskingCollator, self).__init__()
+        self.cfg = cfg
+        self.tokenizer = cfg.tokenizer
+
+    def _whole_word_mask(self, input_tokens: List[str], max_predictions: int = CFG.max_seq) -> List[int]:
+        cand_indexes = []
+        for i, token in enumerate(input_tokens):
+            if token == "[CLS]" or token == "[SEP]":
+                continue
+
+            if len(cand_indexes) >= 1 and token.startswith("##"):
+                cand_indexes[-1].append(i)
+            else:
+                cand_indexes.append([i])
+
+        random.shuffle(cand_indexes)
+        num_to_predict = min(max_predictions, max(1, int(round(len(input_tokens) * self.mlm_probability))))
+        masked_lms = []
+        covered_indexes = set()
+        for index_set in cand_indexes:
+            if len(masked_lms) >= num_to_predict:
+                break
+            if len(masked_lms) + len(index_set) > num_to_predict:
+                continue
+            is_any_index_covered = False
+            for index in index_set:
+                if index in covered_indexes:
+                    is_any_index_covered = True
+                    break
+            if is_any_index_covered:
+                continue
+            for index in index_set:
+                covered_indexes.add(index)
+                masked_lms.append(index)
+
+        if len(covered_indexes) != len(masked_lms):
+            raise ValueError("Length of covered_indexes is not equal to length of masked_lms.")
+        mask_labels = [1 if i in covered_indexes else 0 for i in range(len(input_tokens))]
+        return mask_labels
+
+    def get_mask_tokens(
+        self,
+        inputs: Tensor,
+        mask_labels: Tensor
+    ) -> Tuple[Tensor, Tensor]:
+        """ Prepare masked tokens inputs/labels for masked language modeling(15%):
+        80% MASK, 10% random, 10% original. Set 'mask_labels' means we use whole word mask (wwm), we directly mask idxs according to it's ref
+        """
+        labels = inputs.clone()
+        probability_matrix = mask_labels
+
+        special_tokens_mask = [
+            self.tokenizer.get_special_tokens_mask(val, already_has_special_tokens=True) for val in labels.tolist()
+        ]
+        probability_matrix.masked_fill_(torch.tensor(special_tokens_mask, dtype=torch.bool), value=0.0)
+        if self.tokenizer.pad_token is not None:
+            padding_mask = labels.eq(self.tokenizer.pad_token_id)
+            probability_matrix.masked_fill_(padding_mask, value=0.0)
+
+        masked_indices = probability_matrix.bool()
+        labels[~masked_indices] = -100  # We only compute loss on masked tokens
+
+        # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
+        indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
+        inputs[indices_replaced] = self.tokenizer.convert_tokens_to_ids(self.tokenizer.mask_token)
+
+        # 10% of the time, we replace masked input tokens with random word
+        indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).bool() & masked_indices & ~indices_replaced
+        random_words = torch.randint(len(self.tokenizer), labels.shape, dtype=torch.long)
+        inputs[indices_random] = random_words[indices_random]
+
+        # The rest of the time (10% of the time) we keep the masked input tokens unchanged
+        return inputs, labels
+
+    def forward(self, batched: List[Dict[str, Tensor]]) -> Dict:
+        """ Masking for MLM with whole-word tokenizing """
+        input_ids = [x["input_ids"] for x in batched]
+        token_type_ids = [torch.tensor(x["token_type_ids"]) for x in batched]
+        attention_mask = [torch.tensor(x["attention_mask"]) for x in batched]
+
+        padding_mask = [self.get_padding_mask(x) for x in input_ids]
+        padding_mask = pad_sequence(padding_mask, batch_first=True, padding_value=True)
+        input_ids = pad_sequence(input_ids, batch_first=True, padding_value=0)
+
+        mask_labels = []
+        for x in batched:
+            ref_tokens = []
+            for input_id in x["input_ids"]:
+                token = self.tokenizer.convert_id_to_token(input_id)
+                ref_tokens.append(token)
+            mask_labels.append(self._whole_word_mask(ref_tokens))
+
+        mask_labels = [torch.tensor(x) for x in mask_labels]
+        mask_labels = pad_sequence(mask_labels, batch_first=True, padding_value=0)
+        inputs, labels = self.get_mask_tokens(
+            input_ids,
+            mask_labels
+        )
+        return {
+            "input_ids": inputs,
+            "labels": labels,
+            "padding_mask": padding_mask,
+            "token_type_ids": token_type_ids,
+            "attention_mask": attention_mask
+        }
+
+
+class MLMCollator:
+    """ Custom Collator for MLM Task, which is used for pre-training Auto-Encoding Model (AE)
+    Dataloader returns a list to collator, so collator should be able to handle list of tensors
+    Args:
+        cfg: configuration.CFG
+        is_mlm: whether to use MLM or not, if you set False to this argument,
+                this collator will be used for CLM
+        special_tokens_mask: special tokens mask for masking
+    References:
+        https://huggingface.co/docs/transformers/v4.32.0/ko/tasks/masked_language_modeling
+        https://github.com/huggingface/transformers/blob/main/src/transformers/data/data_collator.py#L607
+        https://github.com/huggingface/transformers/blob/main/src/transformers/data/data_collator.py#L748
+    """
+    def __init__(self, cfg: CFG, is_mlm: bool = True, special_tokens_mask: Optional[Any] = None):
+        self.cfg = cfg
+        self.mlm = is_mlm
+        self.special_tokens_mask = special_tokens_mask
+
+    def __call__(self, batched: List[Dict[str, Tensor]]) -> Dict:
+        batch_instance = None
+        if self.cfg.mlm_masking == 'SubWordMasking':
+            batch_instance = SubWordMaskingCollator(self.cfg)(batched)
+        if self.cfg.mlm_masking == 'WholeWordMasking':
+            batch_instance = WholeWorldMaskingCollator(self.cfg)(batched)
+        return batch_instance
 
 
 class MLMHead(nn.Module):

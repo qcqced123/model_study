@@ -163,6 +163,7 @@ def sync_config(json_config: json) -> None:
     CFG.hidden_dropout_prob = json_config.model_utils.hidden_dropout_prob
     CFG.init_weight = json_config.model_utils.init_weight
     CFG.initializer_range = json_config.model_utils.initializer_range
+    CFG.mlm_masking = json_config.model_utils.mlm_masking
     CFG.mlm_probability = json_config.model_utils.mlm_probability
     CFG.stop_mode = json_config.model_utils.stop_mode
     CFG.reinit = json_config.model_utils.reinit
