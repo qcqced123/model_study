@@ -12,6 +12,10 @@ def get_relative_position() -> Tensor:
 
 class SpanCollator(nn.Module):
     """ Custom Collator for Span Boundary Objective Task
+    Algorithm:
+    1) Select 2 random tokens from input tokens for spanning
+    2) Calculate relative position embedding for each token with 2 random tokens froms step 1.
+    3) Calculate span boundary objective with 2 random tokens from step 1 & pos embedding from step 2.
     Args:
         cfg: configuration.CFG
     """
