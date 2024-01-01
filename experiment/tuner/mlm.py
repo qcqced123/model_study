@@ -103,7 +103,7 @@ class SubWordMaskingCollator(PretrainingMaskingCollator):
         }
 
 
-class WholeWorldMaskingCollator(PretrainingMaskingCollator):
+class WholeWordMaskingCollator(PretrainingMaskingCollator):
     """ Module for Whole Word Masking Task (WWM), basic concept is similar to MLM Task which is using sub-word tokenizer
     But, WWM do not allow sub-word tokenizing. Instead masking whole word-level token.
     Example:
@@ -113,11 +113,16 @@ class WholeWorldMaskingCollator(PretrainingMaskingCollator):
         https://github.com/huggingface/transformers/blob/main/src/transformers/data/data_collator.py#L748
     """
     def __init__(self, cfg: CFG) -> None:
-        super(WholeWorldMaskingCollator, self).__init__()
+        super(WholeWordMaskingCollator, self).__init__()
         self.cfg = cfg
+        self.mlm_probability = cfg.mlm_probability
         self.tokenizer = cfg.tokenizer
 
-    def _whole_word_mask(self, input_tokens: List[str], max_predictions: int = CFG.max_seq) -> List[int]:
+    def _whole_word_mask(
+            self,
+            input_tokens: List[str],
+            max_predictions: int = CFG.max_seq
+    ) -> List[int]:
         cand_indexes = []
         for i, token in enumerate(input_tokens):
             if token == "[CLS]" or token == "[SEP]":
@@ -201,7 +206,7 @@ class WholeWorldMaskingCollator(PretrainingMaskingCollator):
         for x in batched:
             ref_tokens = []
             for input_id in x["input_ids"]:
-                token = self.tokenizer.convert_id_to_token(input_id)
+                token = self.tokenizer._convert_id_to_token(input_id)
                 ref_tokens.append(token)
             mask_labels.append(self._whole_word_mask(ref_tokens))
 
@@ -243,7 +248,7 @@ class MLMCollator:
         if self.cfg.mlm_masking == 'SubWordMasking':
             batch_instance = SubWordMaskingCollator(self.cfg)(batched)
         if self.cfg.mlm_masking == 'WholeWordMasking':
-            batch_instance = WholeWorldMaskingCollator(self.cfg)(batched)
+            batch_instance = WholeWordMaskingCollator(self.cfg)(batched)
         return batch_instance
 
 

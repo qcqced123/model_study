@@ -192,8 +192,8 @@ class PreTrainTuner:
             if ((step + 1) % self.cfg.val_check == 0) or ((step + 1) == len(loader_train)):
                 valid_loss, score_list = self.valid_fn(loader_valid, model, val_criterion, val_metric_list)
 
-                print(f'[Validation Check{step}/{len(loader_train)}] Train Loss: {np.round(losses.avg, 4)}')
-                print(f'[Validation Check{step}/{len(loader_train)}] Valid Loss: {np.round(valid_loss, 4)}')
+                print(f'[Validation Check: {step}/{len(loader_train)}] Train Loss: {np.round(losses.avg, 4)}')
+                print(f'[Validation Check: {step}/{len(loader_train)}] Valid Loss: {np.round(valid_loss, 4)}')
                 for i, metric_name in enumerate(self.metric_list):
                     print(f'[{step}/{len(loader_train)}] Valid {metric_name}: {score_list[i]}')
                     wandb.log({f'<Validation Check Step> Valid {metric_name}': score_list[i]})
@@ -208,13 +208,13 @@ class PreTrainTuner:
                     print(f'Best Score: {valid_loss}')
                     torch.save(
                         model.state_dict(),
-                        f'{self.cfg.checkpoint_dir}_{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
+                        f'{self.cfg.checkpoint_dir}{self.cfg.mlm_masking}_{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
                     )
                     val_score_max = valid_loss
                 del valid_loss
                 gc.collect()
                 torch.cuda.empty_cache()
-        return losses.avg * self.cfg.n_gradient_accumulation_steps, val_score_max
+        return losses.avg * self.cfg.n_gradien_accumulation_steps, val_score_max
 
     def train_fn(self, loader_train, model, criterion, optimizer, scheduler, epoch, awp=None, swa_model=None, swa_start=None, swa_scheduler=None) -> Tuple[Tensor, Tensor, Tensor]:
         """ function for train loop
