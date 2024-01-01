@@ -3,13 +3,12 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
 from torch import Tensor
-from typing import Dict, List, Tuple, Union, Optional, Any
+from typing import Dict, List, Tuple, Optional, Any
 from configuration import CFG
 
 
 class PretrainingMaskingCollator(nn.Module):
-    """ Abstract Collator class for Pre-training
-    """
+    """ Abstract Collator class for MLM Task """
     def __init__(self):
         super(PretrainingMaskingCollator, self).__init__()
         self.pad_to_multiple_of = None
@@ -108,7 +107,7 @@ class WholeWordMaskingCollator(PretrainingMaskingCollator):
     But, WWM do not allow sub-word tokenizing. Instead masking whole word-level token.
     Example:
         1) sub-word mlm masking: pretrained => pre##, ##train, ##ing => pre##, [MASK], ##ing
-        2) whole-word mlm masking: pretrained => [MASK]
+        2) whole-word mlm masking: pretrained => [MASK], [MASK], [MASK]
     References:
         https://github.com/huggingface/transformers/blob/main/src/transformers/data/data_collator.py#L748
     """
