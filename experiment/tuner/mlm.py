@@ -25,7 +25,6 @@ WORDPIECE = [
 ]
 
 
-
 class PretrainingMaskingCollator(nn.Module):
     """ Abstract Collator class for Pre-training with Masking (MLM, SBO ...) """
     def __init__(self):
@@ -127,14 +126,17 @@ class WholeWordMaskingCollator(PretrainingMaskingCollator):
     In original source code, wwm is only applied to word-piece tokenizer in BERT Tokenizer,
     So, we extend original source code in Huggingface Transformers for applying wwm to bpe, bbpe, uni-gram tokenizer
     you must pass token, which is already normalized by tokenizer, to this module
+
     Example:
         1) sub-word mlm masking: pretrained => pre##, ##train, ##ing => pre##, [MASK], ##ing
         2) whole-word mlm masking: pretrained => [MASK], [MASK], [MASK]
+
     extend:
         original source code:
             if len(cand_indexes) >= 1 and token.startswith("##"):
         extended source code:
             use flag value with method select_string()
+
     References:
         https://github.com/huggingface/transformers/blob/main/src/transformers/data/data_collator.py#L748
     """
