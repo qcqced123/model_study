@@ -30,7 +30,7 @@ Experiment Application
 │	├── tokenizer
 │	│
 │	└── tuner
-│	    ├── mlm.py  # Masked Language Model
+│	    ├── mlm.py  # Masked Language Model (Sub Word Masking/Whole Word Masking) 
 │	    ├── clm.py  # Causal Language Model
 │	    ├── rtd.py  # Replaced Token Detection
 │	    ├── sbo.py  # Span Boundary Objective
@@ -53,24 +53,24 @@ Experiment Application
 ```
 
 ### Attention
-- **[Transformer] Attention Is All You Need (완료, [리뷰](https://qcqced123.github.io/nlp/transformer))**
+- **[Transformer] Attention Is All You Need (Complete, [Review](https://qcqced123.github.io/nlp/transformer))**
 
 - [Longformer] Longformer: The Long-Document Transformer (예정)
 
 - [Reformer] Reformer: The Efficient Transformer (예정)
 
-- [ELECTRA] Pre-training Text Encoders as Discriminators Rather Than Generators (예정)
+- **[ELECTRA] Pre-training Text Encoders as Discriminators Rather Than Generators (Complete)**
 
-- [SpanBERT] SpanBERT: Improving Pre-training by Representing and Predicting Spans (예정)
+- **[SpanBERT] SpanBERT: Improving Pre-training by Representing and Predicting Spans (Complete)**
 
 - [DistilBERT] DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter
 
 - [Sentence-BERT] Sentence Embeddings using Siamese BERT-Networks
 
-- **[DeBERTa] DeBERTa: Decoding-Enhanced BERT with Disentangled-Attention (완료, [리뷰](https://qcqced123.github.io/nlp/deberta))**
+- **[DeBERTa] DeBERTa: Decoding-Enhanced BERT with Disentangled-Attention (Complete, [Review](https://qcqced123.github.io/nlp/deberta))**
 - [GPT2] Language Models are Unsupervised Multitask Learners (예정)
 
-- **[ViT] An Image Is Worth 16x16 Words: Transformers For Image Recognition At Scale (완료, [리뷰](https://qcqced123.github.io/cv/vit))**
+- **[ViT] An Image Is Worth 16x16 Words: Transformers For Image Recognition At Scale (Complete, [Review](https://qcqced123.github.io/cv/vit))**
 
 - [SwinTransformer] Swin Transformer: Hierarchical Vision Transformer using Shifted Windows(에정)
 
@@ -81,9 +81,9 @@ Experiment Application
 
 ### Recurrent
 
-- **[RNN] Recurrent Neural Network (완료)**
-- **[GRU] Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling (완료)**
-- **[LSTM] Long Short-Term Memory (완료)**
+- **[RNN] Recurrent Neural Network (Complete)**
+- **[GRU] Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling (Complete)**
+- **[LSTM] Long Short-Term Memory (Complete)**
 - [ELMO] Deep contextualized word representations (예정)
 
 ### Convolution 
