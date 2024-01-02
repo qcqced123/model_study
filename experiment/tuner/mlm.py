@@ -195,9 +195,9 @@ class WholeWordMaskingCollator(PretrainingMaskingCollator):
         for i, token in enumerate(input_tokens):
             if token == "[CLS]" or token == "[SEP]":
                 continue
-            if len(cand_indexes) >= 1 and self.select_string(token):
+            if len(cand_indexes) >= 1 and self.select_post_string(token):
                 cand_indexes[-1].append(i)
-            elif self.select_string(token):
+            elif self.select_src_string(token):
                 cand_indexes.append([i])
 
         random.shuffle(cand_indexes)
