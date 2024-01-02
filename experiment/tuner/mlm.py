@@ -1,3 +1,4 @@
+import re
 import random
 import torch
 import torch.nn as nn
@@ -5,6 +6,24 @@ from torch.nn.utils.rnn import pad_sequence
 from torch import Tensor
 from typing import Dict, List, Tuple, Optional, Any
 from configuration import CFG
+
+
+BPE = [
+    'RobertaTokenizerFast',
+    'GPT2TokenizerFast',
+]
+
+SPM = [
+    'DebertaV2TokenizerFast',
+    'DebertaTokenizerFast',
+    'XLMRobertaTokenizerFast',
+]
+
+WORDPIECE = [
+    'BertTokenizerFast',
+    'ElectraTokenizerFast',
+]
+
 
 
 class PretrainingMaskingCollator(nn.Module):
@@ -105,9 +124,17 @@ class SubWordMaskingCollator(PretrainingMaskingCollator):
 class WholeWordMaskingCollator(PretrainingMaskingCollator):
     """ Module for Whole Word Masking Task (WWM), basic concept is similar to MLM Task which is using sub-word tokenizer
     But, WWM do not allow sub-word tokenizing. Instead masking whole word-level token.
+    In original source code, wwm is only applied to word-piece tokenizer in BERT Tokenizer,
+    So, we extend original source code in Huggingface Transformers for applying wwm to bpe, bbpe, uni-gram tokenizer
+    you must pass token, which is already normalized by tokenizer, to this module
     Example:
         1) sub-word mlm masking: pretrained => pre##, ##train, ##ing => pre##, [MASK], ##ing
         2) whole-word mlm masking: pretrained => [MASK], [MASK], [MASK]
+    extend:
+        original source code:
+            if len(cand_indexes) >= 1 and token.startswith("##"):
+        extended source code:
+            use flag value with method select_string()
     References:
         https://github.com/huggingface/transformers/blob/main/src/transformers/data/data_collator.py#L748
     """
@@ -116,6 +143,48 @@ class WholeWordMaskingCollator(PretrainingMaskingCollator):
         self.cfg = cfg
         self.mlm_probability = cfg.mlm_probability
         self.tokenizer = cfg.tokenizer
+
+        if self.tokenizer.__class__.__name__ in SPM:
+            self.tokenizer_type = 'SPM'
+        elif self.tokenizer.__class__.__name__ in BPE:
+            self.tokenizer_type = 'BPE'
+        elif self.tokenizer.__class__.__name__ in WORDPIECE:
+            self.tokenizer_type = 'WORDPIECE'
+
+    def select_src_string(self, token: str) -> bool:
+        """ set flag value for selecting src tokens to mask in sub-word
+        Args:
+            token: str, token to check
+        """
+        flag = False
+        if self.tokenizer_type == 'SPM':
+            flag = True if token.startswith("▁") else False
+
+        elif self.tokenizer_type == 'BPE':
+            flag = True if token.startswith("Ġ") else False
+
+        elif self.tokenizer_type == 'WORDPIECE':
+            pattern = re.compile(r'[^\w\d\s]|_')
+            flag = False if re.match(pattern, token) else True
+        return flag
+
+    def select_post_string(self, token: str) -> bool:
+        """ set flag value for selecting post tokens to mask in sub-word
+        Args:
+            token: str, token to check
+        """
+        flag = False
+        if self.tokenizer_type == 'SPM':
+            pattern = re.compile(r'[^\w\d\s]|_')
+            flag = False if re.match(pattern, token[0]) else True
+
+        elif self.tokenizer_type == 'BPE':
+            flag = False if token.startswith("Ġ") else True
+
+        elif self.tokenizer_type == 'WORDPIECE':
+            flag = True if token.startswith("##") else False
+
+        return flag
 
     def _whole_word_mask(
             self,
@@ -126,10 +195,9 @@ class WholeWordMaskingCollator(PretrainingMaskingCollator):
         for i, token in enumerate(input_tokens):
             if token == "[CLS]" or token == "[SEP]":
                 continue
-
-            if len(cand_indexes) >= 1 and token.startswith("##"):
+            if len(cand_indexes) >= 1 and self.select_string(token):
                 cand_indexes[-1].append(i)
-            else:
+            elif self.select_string(token):
                 cand_indexes.append([i])
 
         random.shuffle(cand_indexes)
