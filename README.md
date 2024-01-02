@@ -53,7 +53,9 @@ Experiment Application
     └── trainer_utils.py    
 ```
 
-### Attention
+### 📝 Experiment List
+
+#### 🤖 Attention
 - **[Transformer] Attention Is All You Need (Complete, [Review](https://qcqced123.github.io/nlp/transformer))**
 
 - [Longformer] Longformer: The Long-Document Transformer (Continue)
@@ -80,14 +82,14 @@ Experiment Application
 - [BLIP] BLIP: Bootstrapping Language-Image Pre-training for Unified Vision-Language Understanding and Generation (Continue)
 
 
-### Recurrent
+#### 🪢 Recurrent
 
 - **[RNN] Recurrent Neural Network (Complete)**
 - **[GRU] Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling (Complete)**
 - **[LSTM] Long Short-Term Memory (Complete)**
 - [ELMO] Deep contextualized word representations (Continue)
 
-### Convolution 
+#### 🔭 Convolution 
 
 - [ConvNext] A ConvNext for the 2020s (Continue)
 
