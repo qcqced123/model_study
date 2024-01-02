@@ -77,10 +77,13 @@ class ReplacedTokenDetection(nn.Module, AbstractTask):
 class SpanBoundaryObjective(nn.Module, AbstractTask):
     """ Custom Model for SBO Task, which is used for pre-training Auto-Encoding Model such as SpanBERT
     Original SpanBERT has two tasks, MLM & SBO, so we need to create instance of MLMHead & SBOHead
+
     Notes:
         L_span = L_MLM + L_SBO
+
     Args:
         cfg: configuration.CFG
+
     References:
         https://arxiv.org/pdf/1907.10529.pdf
     """
@@ -102,7 +105,12 @@ class SpanBoundaryObjective(nn.Module, AbstractTask):
         self._init_weights(self.mlm_head)
         self._init_weights(self.sbo_head)
 
-    def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
-        g_logit, s_logit = None, None
-        return g_logit, s_logit
+    def feature(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
+        outputs = self.model(inputs, padding_mask)
+        return outputs
 
+    def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
+        last_hidden_states, _ = self.feature(inputs, padding_mask)
+        mlm_logit = self.mlm_head(last_hidden_states)
+        sbo_logit = self.sbo_head(last_hidden_states)
+        return mlm_logit, sbo_logit

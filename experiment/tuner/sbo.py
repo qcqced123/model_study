@@ -27,11 +27,7 @@ WORDPIECE = [
 ]
 
 
-def get_relative_position() -> Tensor:
-    pass
-
-
-def random_non_negative_integer(max_value: int):
+def random_non_negative_integer(max_value: int) -> int:
     return random.randint(0, max_value)
 
 
@@ -200,9 +196,14 @@ class SBOHead(nn.Module):
     References:
         https://arxiv.org/pdf/1907.10529.pdf
     """
-    def __init__(self, cfg: CFG) -> None:
+    def __init__(
+        self,
+        cfg: CFG,
+        max_span_length: int = 10
+    ) -> None:
         super(SBOHead, self).__init__()
         self.cfg = cfg
+        self.span_pos_emb = nn.Embedding(max_span_length+1, cfg.dim_model)  # size of dim_model is research topic
         self.head = nn.Sequential(
             nn.Linear(self.cfg.dim_model, self.cfg.dim_ffn, bias=False),
             nn.GELU(),
@@ -212,11 +213,38 @@ class SBOHead(nn.Module):
             nn.LayerNorm(self.cfg.dim_model),
         )
         self.classifier = nn.Linear(self.cfg.dim_model, self.cfg.vocab_size, bias=False)
+        self.bias = nn.Parameter(torch.zeros(cfg.vocab_size))  # for matching vocab size
+        self.classifier.bias = self.bias
 
-    def forward(self, hidden_states: Tensor) -> Tensor:
+    @staticmethod
+    def find_consecutive_groups(mask_labels: Tensor, target_value: int = 1) -> List[List[Dict]]:
+        """ Get the start and end positions of consecutive groups in tensor for the target value
+        This method is used for SBO Objective Function
+        """
+        all_consecutive_groups = []
+        for mask_label in mask_labels:
+            consecutive_groups = []
+            current_group = None
+            for i, value in enumerate(mask_label):
+                if value == target_value:
+                    if current_group is None:
+                        current_group = {"start": i, "end": i}
+                    else:
+                        current_group["end"] = i
+                else:
+                    if current_group is not None:
+                        consecutive_groups.append(current_group)
+                        current_group = None
+            if current_group is not None:
+                consecutive_groups.append(current_group)
+            all_consecutive_groups.append(consecutive_groups)
+        return all_consecutive_groups
+
+    def forward(self, hidden_states: Tensor, mask_labels: Tensor) -> Tensor:
         """ you must pass hidden_states, which is already concatenated with x_s-1, x_e+1, p_i-s+1 """
         assert hidden_states.size(-1) == torch.tensor(self.cfg.dim_model*3), \
             f'Expected last dim size: dim_model*3, but got {hidden_states.size(-1)}'
+        consecutive_groups = self.find_consecutive_groups(mask_labels)  # [batch, num_consecutive_groups]
         z = self.head(hidden_states)
         logit = self.classifier(z)
         return logit

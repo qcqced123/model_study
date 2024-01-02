@@ -23,7 +23,7 @@ class Generator(nn.Module):
         super(Generator, self).__init__()
         self.cfg = cfg
         self.arch_name = cfg.generator
-        self.generator = DeBERTa(self.cfg)
+        self.generator = DeBERTa(self.cfg)  # will be changed to getattr
         self.mlm_head = MLMHead(self.cfg)
 
     def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
@@ -63,7 +63,7 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
         self.cfg = cfg
         self.arch_name = cfg.discriminator
-        self.discriminator = DeBERTa(self.cfg)
+        self.discriminator = DeBERTa(self.cfg)  # will be changed to getattr
         self.rtd_head = RTDHead(self.cfg)
 
     def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
