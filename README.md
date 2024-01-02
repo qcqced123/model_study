@@ -18,6 +18,7 @@ Experiment Application
 │	│	│    ├── vit.py  # vision transformer
 │	│	│    ├── deberta.py
 │	│	│    ├── electra.py
+│	│	│    ├── spanbert.py
 │	│	│    └── gpt2.py
 │	│	├── recurrent
 │	│	│    ├── rnn.py
@@ -55,9 +56,9 @@ Experiment Application
 ### Attention
 - **[Transformer] Attention Is All You Need (Complete, [Review](https://qcqced123.github.io/nlp/transformer))**
 
-- [Longformer] Longformer: The Long-Document Transformer (예정)
+- [Longformer] Longformer: The Long-Document Transformer (Continue)
 
-- [Reformer] Reformer: The Efficient Transformer (예정)
+- [Reformer] Reformer: The Efficient Transformer (Continue)
 
 - **[ELECTRA] Pre-training Text Encoders as Discriminators Rather Than Generators (Complete)**
 
@@ -65,18 +66,18 @@ Experiment Application
 
 - [DistilBERT] DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter
 
-- [Sentence-BERT] Sentence Embeddings using Siamese BERT-Networks
+- [Sentence-BERT] Sentence Embeddings using Siamese BERT-Networks (Continue)
 
 - **[DeBERTa] DeBERTa: Decoding-Enhanced BERT with Disentangled-Attention (Complete, [Review](https://qcqced123.github.io/nlp/deberta))**
-- [GPT2] Language Models are Unsupervised Multitask Learners (예정)
+- [GPT2] Language Models are Unsupervised Multitask Learners (Continue)
 
 - **[ViT] An Image Is Worth 16x16 Words: Transformers For Image Recognition At Scale (Complete, [Review](https://qcqced123.github.io/cv/vit))**
 
-- [SwinTransformer] Swin Transformer: Hierarchical Vision Transformer using Shifted Windows(에정)
+- [SwinTransformer] Swin Transformer: Hierarchical Vision Transformer using Shifted Windows (Continue)
 
-- [CLIP] Learning Transferable Visual Models From Natural Language Supervision(에정)
+- [CLIP] Learning Transferable Visual Models From Natural Language Supervision (Continue)
  
-- [BLIP] BLIP: Bootstrapping Language-Image Pre-training for Unified Vision-Language Understanding and Generation (에정)
+- [BLIP] BLIP: Bootstrapping Language-Image Pre-training for Unified Vision-Language Understanding and Generation (Continue)
 
 
 ### Recurrent
@@ -84,10 +85,10 @@ Experiment Application
 - **[RNN] Recurrent Neural Network (Complete)**
 - **[GRU] Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling (Complete)**
 - **[LSTM] Long Short-Term Memory (Complete)**
-- [ELMO] Deep contextualized word representations (예정)
+- [ELMO] Deep contextualized word representations (Continue)
 
 ### Convolution 
 
-- [ConvNext] A ConvNext for the 2020s (에정)
+- [ConvNext] A ConvNext for the 2020s (Continue)
 
-- [CoAtNet] Marrying Convolution and Attention for All Data Sizes (에정)
+- [CoAtNet] Marrying Convolution and Attention for All Data Sizes (Continue)
