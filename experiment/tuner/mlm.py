@@ -8,7 +8,7 @@ from configuration import CFG
 
 
 class PretrainingMaskingCollator(nn.Module):
-    """ Abstract Collator class for MLM Task """
+    """ Abstract Collator class for Pre-training with Masking (MLM, SBO ...) """
     def __init__(self):
         super(PretrainingMaskingCollator, self).__init__()
         self.pad_to_multiple_of = None
@@ -21,7 +21,7 @@ class PretrainingMaskingCollator(nn.Module):
 
     def forward(self, batched: List[Dict[str, Tensor]]) -> Dict:
         """ Abstract Method for Collator, you must implement this method in child class """
-        pass
+        raise NotImplementedError
 
 
 class SubWordMaskingCollator(PretrainingMaskingCollator):
