@@ -85,34 +85,34 @@ class SpanCollator(WholeWordMaskingCollator):
         for i, token in enumerate(input_tokens):
             if token == "[CLS]" or token == "[SEP]":
                 continue
-            if len(cand_indexes) >= 1 and self.select_post_string(token):  # method from WWM
+            if len(cand_indexes) >= 1 and self.select_post_string(token):  # method from WholeWordMaskingCollator
                 cand_indexes[-1].append(i)
-            elif self.select_src_string(token):  # method from WWM
+            elif self.select_src_string(token):  # method from WholeWordMaskingCollator
                 cand_indexes.append([i])
 
         l = len(input_tokens)
         src_l = len(cand_indexes)
-        num_convert_tokens = int(self.masking_budget * l)  # 27
-        budget = num_convert_tokens  # int is immutable object, so not need to copy manually
+        num_convert_tokens = int(self.masking_budget * l)
+        budget = num_convert_tokens  # int is immutable object, so do not copy manually
         masked_lms = []
         covered_indexes = set()
         while budget:
             span_length = max(1, min(10, int(torch.distributions.Geometric(probs=self.span_probability).sample())))
             src_index = random_non_negative_integer(src_l - 1)
             if span_length > budget:
-                if budget < 5:  # 남은 예산이 너무 적은 경우 수많은 Iteration 발생을 막기 위해서 스팬 길이를 budget으로 설정
+                if budget < 5:  # Set the span length to budget to avoid a large number of iter if the remaining budget is too small
                     span_length = budget
                 else:
                     continue
-            if cand_indexes[src_index][0] + span_length > l - 1:  # 스팬의 마지막 토큰의 인덱스가 시퀀스 범위를 벗어나는 경우
+            if cand_indexes[src_index][0] + span_length > l - 1:  # If the index of the last token in the span is outside the full sequence range
                 continue
-            if len(cand_indexes[src_index]) > span_length:  # 처음부터 형태소를 마스킹하게 되는 경우
+            if len(cand_indexes[src_index]) > span_length:  # handling bad case: violating WWM algorithm at start
                 continue
-            span_token_index = cand_indexes[src_index][0]  # init span token index: src
+            span_token_index = cand_indexes[src_index][0]  # init span token index: src token
             while span_length:
                 if span_length == 0:
                     break
-                if span_token_index in covered_indexes:  # 이미 마스킹 된 index 만나면 끝내고, 다음 순회 시작
+                if span_token_index in covered_indexes: # If it encounters an index that is already masked, it ends, and starts the next iteration
                     break
                 else:  # 스팬 길이가 처음 선택 되었던 시작 토큰 인덱스가 해당되는 리스트 길이를 넘는 경우, 이후 선택되는 토큰은 wwm 위배 가능성
                     covered_indexes.add(span_token_index)
