@@ -62,7 +62,6 @@ class SpanBERT(nn.Module, AbstractModel):
         self.encoder = SpanBERTEncoder(self.cfg)
         self.gradient_checkpointing = self.cfg.gradient_checkpoint
 
-
     def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
         emd_last_hidden_state, emd_hidden_states = self.encoder(
             inputs,
