@@ -185,6 +185,8 @@ class SBOHead(nn.Module):
     we use z for class logit, each Fully Connected Layer doesn't have bias term in original paper
     so we don't use bias term in this module => nn.Linear(bias=False)
 
+    You must select option for matrix sum or concatenate with x_s-1, x_e+1, p_i-s+1
+    If you select concatenate option, you must pass is_concatenate=True to cfg.is_concatenate, default is True
     Math:
         h_0 = [x_s-1;x_e+1;p_i-s+1]
         h_t = LayerNorm(GELU(W_0•h_0))
@@ -192,20 +194,25 @@ class SBOHead(nn.Module):
 
     Args:
         cfg: configuration.CFG
-
+        is_concatenate: option for matrix sum or concatenate with x_s-1, x_e+1, p_i-s+1, default True
+        max_span_length: maximum span length of each span in one batch sequence
+                         (default: 10 => Recommended by original paper)
     References:
         https://arxiv.org/pdf/1907.10529.pdf
     """
     def __init__(
         self,
         cfg: CFG,
+        is_concatenate: bool = True,
         max_span_length: int = 10
     ) -> None:
         super(SBOHead, self).__init__()
         self.cfg = cfg
-        self.span_pos_emb = nn.Embedding(max_span_length+1, cfg.dim_model)  # size of dim_model is research topic
+        self.is_concatenate = is_concatenate  # for matrix sum or concatenate with x_s-1, x_e+1, p_i-s+1
+        self.projector = nn.Linear(self.cfg.dim_model, self.cfg.dim_model*3)  # for concatenate x_s-1, x_e+1, p_i-s+1
+        self.span_pos_emb = nn.Embedding(max_span_length, cfg.dim_model)  # size of dim_model is research topic
         self.head = nn.Sequential(
-            nn.Linear(self.cfg.dim_model, self.cfg.dim_ffn, bias=False),
+            nn.Linear(self.cfg.dim_model*3, self.cfg.dim_ffn, bias=False),
             nn.GELU(),
             nn.LayerNorm(self.cfg.dim_ffn),
             nn.Linear(self.cfg.dim_ffn, self.cfg.dim_model, bias=False),
@@ -220,6 +227,9 @@ class SBOHead(nn.Module):
     def find_consecutive_groups(mask_labels: Tensor, target_value: int = 1) -> List[List[Dict]]:
         """ Get the start and end positions of consecutive groups in tensor for the target value
         This method is used for SBO Objective Function
+        Args:
+            mask_labels: masking tensor for span
+            target_value: target value for finding consecutive groups
         """
         all_consecutive_groups = []
         for mask_label in mask_labels:
@@ -240,11 +250,29 @@ class SBOHead(nn.Module):
             all_consecutive_groups.append(consecutive_groups)
         return all_consecutive_groups
 
+    def cal_span_emb(self, hidden_states: Tensor, consecutive_groups: List[List[Dict]]) -> Tensor:
+        """ Calculate span embedding for each span in one batch sequence
+        Args:
+            hidden_states: hidden states from encoder
+            consecutive_groups: consecutive groups for each batch sequence
+        """
+        for i, batch in enumerate(consecutive_groups):  # batch level
+            for j, span in enumerate(batch):  # span level
+                start, end = span["start"], span["end"]
+                length = end - start + 1
+                idx = torch.arange(length)
+
+                context_s, context_e = hidden_states[i, start - 1, :], hidden_states[i, end + 1, :]
+                span_pos_emb = self.span_pos_emb(idx).squeeze(0)
+                for k, p_h in enumerate(span_pos_emb):  # length of span_pos_emb == length of span of this iterations
+                    hidden_states[i, start+k, :] = torch.concat([context_s, p_h, context_e], dim=0)
+        return hidden_states
+
     def forward(self, hidden_states: Tensor, mask_labels: Tensor) -> Tensor:
-        """ you must pass hidden_states, which is already concatenated with x_s-1, x_e+1, p_i-s+1 """
-        assert hidden_states.size(-1) == torch.tensor(self.cfg.dim_model*3), \
-            f'Expected last dim size: dim_model*3, but got {hidden_states.size(-1)}'
+        if self.is_concatenate:
+            hidden_states = self.projector(hidden_states)  # [batch, seq, dim_model*3]
         consecutive_groups = self.find_consecutive_groups(mask_labels)  # [batch, num_consecutive_groups]
-        z = self.head(hidden_states)
+        h = self.cal_span_emb(hidden_states, consecutive_groups)
+        z = self.head(h)
         logit = self.classifier(z)
         return logit
