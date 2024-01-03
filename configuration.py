@@ -3,6 +3,13 @@ from transformers import AutoTokenizer
 
 
 class CFG:
+    """ Base Configuration Class for various experiments
+    This Module has all of hyper-parameters for whole this project such as training, model, data, optimizer, scheduler, loss, metrics, ... etc
+    You can change hyper-parameters easily by changing json file in configuration folder
+    Each json file has same name with model name, so you can easily find hyper-parameters for each model
+    And then, individual JSON files adjust only the hyperparameters needed for individual experiments
+    """
+
     """ Pipeline Setting """
     train, test = True, False
     checkpoint_dir = 'saved/model'
@@ -91,8 +98,6 @@ class CFG:
     hidden_dropout_prob = 0.1
     init_weight = 'orthogonal'  # options: normal, xavier_uniform, xavier_normal, kaiming_uniform, kaiming_normal
     initializer_range = 0.02
-    mlm_masking = 'SubWordMasking'
-    mlm_probability = 0.15
     stop_mode = 'min'
     freeze = False
     num_freeze = 2
@@ -102,3 +107,26 @@ class CFG:
     nth_awp_start_epoch = 10
     awp_eps = 1e-2
     awp_lr = 1e-4
+
+    """ Pre-Training Option """
+    # 1) MLM Option(SWM, WWM)
+    mlm_masking = 'SubWordMasking'
+    mlm_probability = 0.15
+
+    # 2) RTD Option
+    rtd_masking = 'SubWordMasking'
+    generator = 'DeBERTa'
+    discriminator = 'DeBERTa'
+    is_share_embed = True
+    share_embed_method = 'GDES'  # options: GDES (Gradient Disentangled Embedding Space)
+    is_generator_resume = False  # load pretrained generator's weight
+    is_discriminator_resume = False  # load pretrained discriminator's weight
+    generator_load_pretrained = False
+    discriminator_load_pretrained = False
+
+    # 3) SBO Option
+    span_encoder_name = 'DeBERTa'
+    masking_budget = 0.15
+    span_probability = 0.2
+    max_span_length = 10
+    is_concatenate = True

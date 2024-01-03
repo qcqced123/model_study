@@ -163,8 +163,6 @@ def sync_config(json_config: json) -> None:
     CFG.hidden_dropout_prob = json_config.model_utils.hidden_dropout_prob
     CFG.init_weight = json_config.model_utils.init_weight
     CFG.initializer_range = json_config.model_utils.initializer_range
-    CFG.mlm_masking = json_config.model_utils.mlm_masking
-    CFG.mlm_probability = json_config.model_utils.mlm_probability
     CFG.stop_mode = json_config.model_utils.stop_mode
     CFG.reinit = json_config.model_utils.reinit
     CFG.num_freeze = json_config.model_utils.num_freeze
@@ -173,3 +171,21 @@ def sync_config(json_config: json) -> None:
     CFG.nth_awp_start_epoch = json_config.model_utils.nth_awp_start_epoch
     CFG.awp_eps = json_config.model_utils.awp_eps
     CFG.awp_lr = json_config.model_utils.awp_lr
+
+    """ Pre-Training Option """
+    CFG.mlm_masking = json_config.pretrain_options.mlm_masking
+    CFG.mlm_probability = json_config.pretrain_options.mlm_probability
+    CFG.rtd_masking = json_config.pretrain_options.rtd_masking
+    CFG.generator = json_config.pretrain_options.generator
+    CFG.discriminator = json_config.pretrain_options.discriminator
+    CFG.is_share_embed = json_config.pretrain_options.is_share_embed
+    CFG.share_embed_method = json_config.pretrain_options.share_embed_method
+    CFG.is_generator_resume = json_config.pretrain_options.is_generator_resume
+    CFG.is_discriminator_resume = json_config.pretrain_options.is_discriminator_resume
+    CFG.generator_load_pretrained = json_config.pretrain_options.generator_load_pretrained
+    CFG.discriminator_load_pretrained = json_config.pretrain_options.discriminator_load_pretrained
+    CFG.span_encoder_name = json_config.pretrain_options.span_encoder_name
+    CFG.masking_budget = json_config.pretrain_options.masking_budget
+    CFG.span_probability = json_config.pretrain_options.span_probability
+    CFG.max_span_length = json_config.pretrain_options.max_span_length
+    CFG.is_concatenate = json_config.pretrain_options.is_concatenate

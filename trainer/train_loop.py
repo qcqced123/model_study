@@ -20,7 +20,7 @@ def train_loop(cfg: CFG) -> None:
         project=cfg.name,
         name=f'[{cfg.arch_name}]' + cfg.module_name,
         config=class2dict(cfg),
-        group=f'{cfg.module_name}/layers_{cfg.num_layers}/{cfg.mlm_masking}/max_length_{cfg.max_seq}/',
+        group=f'{cfg.module_name}/layers_{cfg.num_layers}/{cfg.rtd_masking}/{cfg.mlm_masking}/max_length_{cfg.max_seq}/',
         job_type='train',
         entity="qcqced"
     )

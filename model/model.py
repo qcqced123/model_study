@@ -24,16 +24,17 @@ class MaskedLanguageModel(nn.Module, AbstractTask):
         self.cfg = cfg
         self.model = DeBERTa(self.cfg)  # later, change this line to getattr
         self.mlm_head = MLMHead(cfg)
-        if self.cfg.load_pretrained:
-            self.model.load_state_dict(
-                torch.load(cfg.checkpoint_dir + cfg.state_dict),
-                strict=True
-            )
         if self.cfg.gradient_checkpoint:
             self.model.gradient_checkpointing_enable()
 
         self._init_weights(self.model)
         self._init_weights(self.mlm_head)
+
+        if self.cfg.load_pretrained:
+            self.model.load_state_dict(
+                torch.load(cfg.checkpoint_dir + cfg.state_dict),
+                strict=True
+            )
 
     def feature(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
         outputs = self.model(inputs, padding_mask)
@@ -54,17 +55,28 @@ class ReplacedTokenDetection(nn.Module, AbstractTask):
         super(ReplacedTokenDetection, self).__init__()
         self.cfg = cfg
         self.model = ELECTRA(self.cfg)
-        if self.cfg.load_pretrained:
-            self.model.load_state_dict(
-                torch.load(cfg.checkpoint_dir + cfg.state_dict),
-                strict=True
-            )
         if self.cfg.gradient_checkpoint:
             self.model.gradient_checkpointing_enable()
 
         self._init_weights(self.model)
+        if self.cfg.generator_load_pretrained:  # for generator
+            self.model.generator.load_state_dict(
+                torch.load(cfg.checkpoint_dir + cfg.state_dict),
+                strict=True
+            )
+        if self.cfg.discriminator_load_pretrained:  # for discriminator
+            self.model.discriminator.load_state_dict(
+                torch.load(cfg.checkpoint_dir + cfg.state_dict),
+                strict=True
+            )
 
-    def forward(self, inputs: Tensor, labels: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor, Tensor]:
+    def forward(
+            self,
+            inputs: Tensor,
+            labels: Tensor,
+            padding_mask: Tensor,
+            attention_mask: Tensor = None
+    ) -> Tuple[Tensor, Tensor, Tensor]:
         g_logit, d_logit, d_labels = self.model(
             inputs,
             labels,
@@ -77,13 +89,10 @@ class ReplacedTokenDetection(nn.Module, AbstractTask):
 class SpanBoundaryObjective(nn.Module, AbstractTask):
     """ Custom Model for SBO Task, which is used for pre-training Auto-Encoding Model such as SpanBERT
     Original SpanBERT has two tasks, MLM & SBO, so we need to create instance of MLMHead & SBOHead
-
     Notes:
         L_span = L_MLM + L_SBO
-
     Args:
         cfg: configuration.CFG
-
     References:
         https://arxiv.org/pdf/1907.10529.pdf
     """
@@ -93,17 +102,18 @@ class SpanBoundaryObjective(nn.Module, AbstractTask):
         self.model = SpanBERT(self.cfg)
         self.mlm_head = MLMHead(self.cfg)
         self.sbo_head = SBOHead(self.cfg)
-        if self.cfg.load_pretrained:
-            self.model.load_state_dict(
-                torch.load(cfg.checkpoint_dir + cfg.state_dict),
-                strict=True
-            )
         if self.cfg.gradient_checkpoint:
             self.model.gradient_checkpointing_enable()
 
         self._init_weights(self.model)
         self._init_weights(self.mlm_head)
         self._init_weights(self.sbo_head)
+
+        if self.cfg.load_pretrained:
+            self.model.load_state_dict(
+                torch.load(cfg.checkpoint_dir + cfg.state_dict),
+                strict=True
+            )
 
     def feature(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
         outputs = self.model(inputs, padding_mask)

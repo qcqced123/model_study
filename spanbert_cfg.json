@@ -2,8 +2,8 @@
     "pipeline_setting": {
         "train": true,
         "test": false,
-        "checkpoint_dir": "./saved",
-        "state_dict": "/model_512_DeBERTa_state_dict.pth",
+        "checkpoint_dir": "./saved/",
+        "state_dict": "SWM_512_DeBERTa_state_dict.pth",
         "load_pretrained": false,
         "resume": true,
         "name": "MaskedLanguageModel",
@@ -35,7 +35,7 @@
         "n_folds": 4,
         "max_len": 512,
         "epochs": 20,
-        "batch_size": 16,
+        "batch_size": 20,
         "val_batch_size": 16,
         "smart_batch": false,
         "val_check": 10000
@@ -71,14 +71,14 @@
     },
 
     "scheduler_options": {
-        "scheduler": "cosine_annealing",
+        "scheduler": "constant_with_warmup",
         "batch_scheduler": true,
         "num_cycles": 2,
-        "warmup_ratio": 0.025
+        "warmup_ratio": 0.0025
     },
 
     "swa_options": {
-        "swa": true,
+        "swa": false,
         "swa_start": 2,
         "swa_lr": 5e-5,
         "anneal_epochs": 2,
@@ -98,7 +98,6 @@
         "hidden_dropout_prob": 0.1,
         "init_weight": "kaiming_normal",
         "initializer_range": 0.02,
-        "mlm_probability": 0.15,
         "stop_mode": "min",
         "freeze": false,
         "num_freeze": 1,
@@ -108,5 +107,24 @@
         "nth_awp_start_epoch": 1,
         "awp_eps": 1e-2,
         "awp_lr": 1e-4
+    },
+
+    "pretrain_options": {
+        "mlm_masking": "WholeWordMasking",
+        "mlm_probability": 0.15,
+        "rtd_masking": "MaskedLanguageModel",
+        "generator": "DeBERTa",
+        "discriminator": "DeBERTa",
+        "is_share_embed": true,
+        "share_embed_method": "GDES",
+        "is_generator_resume": false,
+        "is_discriminator_resume": false,
+        "generator_load_pretrained": false,
+        "discriminator_load_pretrained": false,
+        "span_encoder_name": "DeBERTa",
+        "masking_budget": 0.15,
+        "span_probability": 0.2,
+        "max_span_length": 10,
+        "is_concatenate": true
     }
 }

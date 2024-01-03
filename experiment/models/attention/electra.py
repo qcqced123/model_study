@@ -5,8 +5,8 @@ from typing import Tuple, List
 from einops.layers.torch import Rearrange
 from experiment.tuner.mlm import MLMHead
 from experiment.tuner.rtd import get_discriminator_input, RTDHead
-from .deberta import DeBERTa
 from configuration import CFG
+from ..attention import deberta
 
 
 class Generator(nn.Module):
@@ -23,7 +23,7 @@ class Generator(nn.Module):
         super(Generator, self).__init__()
         self.cfg = cfg
         self.arch_name = cfg.generator
-        self.generator = DeBERTa(self.cfg)  # will be changed to getattr
+        self.generator = getattr(deberta, self.arch_name)(self.cfg)  # will be changed to getattr
         self.mlm_head = MLMHead(self.cfg)
 
     def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
@@ -63,7 +63,7 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
         self.cfg = cfg
         self.arch_name = cfg.discriminator
-        self.discriminator = DeBERTa(self.cfg)  # will be changed to getattr
+        self.discriminator = getattr(deberta, self.arch_name)(self.cfg)  # will be changed to getattr
         self.rtd_head = RTDHead(self.cfg)
 
     def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
@@ -110,8 +110,9 @@ class ELECTRA(nn.Module, AbstractModel):
         self.cfg = cfg
         self.generator = Generator(self.cfg)
         self.discriminator = Discriminator(self.cfg)
-        self.share_embedding = self.cfg.share_embedding
-        if self.share_embedding:
+        self.share_embed = self.cfg.is_share_embed
+        if self.share_embed:
+            self.share_embed_method = self.cfg.share_embed_method
             self.discriminator.discriminator.embeddings = self.generator.generator.embeddings
         self.gradient_checkpointing = self.cfg.gradient_checkpoint
 
