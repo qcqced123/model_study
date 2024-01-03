@@ -109,8 +109,14 @@ class SpanBoundaryObjective(nn.Module, AbstractTask):
         outputs = self.model(inputs, padding_mask)
         return outputs
 
-    def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
+    def forward(
+        self,
+        inputs: Tensor,
+        padding_mask: Tensor,
+        mask_labels: Tensor,
+        attention_mask: Tensor = None
+    ) -> Tuple[Tensor, Tensor]:
         last_hidden_states, _ = self.feature(inputs, padding_mask)
         mlm_logit = self.mlm_head(last_hidden_states)
-        sbo_logit = self.sbo_head(last_hidden_states)
+        sbo_logit = self.sbo_head(last_hidden_states, mask_labels)
         return mlm_logit, sbo_logit
