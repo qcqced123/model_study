@@ -177,6 +177,7 @@ class SpanCollator(WholeWordMaskingCollator):
             "token_type_ids": token_type_ids,
             "attention_mask": attention_mask,
             "padding_mask": padding_mask,
+            "mask_labels": mask_labels
         }
 
 

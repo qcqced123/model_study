@@ -5,10 +5,10 @@
         "checkpoint_dir": "./saved/",
         "state_dict": "SWM_512_DeBERTa_state_dict.pth",
         "load_pretrained": false,
-        "resume": true,
-        "name": "MaskedLanguageModel",
+        "resume": false,
+        "name": "SpanBoundaryObjective",
         "datafolder": "wikipedia_en",
-        "trainer": "PreTrainTuner",
+        "trainer": "SBOTuner",
         "loop": "train_loop",
         "hf_dataset": "wikimedia/wikipedia",
         "language": "20231101.en",
@@ -17,7 +17,7 @@
         "model_name": "deberta",
         "module_name": "DeBERTa",
         "tmp_model": "microsoft/deberta-v3-large",
-        "task": "MaskedLanguageModel",
+        "task": "SpanBoundaryObjective",
         "pooling": "MeanPooling"
     },
 

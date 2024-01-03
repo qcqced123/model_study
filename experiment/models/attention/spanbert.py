@@ -5,7 +5,7 @@ from experiment.models.abstract_model import AbstractModel
 from torch import Tensor
 from typing import Tuple, List
 from einops.layers.torch import Rearrange
-from .deberta import DeBERTa
+from ..attention import deberta
 from configuration import CFG
 
 
@@ -20,7 +20,7 @@ class SpanBERTEncoder(nn.Module):
         super(SpanBERTEncoder, self).__init__()
         self.cfg = cfg
         self.model_name = cfg.span_encoder_name
-        self.enc_model = getattr(DeBERTa, self.model_name)(self.cfg)
+        self.enc_model = getattr(deberta, self.model_name)(self.cfg)
 
     def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
         assert inputs.ndim == 2, f'Expected (batch, sequence) got {inputs.shape}'

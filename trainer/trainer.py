@@ -14,7 +14,7 @@ from torch import Tensor
 from typing import Tuple, Any, Union, List, Callable
 
 import dataset_class.dataclass as dataset_class
-from experiment.tuner import mlm, clm, sbo
+from experiment.tuner import mlm, clm, sbo, rtd
 from experiment.losses import loss
 from experiment.metrics import metric
 from model import model as task
@@ -53,6 +53,23 @@ class PreTrainTuner:
             collate_fn = getattr(mlm, 'MLMCollator')(self.cfg)
         elif self.cfg.task == 'CasualLanguageModel':
             collate_fn = getattr(clm, 'CLMCollator')(self.cfg)
+        elif self.cfg.task == 'SpanBoundaryObjective':
+            collate_fn = getattr(sbo, 'SpanCollator')(
+                self.cfg,
+                self.cfg.masking_budget,
+                self.cfg.span_probability,
+                self.cfg.max_span_length,
+            )
+        elif self.cfg.task == 'ReplacedTokenDetection':
+            if self.cfg.rtd_masking == 'MaskedLanguageModel':
+                collate_fn = getattr(mlm, 'MLMCollator')(self.cfg)
+            elif self.cfg.rtd_masking == 'SpanBoundaryObjective':
+                collate_fn = getattr(sbo, 'SpanCollator')(
+                    self.cfg,
+                    self.cfg.masking_budget,
+                    self.cfg.span_probability,
+                    self.cfg.max_span_length,
+                )
 
         # 3) Initializing torch.utils.data.DataLoader Module
         loader_train = get_dataloader(
@@ -340,6 +357,209 @@ class PreTrainTuner:
         return valid_losses.avg, avg_scores
 
 
+class SBOTuner(PreTrainTuner):
+    """ Trainer class for Span Boundary Objective
+    """
+    def __init__(self, cfg: CFG, generator: torch.Generator) -> None:
+        super(SBOTuner, self).__init__(cfg, generator)
+
+    def train_val_fn(
+            self,
+            loader_train,
+            model: nn.Module,
+            criterion: nn.Module,
+            optimizer,
+            scheduler,
+            loader_valid,
+            val_criterion: nn.Module,
+            val_metric_list: List[Callable],
+            val_score_max: float,
+            epoch: int,
+            awp: nn.Module = None,
+            swa_model: nn.Module = None,
+            swa_start: int = None,
+            swa_scheduler=None
+    ) -> Tuple[Any, Union[float, ndarray, ndarray]]:
+        """ function for train loop with validation for each batch*N Steps
+        SpanBERT has two loss, one is MLM loss, the other is SBO loss
+        """
+        scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
+        losses, mlm_losses, sbo_losses = AverageMeter(), AverageMeter(), AverageMeter()
+        model.train()
+        for step, batch in enumerate(tqdm(loader_train)):
+            optimizer.zero_grad()
+            inputs = batch['input_ids'].to(self.cfg.device)
+            labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
+            padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
+            mask_labels = batch['mask_labels'].to(self.cfg.device)  # mask labels to GPU
+
+            batch_size = inputs.size(0)
+            with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
+                mlm_logit, sbo_logit = model(
+                    inputs=inputs,
+                    padding_mask=padding_mask,
+                    mask_labels=mask_labels
+                )
+                mlm_loss = criterion(mlm_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
+                sbo_loss = criterion(sbo_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
+                loss = mlm_loss + sbo_loss
+
+            if self.cfg.n_gradient_accumulation_steps > 1:
+                loss = loss / self.cfg.n_gradient_accumulation_steps
+
+            scaler.scale(loss).backward()
+            losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
+            mlm_losses.update(mlm_loss.detach().cpu().numpy(), batch_size)
+            sbo_losses.update(sbo_loss.detach().cpu().numpy(), batch_size)
+
+            if self.cfg.awp and epoch >= self.cfg.nth_awp_start_epoch:  # later update
+                adv_loss = awp.attack_backward(inputs, padding_mask, labels)
+                scaler.scale(adv_loss).backward()
+                awp._restore()
+
+            if self.cfg.clipping_grad and (step + 1) % self.cfg.n_gradient_accumulation_steps == 0 or self.cfg.n_gradient_accumulation_steps == 1:
+                scaler.unscale_(optimizer)
+                grad_norm = torch.nn.utils.clip_grad_norm(
+                    model.parameters(),
+                    self.cfg.max_grad_norm * self.cfg.n_gradient_accumulation_steps
+                )
+                # Stochastic Weight Averaging
+                if self.cfg.swa and epoch >= int(swa_start):
+                    swa_model.update_parameters(model)
+                    swa_scheduler.step()
+
+                scaler.step(optimizer)
+                scaler.update()
+                scheduler.step()
+            del inputs, labels, loss, mlm_loss, sbo_loss, mlm_logit, sbo_logit, mask_labels
+            torch.cuda.empty_cache()
+            gc.collect()
+
+            # logging train loss, gradient norm, lr to wandb
+            lr = scheduler.get_lr()[0]
+            grad_norm = grad_norm.detach().cpu().numpy()
+
+            wandb.log({
+                '<Per Step> Total Train Loss': losses.avg,
+                '<Per Step> MLM Train Loss': mlm_losses.avg,
+                '<Per Step> SBO Train Loss': sbo_losses.avg,
+                '<Per Step> Gradient Norm': grad_norm,
+                '<Per Step> lr': lr,
+            })
+
+            # validate for each size of batch*N Steps
+            if ((step + 1) % self.cfg.val_check == 0) or ((step + 1) == len(loader_train)):
+                valid_loss, mlm_valid_loss, sbo_valid_loss, mlm_score_list, sbo_score_list = self.valid_fn(
+                    loader_valid,
+                    model,
+                    val_criterion,
+                    val_metric_list
+                )
+                print(f'[Validation Check: {step}/{len(loader_train)}] Total Train Loss: {np.round(losses.avg, 4)}')
+                print(f'[Validation Check: {step}/{len(loader_train)}] MLM Train Loss: {np.round(mlm_losses.avg, 4)}')
+                print(f'[Validation Check: {step}/{len(loader_train)}] SBO Train Loss: {np.round(sbo_losses.avg, 4)}')
+
+                print(f'[Validation Check: {step}/{len(loader_train)}] Total Valid Loss: {np.round(valid_loss, 4)}')
+                print(f'[Validation Check: {step}/{len(loader_train)}] MLM Valid Loss: {np.round(mlm_valid_loss, 4)}')
+                print(f'[Validation Check: {step}/{len(loader_train)}] SBO Valid Loss: {np.round(sbo_valid_loss, 4)}')
+
+                for i, metric_name in enumerate(self.metric_list):
+                    print(f'[{step}/{len(loader_train)}] MLM Valid {metric_name}: {mlm_score_list[i]}')
+                    print(f'[{step}/{len(loader_train)}] SBO Valid {metric_name}: {sbo_score_list[i]}')
+                    wandb.log({
+                        f'<Validation Check Step> MLM Valid {metric_name}': mlm_score_list[i],
+                        f'<Validation Check Step> SBO Valid {metric_name}': sbo_score_list[i]
+                    })
+
+                wandb.log({
+                    '<Val Check Step> Total Train Loss': losses.avg,
+                    '<Val Check Step> MLM Train Loss': mlm_losses.avg,
+                    '<Val Check Step> SBO Train Loss': sbo_losses.avg,
+                    '<Val Check Step> Total Valid Loss': valid_loss,
+                    '<Val Check Step> MLM Valid Loss': mlm_valid_loss,
+                    '<Val Check Step> SBO Valid Loss': sbo_valid_loss,
+                })
+
+                if val_score_max >= valid_loss:
+                    print(f'[Update] Valid Score : ({val_score_max:.4f} => {valid_loss:.4f}) Save Parameter')
+                    print(f'Best Score: {valid_loss}')
+                    torch.save(
+                        model.state_dict(),
+                        f'{self.cfg.checkpoint_dir}{self.cfg.task}_SpanBERT_{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
+                    )
+                    val_score_max = valid_loss
+                del valid_loss
+                gc.collect()
+                torch.cuda.empty_cache()
+        return losses.avg * self.cfg.n_gradien_accumulation_steps, val_score_max
+
+    def valid_fn(
+            self,
+            loader_valid,
+            model: nn.Module,
+            val_criterion: nn.Module,
+            val_metric_list: List[Callable]
+    ) -> Tuple[Any, Any, Any, List[Any], List[Any]]:
+        """ function for validation loop
+        """
+        valid_losses, valid_mlm_losses, valid_sbo_losses = AverageMeter(), AverageMeter(), AverageMeter()
+        mlm_valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
+        sbo_valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
+        model.eval()
+        with torch.no_grad():
+            for step, batch in enumerate(tqdm(loader_valid)):
+                inputs = batch['input_ids'].to(self.cfg.device)
+                labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
+                padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
+                mask_labels = batch['mask_labels'].to(self.cfg.device)  # mask labels to GPU
+                batch_size = inputs.size(0)
+
+                mlm_logit, sbo_logit = model(
+                    inputs=inputs,
+                    padding_mask=padding_mask,
+                    mask_labels=mask_labels
+                )
+                labels = labels.view(-1)
+                mlm_logit, sbo_logit = mlm_logit.view(-1, self.cfg.vocab_size), sbo_logit.view(-1, self.cfg.vocab_size)
+
+                mlm_loss = val_criterion(mlm_logit, labels)
+                sbo_loss = val_criterion(sbo_logit, labels)
+                loss = mlm_loss + sbo_loss
+
+                valid_losses.update(loss.detach().cpu().numpy(), batch_size)
+                valid_mlm_losses.update(mlm_loss.detach().cpu().numpy(), batch_size)
+                valid_sbo_losses.update(sbo_loss.detach().cpu().numpy(), batch_size)
+
+                wandb.log({
+                    '<Val Step> Total Valid Loss': valid_losses.avg,
+                    '<Val Step> MLM Valid Loss': valid_mlm_losses.avg,
+                    '<Val Step> SBO Valid Loss': valid_sbo_losses.avg,
+                })
+
+                for i, metric_fn in enumerate(val_metric_list):
+                    mlm_scores = metric_fn(
+                        mlm_logit.detach().cpu().numpy(),
+                        labels.detach().cpu().numpy()
+                    )
+                    sbo_scores = metric_fn(
+                        sbo_logit.detach().cpu().numpy(),
+                        labels.detach().cpu().numpy()
+                    )
+                    mlm_valid_metrics[self.metric_list[i]].update(mlm_scores, batch_size)
+                    sbo_valid_metrics[self.metric_list[i]].update(sbo_scores, batch_size)
+                    wandb.log({
+                        f'<Val Step> MLM Valid {self.metric_list[i]}': mlm_scores,
+                        f'<Val Step> SBO Valid {self.metric_list[i]}': sbo_scores,
+                    })
+
+            del inputs, labels, loss, mlm_loss, sbo_loss, mlm_logit, sbo_logit, mask_labels
+            torch.cuda.empty_cache()
+            gc.collect()
+        mlm_avg_scores = [mlm_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
+        sbo_avg_scores = [sbo_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
+        return valid_losses.avg, valid_mlm_losses.avg, valid_sbo_losses.avg, mlm_avg_scores, sbo_avg_scores
+
+
 class RTDTuner(PreTrainTuner):
     """ Trainer class for Replaced Token Detection
     """
@@ -348,44 +568,6 @@ class RTDTuner(PreTrainTuner):
         self.model_name = self.cfg.module_name
         self.generator_name = self.cfg.generator
         self.discriminator_name = self.cfg.discriminator
-
-    def make_batch(self) -> Tuple[DataLoader, DataLoader, int]:
-        """ Function for making batch instance """
-        train = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_train')
-        valid = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_valid')
-
-        # 1) Custom Datasets
-        train_dataset = getattr(dataset_class, self.cfg.dataset)(train)
-        valid_dataset = getattr(dataset_class, self.cfg.dataset)(valid)
-
-        # 2) Custom Collator
-        collate_fn = None
-        if self.cfg.rtd_masking == 'MaskedLanguageModel':
-            collate_fn = getattr(mlm, 'MLMCollator')(self.cfg)
-        elif self.cfg.rtd_masking == 'SpanBoundaryObjective':
-            collate_fn = getattr(sbo, 'SpanCollator')(
-                self.cfg,
-                self.cfg.masking_budget,
-                self.cfg.span_probability,
-                self.cfg.max_span_length,
-            )
-
-        # 3) Initializing torch.utils.data.DataLoader Module
-        loader_train = get_dataloader(
-            cfg=self.cfg,
-            dataset=train_dataset,
-            collate_fn=collate_fn,
-            generator=self.generator
-        )
-        loader_valid = get_dataloader(
-            cfg=self.cfg,
-            dataset=valid_dataset,
-            collate_fn=collate_fn,
-            generator=self.generator,
-            shuffle=False,
-            drop_last=False
-        )
-        return loader_train, loader_valid, len(train['input_ids'])
 
     def model_setting(self, len_train: int):
         """ Function for init backbone's configuration & train utils setting,
