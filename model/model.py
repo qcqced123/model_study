@@ -99,7 +99,8 @@ class SpanBoundaryObjective(nn.Module, AbstractTask):
     def __init__(self, cfg: CFG) -> None:
         super(SpanBoundaryObjective, self).__init__()
         self.cfg = cfg
-        self.model = SpanBERT(self.cfg)
+        # self.model = SpanBERT(self.cfg)  # later, change this line
+        self.model = DeBERTa(self.cfg)
         self.mlm_head = MLMHead(self.cfg)
         self.sbo_head = SBOHead(self.cfg)
         if self.cfg.gradient_checkpoint:
@@ -126,7 +127,7 @@ class SpanBoundaryObjective(nn.Module, AbstractTask):
         mask_labels: Tensor,
         attention_mask: Tensor = None
     ) -> Tuple[Tensor, Tensor]:
-        last_hidden_states, _ = self.feature(inputs, padding_mask)
+        _, _, last_hidden_states, _ = self.feature(inputs, padding_mask)
         mlm_logit = self.mlm_head(last_hidden_states)
         sbo_logit = self.sbo_head(last_hidden_states, mask_labels)
         return mlm_logit, sbo_logit

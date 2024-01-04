@@ -155,6 +155,7 @@ class SpanCollator(WholeWordMaskingCollator):
         attention_mask = [torch.tensor(x["attention_mask"]) for x in batched]
 
         padding_mask = [self.get_padding_mask(x) for x in input_ids]
+        padding_mask = pad_sequence(padding_mask, batch_first=True, padding_value=True)
         input_ids = pad_sequence(input_ids, batch_first=True, padding_value=0)
 
         mask_labels = []
@@ -211,7 +212,7 @@ class SBOHead(nn.Module):
         self.cfg = cfg
         self.is_concatenate = is_concatenate  # for matrix sum or concatenate with x_s-1, x_e+1, p_i-s+1
         self.projector = nn.Linear(self.cfg.dim_model, self.cfg.dim_model*3)  # for concatenate x_s-1, x_e+1, p_i-s+1
-        self.span_pos_emb = nn.Embedding(max_span_length, cfg.dim_model)  # size of dim_model is research topic
+        self.span_pos_emb = nn.Embedding(max_span_length*3, cfg.dim_model)  # size of dim_model is research topic
         self.head = nn.Sequential(
             nn.Linear(self.cfg.dim_model*3, self.cfg.dim_ffn, bias=False),
             nn.GELU(),
@@ -251,9 +252,10 @@ class SBOHead(nn.Module):
             all_consecutive_groups.append(consecutive_groups)
         return all_consecutive_groups
 
-    def cal_span_emb(self, hidden_states: Tensor, consecutive_groups: List[List[Dict]]) -> Tensor:
+    def cal_span_emb(self, h: Tensor, hidden_states: Tensor, consecutive_groups: List[List[Dict]]) -> Tensor:
         """ Calculate span embedding for each span in one batch sequence
         Args:
+            h: hidden states, already passed through projection layer (dim*3)
             hidden_states: hidden states from encoder
             consecutive_groups: consecutive groups for each batch sequence
         """
@@ -261,19 +263,20 @@ class SBOHead(nn.Module):
             for j, span in enumerate(batch):  # span level
                 start, end = span["start"], span["end"]
                 length = end - start + 1
-                idx = torch.arange(length)
-
+                idx = torch.arange(length).to(self.cfg.device)
                 context_s, context_e = hidden_states[i, start - 1, :], hidden_states[i, end + 1, :]
                 span_pos_emb = self.span_pos_emb(idx).squeeze(0)
-                for k, p_h in enumerate(span_pos_emb):  # length of span_pos_emb == length of span of this iterations
-                    hidden_states[i, start+k, :] = torch.concat([context_s, p_h, context_e], dim=0)
-        return hidden_states
+                if length > 1:
+                    for k, p_h in enumerate(span_pos_emb):  # length of span_pos_emb == length of span of this iterations
+                        h[i, start+k, :] = torch.cat([context_s, p_h, context_e], dim=0)
+                else:
+                    h[i, start, :] = torch.cat([context_s, span_pos_emb, context_e], dim=0)
+        return h
 
     def forward(self, hidden_states: Tensor, mask_labels: Tensor) -> Tensor:
-        if self.is_concatenate:
-            hidden_states = self.projector(hidden_states)  # [batch, seq, dim_model*3]
         consecutive_groups = self.find_consecutive_groups(mask_labels)  # [batch, num_consecutive_groups]
-        h = self.cal_span_emb(hidden_states, consecutive_groups)
-        z = self.head(h)
+        h = self.projector(hidden_states)  # [batch, seq, dim_model*3]
+        h_t = self.cal_span_emb(h, hidden_states, consecutive_groups)
+        z = self.head(h_t)
         logit = self.classifier(z)
         return logit

@@ -96,7 +96,8 @@ class PreTrainTuner:
         # load checkpoint when you set 'resume' to True
         if self.cfg.resume:
             model.load_state_dict(
-                torch.load(self.cfg.checkpoint_dir + self.cfg.state_dict)
+                torch.load(self.cfg.checkpoint_dir + self.cfg.state_dict),
+                strict=False
             )
         model.to(self.cfg.device)
 
@@ -431,7 +432,7 @@ class SBOTuner(PreTrainTuner):
                 scaler.step(optimizer)
                 scaler.update()
                 scheduler.step()
-            del inputs, labels, loss, mlm_loss, sbo_loss, mlm_logit, sbo_logit, mask_labels
+            del inputs, labels, loss, mlm_loss, sbo_loss, mlm_logit, sbo_logit, mask_labels, padding_mask
             torch.cuda.empty_cache()
             gc.collect()
 
@@ -552,7 +553,7 @@ class SBOTuner(PreTrainTuner):
                         f'<Val Step> SBO Valid {self.metric_list[i]}': sbo_scores,
                     })
 
-            del inputs, labels, loss, mlm_loss, sbo_loss, mlm_logit, sbo_logit, mask_labels
+            del inputs, labels, loss, mlm_loss, sbo_loss, mlm_logit, sbo_logit, padding_mask, mask_labels
             torch.cuda.empty_cache()
             gc.collect()
         mlm_avg_scores = [mlm_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
