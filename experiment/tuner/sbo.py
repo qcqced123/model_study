@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
 from torch import Tensor
+from torch.utils.checkpoint import checkpoint, checkpoint_sequential
 from typing import Dict, List, Tuple, Any
 from ..tuner.mlm import WholeWordMaskingCollator
 from configuration import CFG
@@ -211,10 +212,10 @@ class SBOHead(nn.Module):
         super(SBOHead, self).__init__()
         self.cfg = cfg
         self.is_concatenate = is_concatenate  # for matrix sum or concatenate with x_s-1, x_e+1, p_i-s+1
-        self.projector = nn.Linear(self.cfg.dim_model, self.cfg.dim_model*3)  # for concatenate x_s-1, x_e+1, p_i-s+1
+        self.projector = nn.Linear(self.cfg.dim_model, self.cfg.dim_model*3, bias=False)  # for concatenate x_s-1, x_e+1, p_i-s+1
         self.span_pos_emb = nn.Embedding(max_span_length*3, cfg.dim_model)  # size of dim_model is research topic
         self.head = nn.Sequential(
-            nn.Linear(self.cfg.dim_model*3, self.cfg.dim_ffn, bias=False),
+            nn.Linear(self.cfg.dim_model*3, self.cfg.dim_ffn),
             nn.GELU(),
             nn.LayerNorm(self.cfg.dim_ffn),
             nn.Linear(self.cfg.dim_ffn, self.cfg.dim_model, bias=False),

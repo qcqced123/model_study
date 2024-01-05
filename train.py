@@ -9,7 +9,7 @@ from huggingface_hub import notebook_login
 warnings.filterwarnings('ignore')
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["LRU_CACHE_CAPACITY"] = "1"
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "garbage_collection_threshold:0.95,max_split_size_mb:512"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "garbage_collection_threshold:0.95, max_split_size_mb:512"
 check_library(True)
 all_type_seed(CFG, True)
 notebook_login()  # login to huggingface hub
@@ -23,5 +23,5 @@ def main(config_path: str, cfg: CFG) -> None:
 
 
 if __name__ == '__main__':
-    main('spanbert_cfg.json', CFG)
+    main('deberta_cfg.json', CFG)
 

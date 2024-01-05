@@ -5,7 +5,7 @@
         "checkpoint_dir": "./saved/",
         "state_dict": "SWM_512_DeBERTa_state_dict.pth",
         "load_pretrained": false,
-        "resume": true,
+        "resume": false,
         "name": "MaskedLanguageModel",
         "datafolder": "wikipedia_en",
         "trainer": "PreTrainTuner",
@@ -16,7 +16,7 @@
         "arch_name": "attention",
         "model_name": "deberta",
         "module_name": "DeBERTa",
-        "tmp_model": "microsoft/deberta-v3-large",
+        "tmp_model": "microsoft/deberta-v3-base",
         "task": "MaskedLanguageModel",
         "pooling": "MeanPooling"
     },
@@ -27,7 +27,7 @@
         "seed": 42,
         "n_gpu": 1,
         "gpu_id": 0,
-        "num_workers": 4
+        "num_workers": 2
     },
 
     "data_settings": {
@@ -110,6 +110,7 @@
     },
 
     "pretrain_options": {
+        "is_mf_embedding": false,
         "mlm_masking": "WholeWordMasking",
         "mlm_probability": 0.15,
         "rtd_masking": "MaskedLanguageModel",

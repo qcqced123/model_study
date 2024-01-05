@@ -381,6 +381,7 @@ class Embedding(nn.Module):
     """
     def __init__(self, cfg: CFG) -> None:
         super(Embedding, self).__init__()
+        self.cfg = cfg
         self.max_seq = cfg.max_seq
         self.max_rel_pos = 2 * self.max_seq
         self.word_embedding = nn.Embedding(len(cfg.tokenizer), cfg.dim_model)  # Word Embedding which is not add Absolute Position
@@ -391,10 +392,20 @@ class Embedding(nn.Module):
         self.layer_norm3 = nn.LayerNorm(cfg.dim_model, eps=cfg.layer_norm_eps)  # for abs_pos_emb
         self.hidden_dropout = nn.Dropout(p=cfg.hidden_dropout_prob)
 
+        # ALBERT Style Factorized Embedding
+        if self.cfg.is_mf_embedding:
+            self.word_embedding = nn.Embedding(len(cfg.tokenizer), int(cfg.dim_model/6))
+            self.projector = nn.Linear(int(cfg.dim_model/6), cfg.dim_model)  # project to original hidden dim
+
     def forward(self, inputs: Tensor) -> Tuple[nn.Embedding, nn.Embedding, nn.Embedding]:
-        word_embeddings = self.hidden_dropout(
-            self.layer_norm1(self.word_embedding(inputs))
-        )
+        if self.cfg.is_mf_embedding:
+            word_embeddings = self.hidden_dropout(
+                self.layer_norm1(self.projector(self.word_embedding(inputs)))
+            )
+        else:
+            word_embeddings = self.hidden_dropout(
+                self.layer_norm1(self.word_embedding(inputs))
+            )
         rel_pos_emb = self.hidden_dropout(
             self.layer_norm2(self.rel_pos_emb(torch.arange(inputs.shape[1]).repeat(inputs.shape[0]).view(inputs.shape[0], -1).to(inputs)))
         )

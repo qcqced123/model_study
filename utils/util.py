@@ -173,6 +173,7 @@ def sync_config(json_config: json) -> None:
     CFG.awp_lr = json_config.model_utils.awp_lr
 
     """ Pre-Training Option """
+    CFG.is_mf_embedding = json_config.pretrain_options.is_mf_embedding
     CFG.mlm_masking = json_config.pretrain_options.mlm_masking
     CFG.mlm_probability = json_config.pretrain_options.mlm_probability
     CFG.rtd_masking = json_config.pretrain_options.rtd_masking

@@ -109,6 +109,7 @@ class CFG:
     awp_lr = 1e-4
 
     """ Pre-Training Option """
+    is_mf_embedding = True
     # 1) MLM Option(SWM, WWM)
     mlm_masking = 'SubWordMasking'
     mlm_probability = 0.15
