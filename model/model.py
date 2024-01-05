@@ -22,7 +22,7 @@ class MaskedLanguageModel(nn.Module, AbstractTask):
     def __init__(self, cfg: CFG) -> None:
         super(MaskedLanguageModel, self).__init__()
         self.cfg = cfg
-        self.model = DeBERTa(self.cfg)  # later, change this line to getattr
+        self.model = self.select_model()
         self.mlm_head = MLMHead(cfg)
         if self.cfg.gradient_checkpoint:
             self.model.gradient_checkpointing_enable()
@@ -41,7 +41,7 @@ class MaskedLanguageModel(nn.Module, AbstractTask):
         return outputs
 
     def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> List[Tensor]:
-        _, _, last_hidden_states, _ = self.feature(inputs, padding_mask)
+        last_hidden_states, _ = self.feature(inputs, padding_mask)
         logit = self.mlm_head(last_hidden_states)
         return logit
 
@@ -54,7 +54,11 @@ class ReplacedTokenDetection(nn.Module, AbstractTask):
     def __init__(self, cfg: CFG) -> None:
         super(ReplacedTokenDetection, self).__init__()
         self.cfg = cfg
-        self.model = ELECTRA(self.cfg)
+        self.backbone = self.select_model()
+        self.model = ELECTRA(
+            self.cfg,
+            self.backbone
+        )
         if self.cfg.gradient_checkpoint:
             self.model.gradient_checkpointing_enable()
 
@@ -99,8 +103,11 @@ class SpanBoundaryObjective(nn.Module, AbstractTask):
     def __init__(self, cfg: CFG) -> None:
         super(SpanBoundaryObjective, self).__init__()
         self.cfg = cfg
-        # self.model = SpanBERT(self.cfg)  # later, change this line
-        self.model = DeBERTa(self.cfg)
+        self.backbone = self.select_model()
+        self.model = SpanBERT(
+            self.cfg,
+            self.backbone
+        )
         self.mlm_head = MLMHead(self.cfg)
         self.sbo_head = SBOHead(self.cfg)
         if self.cfg.gradient_checkpoint:
@@ -127,7 +134,10 @@ class SpanBoundaryObjective(nn.Module, AbstractTask):
         mask_labels: Tensor,
         attention_mask: Tensor = None
     ) -> Tuple[Tensor, Tensor]:
-        _, _, last_hidden_states, _ = self.feature(inputs, padding_mask)
+        last_hidden_states, _ = self.feature(inputs, padding_mask)
         mlm_logit = self.mlm_head(last_hidden_states)
-        sbo_logit = self.sbo_head(last_hidden_states, mask_labels)
+        sbo_logit = self.sbo_head(
+            last_hidden_states,
+            mask_labels
+        )
         return mlm_logit, sbo_logit

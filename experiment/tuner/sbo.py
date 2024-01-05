@@ -3,7 +3,6 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
 from torch import Tensor
-from torch.utils.checkpoint import checkpoint, checkpoint_sequential
 from typing import Dict, List, Tuple, Any
 from ..tuner.mlm import WholeWordMaskingCollator
 from configuration import CFG

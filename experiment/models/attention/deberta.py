@@ -276,7 +276,8 @@ class DeBERTaEncoder(nn.Module, AbstractModel):
                     layer.__call__,  # same as __forward__ call, torch reference recommend to use __call__ instead of forward
                     x,
                     pos_x,
-                    padding_mask
+                    padding_mask,
+                    attention_mask
                 )
             else:
                 x = layer(
@@ -334,9 +335,10 @@ class EnhancedMaskDecoder(nn.Module, AbstractModel):
             if self.gradient_checkpointing and self.cfg.train:
                 query_states = self._gradient_checkpointing_func(
                     emd_layer.__call__,  # same as __forward__ call, torch reference recommend to use __call__ instead of forward
-                    query_states,
-                    rel_pos_emb,
-                    padding_mask
+                    x=hidden_states,
+                    pos_x=rel_pos_emb,
+                    padding_mask=padding_mask,
+                    emd=query_states
                 )
             else:
                 query_states = emd_layer(
@@ -486,7 +488,7 @@ class DeBERTa(nn.Module, AbstractModel):
             self.gradient_checkpointing
         )
 
-    def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+    def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
         """
         Args:
             inputs: input sequence, shape (batch_size, sequence)
@@ -500,4 +502,4 @@ class DeBERTa(nn.Module, AbstractModel):
 
         emd_hidden_states = hidden_states[-self.cfg.num_emd]
         emd_last_hidden_state, emd_hidden_states = self.emd_encoder(emd_hidden_states, abs_pos_emb, rel_pos_emb, padding_mask, attention_mask)
-        return last_hidden_state, hidden_states, emd_last_hidden_state, emd_hidden_states
+        return emd_last_hidden_state, emd_hidden_states

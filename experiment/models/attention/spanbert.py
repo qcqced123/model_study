@@ -51,12 +51,14 @@ class SpanBERT(nn.Module, AbstractModel):
     In original paper, BERT is used as backbone model but we select DeBERTa as backbone model
     you can change backbone model to any other model easily, just passing other model name to cfg.encoder_name
     But, you must pass ONLY encoder model such as BERT, RoBERTa, DeBERTa, ...
+
     Args:
         cfg: configuration.CFG
+        backbone: baseline architecture (nn.Module) which is used for Pretraining SpanBERT
     References:
         https://arxiv.org/pdf/1907.10529.pdf
     """
-    def __init__(self, cfg: CFG) -> None:
+    def __init__(self, cfg: CFG, backbone: nn.Module) -> None:
         super(SpanBERT, self).__init__()
         self.cfg = cfg
         self.encoder = SpanBERTEncoder(self.cfg)

@@ -94,6 +94,10 @@ class ELECTRA(nn.Module, AbstractModel):
     Init Scale of ELECTRA Hyper-Parameters, Embedding Layer, Encoder Blocks of Generator, Discriminator
     You can select any other backbone model architecture for Generator & Discriminator, in original paper, BERT is used
 
+    Args:
+        cfg: configuration.CFG
+        backbone: baseline architecture (nn.Module) which is used for Pretraining ELECTRA
+
     Var:
         cfg: configuration.CFG
         generator: Generator, which is used for generating replaced tokens for RTD
@@ -101,11 +105,12 @@ class ELECTRA(nn.Module, AbstractModel):
         discriminator: Discriminator, which is used for detecting replaced tokens for RTD
                        should select backbone model ex) BERT, RoBERTa, DeBERTa, ...
         share_embedding: whether or not to share embedding layer (word & pos) between Generator & Discriminator
+
     References:
         https://arxiv.org/pdf/2003.10555.pdf
         https://github.com/google-research/electra
     """
-    def __init__(self, cfg: CFG) -> None:
+    def __init__(self, cfg: CFG, backbone: nn.Module) -> None:
         super(ELECTRA, self).__init__()
         self.cfg = cfg
         self.generator = Generator(self.cfg)

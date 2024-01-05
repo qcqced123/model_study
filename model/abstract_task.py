@@ -1,7 +1,7 @@
-import functools
+import importlib.util
 import torch.nn as nn
-from torch.utils.checkpoint import checkpoint
 from typing import Dict, List, Tuple, Union, Callable
+from ..configuration import CFG
 
 
 class AbstractTask:
@@ -11,12 +11,14 @@ class AbstractTask:
         1) Init Gradient Checkpointing Flag
         2) Weight Initialization
             - Pytorch Default Weight Initialization: He Initialization (Kaiming Initialization)
+        3) Interface method for making model instance in runtime
     """
-    def __init__(self):
+    def __init__(self, cfg: CFG) -> None:
         super(AbstractTask, self).__init__()
+        self.cfg = cfg
 
     def _init_weights(self, module: nn.Module) -> None:
-        """ over-ride initializes weights of the given module function for torch models
+        """ Over-ride initializes weights of the given module function for torch models
         you must implement this function in your task class
         Args:
             module (:obj:`torch.nn.Module`):
@@ -46,3 +48,24 @@ class AbstractTask:
             """ reference from torch.nn.Layernorm with elementwise_affine=True """
             module.weight.data.fill_(1.0)
             module.bias.data.zero_()
+
+    def select_model(self) -> nn.Module:
+        """ Selects architecture for each task,
+        you can easily select your model for experiment from json config files
+        1) select .py file from input config settings
+        2) select class object from input config settings
+        Args:
+            cfg (:obj:`configuration.CFG`):
+                The configuration to select architecture
+        Returns:
+            model (:obj:`nn.Module`):
+                The model to use for each task
+        """
+        base_path = '../experiment/models/'
+        arch_path = f"{base_path + self.cfg.arch_name + self.cfg.model_name}.py"
+        spec = importlib.util.spec_from_file_location(self.cfg.model_name, arch_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        model = getattr(module, self.cfg.module_name)(self.cfg)  # get instance in runtime
+        return model
+

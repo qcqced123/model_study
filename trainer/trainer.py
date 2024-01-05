@@ -47,7 +47,7 @@ class PreTrainTuner:
         train_dataset = getattr(dataset_class, self.cfg.dataset)(train)
         valid_dataset = getattr(dataset_class, self.cfg.dataset)(valid)
 
-        # 2) Custom Collator
+        # 2) selecting custom masking method for each task
         collate_fn = None
         if self.cfg.task == 'MaskedLanguageModel':
             collate_fn = getattr(mlm, 'MLMCollator')(self.cfg)
