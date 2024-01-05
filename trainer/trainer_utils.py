@@ -32,7 +32,16 @@ def get_optimizer_grouped_parameters(
          "lr": layerwise_lr
          },
     ]
-    layers = [model.model.embeddings] + list(model.model.encoder.layer)  # need to extend this line more generalization
+    if configuration.CFG.task == 'SpanBoundaryObjective':
+        layers = [model.model.backbone.embeddings] + list(model.model.backbone.encoder.layer)
+    elif configuration.CFG.task == 'ReplacedTokenDetection':
+        layers = (
+                [model.model.generator.embeddings] +
+                list(model.model.generator.encoder.layer) +
+                list(model.model.discriminator.encoder.layer)
+        )
+    else:
+        layers = [model.model.embeddings] + list(model.model.encoder.layer)
     layers.reverse()
     lr = layerwise_lr
     for layer in layers:

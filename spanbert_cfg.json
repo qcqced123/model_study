@@ -16,7 +16,7 @@
         "arch_name": "attention",
         "model_name": "deberta",
         "module_name": "DeBERTa",
-        "tmp_model": "microsoft/deberta-base",
+        "tmp_model": "microsoft/deberta-v3-large",
         "task": "SpanBoundaryObjective",
         "pooling": "MeanPooling"
     },
@@ -35,7 +35,7 @@
         "n_folds": 4,
         "max_len": 512,
         "epochs": 20,
-        "batch_size": 20,
+        "batch_size": 14,
         "val_batch_size": 16,
         "smart_batch": false,
         "val_check": 10000
@@ -87,7 +87,7 @@
 
     "model_utils": {
         "max_seq": 512,
-        "num_layers": 6,
+        "num_layers": 12,
         "num_emd": 2,
         "num_attention_heads": 12,
         "dim_model": 768,
@@ -110,7 +110,7 @@
     },
 
     "pretrain_options": {
-        "is_mf_embedding": true,
+        "is_mf_embedding": false,
         "mlm_masking": "WholeWordMasking",
         "mlm_probability": 0.15,
         "rtd_masking": "MaskedLanguageModel",

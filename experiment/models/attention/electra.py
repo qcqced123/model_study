@@ -1,7 +1,7 @@
 import torch.nn as nn
 from experiment.models.abstract_model import AbstractModel
 from torch import Tensor
-from typing import Tuple, List
+from typing import Tuple, List, Callable
 from einops.layers.torch import Rearrange
 from experiment.tuner.mlm import MLMHead
 from experiment.tuner.rtd import get_discriminator_input, RTDHead
@@ -24,7 +24,6 @@ class Generator(nn.Module):
         self.cfg = cfg
         self.arch_name = cfg.generator
         self.generator = getattr(deberta, self.arch_name)(self.cfg)  # will be changed to getattr
-        self.mlm_head = MLMHead(self.cfg)
 
     def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
         assert inputs.ndim == 2, f'Expected (batch, sequence) got {inputs.shape}'
@@ -64,7 +63,6 @@ class Discriminator(nn.Module):
         self.cfg = cfg
         self.arch_name = cfg.discriminator
         self.discriminator = getattr(deberta, self.arch_name)(self.cfg)  # will be changed to getattr
-        self.rtd_head = RTDHead(self.cfg)
 
     def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
         assert inputs.ndim == 2, f'Expected (batch, sequence) got {inputs.shape}'
@@ -96,7 +94,7 @@ class ELECTRA(nn.Module, AbstractModel):
 
     Args:
         cfg: configuration.CFG
-        backbone: baseline architecture (nn.Module) which is used for Pretraining ELECTRA
+        model_func: make model instance in runtime from config.json
 
     Var:
         cfg: configuration.CFG
@@ -110,32 +108,41 @@ class ELECTRA(nn.Module, AbstractModel):
         https://arxiv.org/pdf/2003.10555.pdf
         https://github.com/google-research/electra
     """
-    def __init__(self, cfg: CFG, backbone: nn.Module) -> None:
+    def __init__(self, cfg: CFG, model_func: Callable) -> None:
         super(ELECTRA, self).__init__()
         self.cfg = cfg
-        self.generator = Generator(self.cfg)
-        self.discriminator = Discriminator(self.cfg)
+        self.generator = model_func  # init generator
+        self.mlm_head = MLMHead(self.cfg)
+
+        self.discriminator = model_func  # init generator
+        self.rtd_head = RTDHead(self.cfg)
+
         self.share_embed = self.cfg.is_share_embed
         if self.share_embed:
             self.share_embed_method = self.cfg.share_embed_method
-            self.discriminator.discriminator.embeddings = self.generator.generator.embeddings
-        self.gradient_checkpointing = self.cfg.gradient_checkpoint
+            self.discriminator.embeddings = self.generator.embeddings
 
     def forward(self, inputs: Tensor, labels: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor, Tensor]:
         assert inputs.ndim == 2, f'Expected (batch, sequence) got {inputs.shape}'
-        g_logit = self.generator(
+        g_last_hidden_states, _ = self.generator(
             inputs,
             padding_mask,
             attention_mask
+        )
+        g_logit = self.mlm_head(
+            g_last_hidden_states
         )
         d_inputs, d_labels = get_discriminator_input(
             inputs,
             labels,
             g_logit,
         )
-        d_logit = self.discriminator(
+        d_last_hidden_states, _ = self.discriminator(
             d_inputs,
             padding_mask,
             attention_mask
+        )
+        d_logit = self.rtd_head(
+            d_last_hidden_states
         )
         return g_logit, d_logit, d_labels

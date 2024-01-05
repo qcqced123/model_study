@@ -335,10 +335,10 @@ class EnhancedMaskDecoder(nn.Module, AbstractModel):
             if self.gradient_checkpointing and self.cfg.train:
                 query_states = self._gradient_checkpointing_func(
                     emd_layer.__call__,  # same as __forward__ call, torch reference recommend to use __call__ instead of forward
-                    x=hidden_states,
-                    pos_x=rel_pos_emb,
-                    padding_mask=padding_mask,
-                    emd=query_states
+                    hidden_states,
+                    rel_pos_emb,
+                    padding_mask,
+                    query_states
                 )
             else:
                 query_states = emd_layer(

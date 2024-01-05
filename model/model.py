@@ -54,10 +54,9 @@ class ReplacedTokenDetection(nn.Module, AbstractTask):
     def __init__(self, cfg: CFG) -> None:
         super(ReplacedTokenDetection, self).__init__()
         self.cfg = cfg
-        self.backbone = self.select_model()
         self.model = ELECTRA(
             self.cfg,
-            self.backbone
+            self.select_model()
         )
         if self.cfg.gradient_checkpoint:
             self.model.gradient_checkpointing_enable()
@@ -103,10 +102,9 @@ class SpanBoundaryObjective(nn.Module, AbstractTask):
     def __init__(self, cfg: CFG) -> None:
         super(SpanBoundaryObjective, self).__init__()
         self.cfg = cfg
-        self.backbone = self.select_model()
         self.model = SpanBERT(
             self.cfg,
-            self.backbone
+            self.select_model()
         )
         self.mlm_head = MLMHead(self.cfg)
         self.sbo_head = SBOHead(self.cfg)

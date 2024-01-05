@@ -35,7 +35,7 @@
         "n_folds": 4,
         "max_len": 512,
         "epochs": 20,
-        "batch_size": 20,
+        "batch_size": 8,
         "val_batch_size": 16,
         "smart_batch": false,
         "val_check": 10000
@@ -110,7 +110,7 @@
     },
 
     "pretrain_options": {
-        "is_mf_embedding": true,
+        "is_mf_embedding": false,
         "mlm_masking": "WholeWordMasking",
         "mlm_probability": 0.15,
         "rtd_masking": "MaskedLanguageModel",

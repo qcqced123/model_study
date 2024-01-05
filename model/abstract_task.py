@@ -1,7 +1,6 @@
 import importlib.util
 import torch.nn as nn
-from typing import Dict, List, Tuple, Union, Callable
-from ..configuration import CFG
+from configuration import CFG
 
 
 class AbstractTask:
@@ -61,8 +60,8 @@ class AbstractTask:
             model (:obj:`nn.Module`):
                 The model to use for each task
         """
-        base_path = '../experiment/models/'
-        arch_path = f"{base_path + self.cfg.arch_name + self.cfg.model_name}.py"
+        base_path = 'experiment/models/'
+        arch_path = f"{base_path + self.cfg.arch_name + '/' + self.cfg.model_name}.py"
         spec = importlib.util.spec_from_file_location(self.cfg.model_name, arch_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
