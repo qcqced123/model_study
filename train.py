@@ -1,6 +1,6 @@
-import os, warnings
+import os
+import warnings
 from omegaconf import OmegaConf
-
 from configuration import CFG
 import trainer.train_loop as train_loop
 from utils.helper import check_library, all_type_seed
@@ -23,5 +23,5 @@ def main(config_path: str, cfg: CFG) -> None:
 
 
 if __name__ == '__main__':
-    main('electra_cfg.json', CFG)
+    main('config/electra_cfg.json', CFG)
 
