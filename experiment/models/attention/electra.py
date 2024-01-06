@@ -6,7 +6,6 @@ from einops.layers.torch import Rearrange
 from experiment.tuner.mlm import MLMHead
 from experiment.tuner.rtd import get_discriminator_input, RTDHead
 from configuration import CFG
-from ..attention import deberta
 
 
 class ELECTRA(nn.Module, AbstractModel):

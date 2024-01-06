@@ -639,7 +639,7 @@ class RTDTuner(PreTrainTuner):
             swa_start: int = None,
             swa_scheduler=None
     ) -> Tuple[Any, Union[float, ndarray, ndarray]]:
-        """ function for train loop with validation for each batch*N Steps
+        """ Function for train loop with validation for each batch*N Steps
         ELECTRA has two loss, one is generator loss, the other is discriminator loss Each of two losses are quite different,
         Models can be under-fitted like tag-of-war if they simply sum losses with different characteristics
         in situations where they share word embeddings, or backwards as it were.

@@ -6,7 +6,6 @@ from experiment.tuner.mlm import MLMHead
 from experiment.tuner.sbo import SBOHead
 from configuration import CFG
 from model.abstract_task import AbstractTask
-from experiment.models.attention.deberta import DeBERTa
 from experiment.models.attention.electra import ELECTRA
 from experiment.models.attention.spanbert import SpanBERT
 
@@ -121,7 +120,7 @@ class SpanBoundaryObjective(nn.Module, AbstractTask):
                 strict=True
             )
 
-    def feature(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
+    def feature(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
         outputs = self.model(inputs, padding_mask)
         return outputs
 
