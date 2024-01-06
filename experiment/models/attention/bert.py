@@ -47,7 +47,7 @@ class AttentionHead(nn.Module):
     Args:
         dim_model: dimension of model's latent vector space, default 1024 from official paper
         dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
-        dropout: dropout rate for attention matrix, default 0.1 from official paper
+        attention_dropout_prob: dropout rate for attention matrix, default 0.1 from official paper
     Math:
         A = softmax(attention Matrix/sqrt(3*D_h)), SA(z) = Av
     Reference:
@@ -63,8 +63,6 @@ class AttentionHead(nn.Module):
         self.fc_q = nn.Linear(self.dim_model, self.dim_head)
         self.fc_k = nn.Linear(self.dim_model, self.dim_head)
         self.fc_v = nn.Linear(self.dim_model, self.dim_head)
-        self.fc_qr = nn.Linear(self.dim_model, self.dim_head)  # projector for Relative Position Query matrix
-        self.fc_kr = nn.Linear(self.dim_model, self.dim_head)  # projector for Relative Position Key matrix
 
     def forward(self, x: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
         q, k, v = self.fc_q(x), self.fc_k(x), self.fc_v(x)
@@ -106,11 +104,11 @@ class MultiHeadAttention(nn.Module):
         )
         self.fc_concat = nn.Linear(self.dim_model, self.dim_model)
 
-    def forward(self, x: Tensor, padding_mask: Tensor, attention_mask: Tensor = None, emd: Tensor = None) -> Tensor:
+    def forward(self, x: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
         """ x is already passed nn.Layernorm """
         assert x.ndim == 3, f'Expected (batch, seq, hidden) got {x.shape}'
         attention_output = self.fc_concat(
-            torch.cat([head(x, padding_mask, attention_mask, emd) for head in self.attention_heads], dim=-1)
+            torch.cat([head(x, padding_mask, attention_mask) for head in self.attention_heads], dim=-1)
         )
         return attention_output
 
@@ -174,7 +172,10 @@ class BERTEncoderLayer(nn.Module):
     def forward(self, x: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
         """ rel_pos_emb is fixed for all layer in same forward pass time """
         ln_x = self.layer_norm1(x)
-        residual_x = self.hidden_dropout(self.self_attention(ln_x, padding_mask, attention_mask)) + x
+        residual_x = self.hidden_dropout(
+            self.self_attention(ln_x, padding_mask, attention_mask)
+        ) + x
+
         ln_x = self.layer_norm2(residual_x)
         fx = self.ffn(ln_x) + residual_x
         return fx
@@ -281,14 +282,13 @@ class Embedding(nn.Module):
             )
         abs_pos_emb = self.hidden_dropout(
             self.layer_norm2(self.abs_pos_emb(torch.arange(inputs.shape[1]).repeat(inputs.shape[0]).view(inputs.shape[0], -1).to(inputs)))
-        )  # "I" in paper)
+        )
         return word_embeddings, abs_pos_emb
 
 
 class BERT(nn.Module, AbstractModel):
     """ Main class for BERT, having all of sub-blocks & modules such as self-attention, feed-forward, BERTEncoder ..
     Init Scale of BERT Hyper-Parameters, Embedding Layer, Encoder Blocks
-
     Args:
         cfg: configuration.CFG
 

@@ -5,7 +5,7 @@ from transformers import AutoTokenizer
 class CFG:
     """ Base Configuration Class for various experiments
     This Module has all of hyper-parameters for whole this project such as training, model, data, optimizer, scheduler, loss, metrics, ... etc
-    You can change hyper-parameters easily by changing json file in configuration folder
+    You can change hyper-parameters easily by changing json file in configuration data_folder
     Each json file has same name with model name, so you can easily find hyper-parameters for each model
     And then, individual JSON files adjust only the hyperparameters needed for individual experiments
     """

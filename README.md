@@ -62,6 +62,7 @@ Experiment Application
 #### 🤖 Attention
 
 - **[Transformer] Attention Is All You Need (Complete, [Review](https://qcqced123.github.io/nlp/transformer))**
+- **[BERT] BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding (Complete)**
 - [Longformer] Longformer: The Long-Document Transformer (Continue)
 - [Reformer] Reformer: The Efficient Transformer (Continue)
 - **[ELECTRA] Pre-training Text Encoders as Discriminators Rather Than Generators (Complete)**
@@ -86,3 +87,9 @@ Experiment Application
 
 - [ConvNext] A ConvNext for the 2020s (Continue)
 - [CoAtNet] Marrying Convolution and Attention for All Data Sizes (Continue)
+-
+
+#### 📐 Metric Learning
+
+- **[ContrastiveLoss] Dimensionality Reduction by Learning an Invariant Mapping (Complete)**
+- **[ArcFace] ArcFace: Additive Angular Margin Loss for Deep Face Recognition (Complete)**

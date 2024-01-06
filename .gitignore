@@ -38,7 +38,7 @@ ipython_config.py
 # KDE directory preferences
 .directory
 
-# Linux trash folder which might appear on any partition or disk
+# Linux trash data_folder which might appear on any partition or disk
 .Trash-*
 
 # .nfs files are created when an open file is removed but is still being accessed
@@ -346,7 +346,7 @@ cython_debug/
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
+#  option (not recommended) you can uncomment the following to ignore the entire idea data_folder.
 #.idea/
 
 ### Python Patch ###
