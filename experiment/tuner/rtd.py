@@ -21,23 +21,19 @@ def get_discriminator_input(inputs: Tensor, labels: Tensor, pred: Tensor) -> Tup
     # 1) flatten pred to 2D Tensor
     d_inputs, d_labels = inputs.clone().view(-1), None
     flat_pred, flat_label = pred.view(-1, pred.size(-1)), labels.view(-1)  # (batch * sequence, vocab_size)
-    print(f"flat_label: {flat_label}")
+
     # 2) get index of the highest probability of [MASK] token
     pred_token_idx, mlm_mask_idx = flat_pred.argmax(dim=-1), torch.where(flat_label != -100)
-    mask = flat_label.ge(-100)
-    pred_tokens = torch.masked_select(pred_token_idx, mask)  # select [MASK] token, return element
+    pred_tokens = torch.index_select(pred_token_idx, 0, mlm_mask_idx[0])
 
     # 3) convert [MASK] token to prediction token
-    print(f"d_inputs: {d_inputs}")
-    print(f"d_inputs shape: {d_inputs.shape}")
-    print(f"pred_tokens: {pred_tokens}")
-    print(f"pred_tokens shape: {pred_tokens.shape}")
-    print(f"mlm_mask_idx: {mlm_mask_idx}")
-    print(f"mlm_mask_idx: {mlm_mask_idx[0]}")
-    print(f"mlm_mask_idx shape: {mlm_mask_idx[0].shape}")
     d_inputs[mlm_mask_idx[0]] = pred_tokens
-    d_inputs = d_inputs.view(-1, pred.size(0))  # covert to [batch, sequence]
-    d_labels = torch.eq(inputs, flat_pred).long()  # unnecessary recover to original label shape, keep flatten state
+
+    # 4) make label for Discriminator
+    original_tokens = inputs.view(-1)
+    original_tokens[mlm_mask_idx[0]] = flat_label[mlm_mask_idx[0]]
+    d_labels = torch.eq(original_tokens, d_inputs).long()  # unnecessary recover to original label shape, keep flatten state
+    d_inputs = d_inputs.view(pred.size(0), -1)  # covert to [batch, sequence]
     return d_inputs, d_labels
 
 
