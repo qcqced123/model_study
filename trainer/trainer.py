@@ -664,7 +664,9 @@ class RTDTuner(PreTrainTuner):
 
             if self.cfg.n_gradient_accumulation_steps > 1:
                 loss = loss / self.cfg.n_gradient_accumulation_steps
-
+            print(loss)
+            print(g_loss)
+            print(d_loss)
             scaler.scale(loss).backward()
             losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
             g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
