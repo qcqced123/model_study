@@ -56,7 +56,7 @@ class ReplacedTokenDetection(nn.Module, AbstractTask):
         self.cfg = cfg
         self.model = ELECTRA(
             self.cfg,
-            self.select_model()
+            self.select_model
         )
         if self.cfg.gradient_checkpoint:
             self.model.gradient_checkpointing_enable()

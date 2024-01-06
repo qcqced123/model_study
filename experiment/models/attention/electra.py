@@ -111,10 +111,10 @@ class ELECTRA(nn.Module, AbstractModel):
     def __init__(self, cfg: CFG, model_func: Callable) -> None:
         super(ELECTRA, self).__init__()
         self.cfg = cfg
-        self.generator = model_func  # init generator
+        self.generator = model_func()  # init generator
         self.mlm_head = MLMHead(self.cfg)
 
-        self.discriminator = model_func  # init generator
+        self.discriminator = model_func()  # init generator
         self.rtd_head = RTDHead(self.cfg)
 
         self.share_embed = self.cfg.is_share_embed

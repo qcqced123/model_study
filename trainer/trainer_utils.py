@@ -1,3 +1,4 @@
+import icecream as ic
 import configuration as configuration
 import torch
 import torch.nn as nn
@@ -42,6 +43,7 @@ def get_optimizer_grouped_parameters(
         )
     else:
         layers = [model.model.embeddings] + list(model.model.encoder.layer)
+
     layers.reverse()
     lr = layerwise_lr
     for layer in layers:

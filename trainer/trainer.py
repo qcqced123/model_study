@@ -657,7 +657,7 @@ class RTDTuner(PreTrainTuner):
             padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
             batch_size = inputs.size(0)
             with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
-                g_logit, d_logit, d_labels = model(inputs, padding_mask)  # generator logit, discriminator logit
+                g_logit, d_logit, d_labels = model(inputs, labels, padding_mask)  # generator logit, discriminator logit
                 g_loss = criterion(g_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
                 d_loss = criterion(d_logit.view(-1, self.cfg.vocab_size), d_labels)
                 loss = g_loss + d_loss
