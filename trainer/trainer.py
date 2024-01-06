@@ -641,7 +641,7 @@ class RTDTuner(PreTrainTuner):
     ) -> Tuple[Any, Union[float, ndarray, ndarray]]:
         """ function for train loop with validation for each batch*N Steps
         ELECTRA has two loss, one is generator loss, the other is discriminator loss Each of two losses are quite different,
-        Models can be underfitted like tag-of-war if they simply sum losses with different characteristics
+        Models can be under-fitted like tag-of-war if they simply sum losses with different characteristics
         in situations where they share word embeddings, or backwards as it were.
 
         This is a demo version, so it's a simple matrix sum and backwards, but in the future we'll develop several gradient update methods
@@ -664,9 +664,6 @@ class RTDTuner(PreTrainTuner):
 
             if self.cfg.n_gradient_accumulation_steps > 1:
                 loss = loss / self.cfg.n_gradient_accumulation_steps
-            print(loss)
-            print(g_loss)
-            print(d_loss)
             scaler.scale(loss).backward()
             losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
             g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
