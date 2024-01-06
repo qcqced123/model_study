@@ -1,8 +1,9 @@
 # 🔬 ML/DL Experiment Application
 
-
 ### 🗂️ Application Structure
+
 This Project implement with Pytorch. The overview structure is as follows.
+
 ```
 Experiment Application
 │
@@ -15,6 +16,7 @@ Experiment Application
 │	├── models
 │	│	├── abstract_model.py
 │	│	├── attention
+│	│	│    ├── bert.py
 │	│	│    ├── transformer.py
 │	│	│    ├── vit.py  # vision transformer
 │	│	│    ├── deberta.py
@@ -52,37 +54,26 @@ Experiment Application
 └── trainer
     ├── train_loop.py
     ├── trainer.py
-    └── trainer_utils.py    
+    └── trainer_utils.py  
 ```
 
 ### 📝 Experiment List
 
 #### 🤖 Attention
+
 - **[Transformer] Attention Is All You Need (Complete, [Review](https://qcqced123.github.io/nlp/transformer))**
-
 - [Longformer] Longformer: The Long-Document Transformer (Continue)
-
 - [Reformer] Reformer: The Efficient Transformer (Continue)
-
 - **[ELECTRA] Pre-training Text Encoders as Discriminators Rather Than Generators (Complete)**
-
 - **[SpanBERT] SpanBERT: Improving Pre-training by Representing and Predicting Spans (Complete)**
-
 - [DistilBERT] DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter
-
 - [Sentence-BERT] Sentence Embeddings using Siamese BERT-Networks (Continue)
-
 - **[DeBERTa] DeBERTa: Decoding-Enhanced BERT with Disentangled-Attention (Complete, [Review](https://qcqced123.github.io/nlp/deberta))**
 - [GPT2] Language Models are Unsupervised Multitask Learners (Continue)
-
 - **[ViT] An Image Is Worth 16x16 Words: Transformers For Image Recognition At Scale (Complete, [Review](https://qcqced123.github.io/cv/vit))**
-
 - [SwinTransformer] Swin Transformer: Hierarchical Vision Transformer using Shifted Windows (Continue)
-
 - [CLIP] Learning Transferable Visual Models From Natural Language Supervision (Continue)
- 
 - [BLIP] BLIP: Bootstrapping Language-Image Pre-training for Unified Vision-Language Understanding and Generation (Continue)
-
 
 #### 🪢 Recurrent
 
@@ -91,8 +82,7 @@ Experiment Application
 - **[LSTM] Long Short-Term Memory (Complete)**
 - [ELMO] Deep contextualized word representations (Continue)
 
-#### 🔭 Convolution 
+#### 🔭 Convolution
 
 - [ConvNext] A ConvNext for the 2020s (Continue)
-
 - [CoAtNet] Marrying Convolution and Attention for All Data Sizes (Continue)
