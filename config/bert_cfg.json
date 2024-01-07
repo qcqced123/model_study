@@ -14,8 +14,8 @@
         "language": "20231101.en",
         "dataset": "MLMDataset",
         "arch_name": "attention",
-        "model_name": "deberta",
-        "module_name": "DeBERTa",
+        "model_name": "bert",
+        "module_name": "BERT",
         "tmp_model": "microsoft/deberta-v3-large",
         "task": "MaskedLanguageModel",
         "pooling": "MeanPooling"
@@ -35,10 +35,10 @@
         "n_folds": 4,
         "max_len": 512,
         "epochs": 20,
-        "batch_size": 20,
-        "val_batch_size": 16,
+        "batch_size": 32,
+        "val_batch_size": 32,
         "smart_batch": false,
-        "val_check": 10000
+        "val_check": 8000
     },
 
     "gradient_settings": {

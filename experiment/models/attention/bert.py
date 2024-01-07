@@ -25,14 +25,15 @@ def scaled_dot_product_attention(
         v: value matrix, shape (batch_size, seq_len, dim_head)
         dot_scale: scale factor for Q•K^T result
         attention_dropout: dropout for attention matrix, default rate is 0.1 from official paper
-        padding_mask: mask for attention matrix for MLM
+        padding_mask: mask for attention matrix for MLM, you must check whether or not padding token is 1
         attention_mask: mask for attention matrix for CLM
     Math:
         A = softmax(q•k^t/sqrt(D_h)), SA(z) = Av
     """
     attention_matrix = torch.matmul(q, k.transpose(-1, -2)) / dot_scale
     if padding_mask is not None:
-        attention_matrix = attention_matrix.masked_fill(padding_mask == 0, float('-inf'))
+        padding_mask = padding_mask.unsqueeze(1)
+        attention_matrix = attention_matrix.masked_fill(padding_mask == 1, float('-inf'))
     attention_dist = attention_dropout(
         F.softmax(attention_matrix, dim=-1)
     )

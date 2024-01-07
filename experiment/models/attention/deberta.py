@@ -22,7 +22,16 @@ def build_relative_position(x_size: int) -> Tensor:
     return rel_pos
 
 
-def disentangled_attention(q: Tensor, k: Tensor, v: Tensor, qr: Tensor, kr: Tensor, attention_dropout: torch.nn.Dropout, padding_mask: Tensor = None, attention_mask: Tensor = None) -> Tensor:
+def disentangled_attention(
+        q: Tensor,
+        k: Tensor,
+        v: Tensor,
+        qr: Tensor,
+        kr: Tensor,
+        attention_dropout: torch.nn.Dropout,
+        padding_mask: Tensor = None,
+        attention_mask: Tensor = None
+) -> Tensor:
     """
     Disentangled Self-attention for DeBERTa, same role as Module "DisentangledSelfAttention" in official Repo
     Args:
@@ -86,7 +95,7 @@ class AttentionHead(nn.Module):
     Args:
         dim_model: dimension of model's latent vector space, default 1024 from official paper
         dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
-        dropout: dropout rate for attention matrix, default 0.1 from official paper
+        attention_dropout_prob: dropout rate for attention matrix, default 0.1 from official paper
     Math:
         attention Matrix = c2c + c2p + p2c
         A = softmax(attention Matrix/sqrt(3*D_h)), SA(z) = Av
