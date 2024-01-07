@@ -11,7 +11,7 @@ Experiment Application
 │   ├──bert_cfg.json
 │   ├──electra_cfg.json
 │   ├──spanbert_cfg.json
-│	└──deberta_cfg.json
+│   └──deberta_cfg.json
 │
 ├── experiment
 │	├── losses
