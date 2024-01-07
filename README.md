@@ -7,6 +7,12 @@ This Project implement with Pytorch. The overview structure is as follows.
 ```
 Experiment Application
 │
+├── config
+│   ├──bert_cfg.json
+│   ├──electra_cfg.json
+│   ├──spanbert_cfg.json
+│	└──deberta_cfg.json
+│
 ├── experiment
 │	├── losses
 │	│	├── loss.py
