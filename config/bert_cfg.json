@@ -16,7 +16,7 @@
         "arch_name": "attention",
         "model_name": "bert",
         "module_name": "BERT",
-        "tmp_model": "microsoft/deberta-v3-large",
+        "tmp_model": "bert-base-uncased",
         "task": "MaskedLanguageModel",
         "pooling": "MeanPooling"
     },
@@ -27,7 +27,7 @@
         "seed": 42,
         "n_gpu": 1,
         "gpu_id": 0,
-        "num_workers": 2
+        "num_workers": 6
     },
 
     "data_settings": {
@@ -35,10 +35,10 @@
         "n_folds": 4,
         "max_len": 512,
         "epochs": 20,
-        "batch_size": 32,
-        "val_batch_size": 32,
+        "batch_size": 24,
+        "val_batch_size": 24,
         "smart_batch": false,
-        "val_check": 8000
+        "val_check": 7000
     },
 
     "gradient_settings": {
