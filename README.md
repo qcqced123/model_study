@@ -71,6 +71,7 @@ Experiment Application
 - **[BERT] BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding (Complete)**
 - [Longformer] Longformer: The Long-Document Transformer (Continue)
 - [Reformer] Reformer: The Efficient Transformer (Continue)
+- [Roformer] RoFormer: Enhanced Transformer with Rotary Position Embedding (Continue)
 - **[ELECTRA] Pre-training Text Encoders as Discriminators Rather Than Generators (Complete)**
 - **[SpanBERT] SpanBERT: Improving Pre-training by Representing and Predicting Spans (Complete)**
 - [DistilBERT] DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter
