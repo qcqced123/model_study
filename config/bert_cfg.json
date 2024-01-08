@@ -111,7 +111,7 @@
 
     "pretrain_options": {
         "is_mf_embedding": false,
-        "mlm_masking": "WholeWordMasking",
+        "mlm_masking": "SubWordMasking",
         "mlm_probability": 0.15,
         "rtd_masking": "MaskedLanguageModel",
         "generator": "DeBERTa",
