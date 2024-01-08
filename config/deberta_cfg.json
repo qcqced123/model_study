@@ -16,7 +16,7 @@
         "arch_name": "attention",
         "model_name": "deberta",
         "module_name": "DeBERTa",
-        "tmp_model": "microsoft/deberta-v3-large",
+        "tmp_model": "microsoft/deberta-base",
         "task": "MaskedLanguageModel",
         "pooling": "MeanPooling"
     },
@@ -27,7 +27,7 @@
         "seed": 42,
         "n_gpu": 1,
         "gpu_id": 0,
-        "num_workers": 2
+        "num_workers": 4
     },
 
     "data_settings": {
@@ -35,7 +35,7 @@
         "n_folds": 4,
         "max_len": 512,
         "epochs": 20,
-        "batch_size": 20,
+        "batch_size": 22,
         "val_batch_size": 16,
         "smart_batch": false,
         "val_check": 10000
@@ -111,7 +111,7 @@
 
     "pretrain_options": {
         "is_mf_embedding": false,
-        "mlm_masking": "WholeWordMasking",
+        "mlm_masking": "SubWordMasking",
         "mlm_probability": 0.15,
         "rtd_masking": "MaskedLanguageModel",
         "generator": "DeBERTa",
