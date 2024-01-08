@@ -35,7 +35,7 @@
         "n_folds": 4,
         "max_len": 512,
         "epochs": 2,
-        "batch_size": 24,
+        "batch_size": 22,
         "val_batch_size": 24,
         "smart_batch": false,
         "val_check": 13000
@@ -111,7 +111,7 @@
 
     "pretrain_options": {
         "is_mf_embedding": false,
-        "mlm_masking": "SubWordMasking",
+        "mlm_masking": "WholeWordMasking",
         "mlm_probability": 0.15,
         "rtd_masking": "MaskedLanguageModel",
         "generator": "DeBERTa",

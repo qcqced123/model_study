@@ -170,6 +170,7 @@ class PreTrainTuner:
 
             if self.cfg.n_gradient_accumulation_steps > 1:
                 loss = loss / self.cfg.n_gradient_accumulation_steps
+
             scaler.scale(loss).backward()
             losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
 
@@ -192,9 +193,6 @@ class PreTrainTuner:
                 scaler.step(optimizer)
                 scaler.update()
                 scheduler.step()
-            del inputs, labels, loss
-            torch.cuda.empty_cache()
-            gc.collect()
 
             # logging train loss, gradient norm, lr to wandb
             lr = scheduler.get_lr()[0]
@@ -229,9 +227,6 @@ class PreTrainTuner:
                         f'{self.cfg.checkpoint_dir}{self.cfg.mlm_masking}_{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
                     )
                     val_score_max = valid_loss
-                del valid_loss
-                gc.collect()
-                torch.cuda.empty_cache()
         return losses.avg * self.cfg.n_gradien_accumulation_steps, val_score_max
 
     def train_fn(self, loader_train, model, criterion, optimizer, scheduler, epoch, awp=None, swa_model=None, swa_start=None, swa_scheduler=None) -> Tuple[Tensor, Tensor, Tensor]:
@@ -253,6 +248,7 @@ class PreTrainTuner:
 
             if self.cfg.n_gradient_accumulation_steps > 1:
                 loss = loss / self.cfg.n_gradient_accumulation_steps
+
             scaler.scale(loss).backward()
             losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
 
@@ -275,10 +271,6 @@ class PreTrainTuner:
                 scaler.step(optimizer)
                 scaler.update()
                 scheduler.step()
-            del inputs, labels, loss
-            torch.cuda.empty_cache()
-            gc.collect()
-
         grad_norm = grad_norm.detach().cpu().numpy()
         return losses.avg, grad_norm, scheduler.get_lr()[0]
 
@@ -317,10 +309,6 @@ class PreTrainTuner:
                     wandb.log({
                         f'<Val Step> Valid {self.metric_list[i]}': scores
                     })
-
-            del inputs, labels, loss, flat_logit, flat_labels, scores
-            torch.cuda.empty_cache()
-            gc.collect()
         avg_scores = [valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
         return valid_losses.avg, avg_scores
 
@@ -350,10 +338,6 @@ class PreTrainTuner:
                 for i, metric_fn in enumerate(val_metric_list):
                     scores = metric_fn(flat_labels.detach().cpu().numpy(), flat_logit.detach().cpu().numpy())
                     valid_metrics[self.metric_list[i]].update(scores, batch_size)
-
-            del inputs, labels, loss, flat_logit, flat_labels, scores
-            torch.cuda.empty_cache()
-            gc.collect()
         avg_scores = [valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
         return valid_losses.avg, avg_scores
 
@@ -432,9 +416,6 @@ class SBOTuner(PreTrainTuner):
                 scaler.step(optimizer)
                 scaler.update()
                 scheduler.step()
-            del inputs, labels, loss, mlm_loss, sbo_loss, mlm_logit, sbo_logit, mask_labels, padding_mask
-            torch.cuda.empty_cache()
-            gc.collect()
 
             # logging train loss, gradient norm, lr to wandb
             lr = scheduler.get_lr()[0]
@@ -489,9 +470,6 @@ class SBOTuner(PreTrainTuner):
                         f'{self.cfg.checkpoint_dir}{self.cfg.task}_SpanBERT_{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
                     )
                     val_score_max = valid_loss
-                del valid_loss
-                gc.collect()
-                torch.cuda.empty_cache()
         return losses.avg * self.cfg.n_gradien_accumulation_steps, val_score_max
 
     def valid_fn(
@@ -552,10 +530,6 @@ class SBOTuner(PreTrainTuner):
                         f'<Val Step> MLM Valid {self.metric_list[i]}': mlm_scores,
                         f'<Val Step> SBO Valid {self.metric_list[i]}': sbo_scores,
                     })
-
-            del inputs, labels, loss, mlm_loss, sbo_loss, mlm_logit, sbo_logit, padding_mask, mask_labels
-            torch.cuda.empty_cache()
-            gc.collect()
         mlm_avg_scores = [mlm_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
         sbo_avg_scores = [sbo_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
         return valid_losses.avg, valid_mlm_losses.avg, valid_sbo_losses.avg, mlm_avg_scores, sbo_avg_scores
@@ -688,9 +662,6 @@ class RTDTuner(PreTrainTuner):
                 scaler.step(optimizer)
                 scaler.update()
                 scheduler.step()
-            del inputs, labels, loss, g_loss, d_loss, g_logit, d_logit, d_labels
-            torch.cuda.empty_cache()
-            gc.collect()
 
             # logging train loss, gradient norm, lr to wandb
             lr = scheduler.get_lr()[0]
@@ -800,10 +771,6 @@ class RTDTuner(PreTrainTuner):
                         f'<Val Step> Generator Valid {self.metric_list[i]}': g_scores,
                         f'<Val Step> Discriminator Valid {self.metric_list[i]}': d_scores,
                     })
-
-            del inputs, labels, loss, g_loss, d_loss, g_scores, d_scores, g_logit, d_logit, d_labels
-            torch.cuda.empty_cache()
-            gc.collect()
         g_avg_scores = [g_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
         d_avg_scores = [d_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
         return valid_losses.avg, valid_g_losses.avg, valid_d_losses.avg, g_avg_scores, d_avg_scores

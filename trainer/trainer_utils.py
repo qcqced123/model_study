@@ -1,4 +1,3 @@
-import icecream as ic
 import configuration as configuration
 import torch
 import torch.nn as nn
