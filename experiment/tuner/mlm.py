@@ -54,6 +54,7 @@ class SubWordMaskingCollator(PretrainingMaskingCollator):
     """
     def __init__(self, cfg: CFG) -> None:
         super(SubWordMaskingCollator, self).__init__()
+        self.cfg = cfg
         self.tokenizer = cfg.tokenizer
 
     def get_mask_tokens(
@@ -75,7 +76,6 @@ class SubWordMaskingCollator(PretrainingMaskingCollator):
             special_tokens_mask = torch.tensor(special_tokens_mask, dtype=torch.bool)
         else:
             special_tokens_mask = special_tokens_mask.bool()
-
         probability_matrix.masked_fill_(special_tokens_mask, value=0.0)
         masked_indices = torch.bernoulli(probability_matrix).bool()
         labels[~masked_indices] = -100
@@ -108,7 +108,7 @@ class SubWordMaskingCollator(PretrainingMaskingCollator):
         padding_mask = [self.get_padding_mask(x) for x in input_ids]
         input_ids = pad_sequence(input_ids, batch_first=True, padding_value=0)
         input_ids, labels = self.get_mask_tokens(
-            input_ids, self.cfg.mlm_probability, special_tokens_mask=self.special_tokens_mask
+            input_ids, self.cfg.mlm_probability
         )
         padding_mask = pad_sequence(padding_mask, batch_first=True, padding_value=True)
         return {
