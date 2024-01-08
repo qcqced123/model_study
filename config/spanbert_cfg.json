@@ -3,7 +3,7 @@
         "train": true,
         "test": false,
         "checkpoint_dir": "./saved/",
-        "state_dict": "WholeWordMasking_512_DeBERTa_state_dict.pth",
+        "state_dict": "WholeWordMasking_512_BERT_state_dict.pth",
         "load_pretrained": false,
         "resume": false,
         "name": "SpanBoundaryObjective",
@@ -14,9 +14,9 @@
         "language": "20231101.en",
         "dataset": "MLMDataset",
         "arch_name": "attention",
-        "model_name": "deberta",
-        "module_name": "DeBERTa",
-        "tmp_model": "microsoft/deberta-v3-large",
+        "model_name": "bert",
+        "module_name": "BERT",
+        "tmp_model": "bert-base-uncased",
         "task": "SpanBoundaryObjective",
         "pooling": "MeanPooling"
     },
@@ -34,16 +34,16 @@
         "split_ratio": 0.2,
         "n_folds": 4,
         "max_len": 512,
-        "epochs": 20,
-        "batch_size": 14,
+        "epochs": 2,
+        "batch_size": 16,
         "val_batch_size": 16,
         "smart_batch": false,
-        "val_check": 10000
+        "val_check": 15000
     },
 
     "gradient_settings": {
         "amp_scaler": true,
-        "gradient_checkpoint": true,
+        "gradient_checkpoint": false,
         "clipping_grad": true,
         "n_gradient_accumulation_steps": 1,
         "max_grad_norm": 1
@@ -74,7 +74,7 @@
         "scheduler": "constant_with_warmup",
         "batch_scheduler": true,
         "num_cycles": 2,
-        "warmup_ratio": 0.0025
+        "warmup_ratio": 0.021
     },
 
     "swa_options": {
@@ -114,15 +114,15 @@
         "mlm_masking": "WholeWordMasking",
         "mlm_probability": 0.15,
         "rtd_masking": "MaskedLanguageModel",
-        "generator": "DeBERTa",
-        "discriminator": "DeBERTa",
+        "generator": "BERT",
+        "discriminator": "BERT",
         "is_share_embed": true,
         "share_embed_method": "GDES",
         "is_generator_resume": false,
         "is_discriminator_resume": false,
         "generator_load_pretrained": false,
         "discriminator_load_pretrained": false,
-        "span_encoder_name": "DeBERTa",
+        "span_encoder_name": "BERT",
         "masking_budget": 0.15,
         "span_probability": 0.2,
         "max_span_length": 10,

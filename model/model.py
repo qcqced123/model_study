@@ -23,8 +23,6 @@ class MaskedLanguageModel(nn.Module, AbstractTask):
         self.cfg = cfg
         self.model = self.select_model()
         self.mlm_head = MLMHead(cfg)
-        if self.cfg.gradient_checkpoint:
-            self.model.gradient_checkpointing_enable()
 
         self._init_weights(self.model)
         self._init_weights(self.mlm_head)
@@ -34,6 +32,8 @@ class MaskedLanguageModel(nn.Module, AbstractTask):
                 torch.load(cfg.checkpoint_dir + cfg.state_dict),
                 strict=True
             )
+        if self.cfg.gradient_checkpoint:
+            self.model.gradient_checkpointing_enable()
 
     def feature(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
         outputs = self.model(inputs, padding_mask)
@@ -57,9 +57,6 @@ class ReplacedTokenDetection(nn.Module, AbstractTask):
             self.cfg,
             self.select_model
         )
-        if self.cfg.gradient_checkpoint:
-            self.model.gradient_checkpointing_enable()
-
         self._init_weights(self.model)
         if self.cfg.generator_load_pretrained:  # for generator
             self.model.generator.load_state_dict(
@@ -71,6 +68,8 @@ class ReplacedTokenDetection(nn.Module, AbstractTask):
                 torch.load(cfg.checkpoint_dir + cfg.state_dict),
                 strict=True
             )
+        if self.cfg.gradient_checkpoint:
+            self.model.gradient_checkpointing_enable()
 
     def forward(
             self,
@@ -107,8 +106,6 @@ class SpanBoundaryObjective(nn.Module, AbstractTask):
         )
         self.mlm_head = MLMHead(self.cfg)
         self.sbo_head = SBOHead(self.cfg)
-        if self.cfg.gradient_checkpoint:
-            self.model.gradient_checkpointing_enable()
 
         self._init_weights(self.model)
         self._init_weights(self.mlm_head)
@@ -119,6 +116,8 @@ class SpanBoundaryObjective(nn.Module, AbstractTask):
                 torch.load(cfg.checkpoint_dir + cfg.state_dict),
                 strict=True
             )
+        if self.cfg.gradient_checkpoint:
+            self.model.gradient_checkpointing_enable()
 
     def feature(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
         outputs = self.model(inputs, padding_mask)
