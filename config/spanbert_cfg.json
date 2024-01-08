@@ -35,15 +35,15 @@
         "n_folds": 4,
         "max_len": 512,
         "epochs": 2,
-        "batch_size": 16,
-        "val_batch_size": 16,
+        "batch_size": 18,
+        "val_batch_size": 18,
         "smart_batch": false,
-        "val_check": 15000
+        "val_check": 8000
     },
 
     "gradient_settings": {
         "amp_scaler": true,
-        "gradient_checkpoint": false,
+        "gradient_checkpoint": true,
         "clipping_grad": true,
         "n_gradient_accumulation_steps": 1,
         "max_grad_norm": 1

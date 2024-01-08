@@ -5,7 +5,7 @@
         "checkpoint_dir": "./saved/",
         "state_dict": "WholeWordMasking_512_BERT_state_dict.pth",
         "load_pretrained": false,
-        "resume": true,
+        "resume": false,
         "name": "MaskedLanguageModel",
         "datafolder": "wikipedia_en",
         "trainer": "PreTrainTuner",
@@ -35,10 +35,10 @@
         "n_folds": 4,
         "max_len": 512,
         "epochs": 2,
-        "batch_size": 22,
+        "batch_size": 24,
         "val_batch_size": 24,
         "smart_batch": false,
-        "val_check": 13000
+        "val_check": 7000
     },
 
     "gradient_settings": {

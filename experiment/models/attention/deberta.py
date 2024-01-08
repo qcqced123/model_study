@@ -270,7 +270,7 @@ class DeBERTaEncoder(nn.Module, AbstractModel):
         self.layer_norm = nn.LayerNorm(dim_model, eps=layer_norm_eps)  # for final-Encoder output
         self.gradient_checkpointing = gradient_checkpointing
 
-    def forward(self, inputs: Tensor, rel_pos_emb: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> tuple[Tensor, Tensor]:
+    def forward(self, inputs: Tensor, rel_pos_emb: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
         """
         inputs: embedding from input sequence
         rel_pos_emb: relative position embedding
@@ -418,10 +418,10 @@ class Embedding(nn.Module):
                 self.layer_norm1(self.word_embedding(inputs))
             )
         rel_pos_emb = self.hidden_dropout(
-            self.layer_norm2(self.rel_pos_emb(torch.arange(inputs.shape[1]).repeat(inputs.shape[0]).view(inputs.shape[0], -1).to(inputs)))
+            self.layer_norm2(self.rel_pos_emb(torch.arange(inputs.shape[1], device="cuda").repeat(inputs.shape[0]).view(inputs.shape[0], -1)))
         )
         abs_pos_emb = self.hidden_dropout(
-            self.layer_norm3(self.abs_pos_emb(torch.arange(inputs.shape[1]).repeat(inputs.shape[0]).view(inputs.shape[0], -1).to(inputs)))
+            self.layer_norm3(self.abs_pos_emb(torch.arange(inputs.shape[1], device="cuda").repeat(inputs.shape[0]).view(inputs.shape[0], -1)))
         )  # "I" in paper)
         return word_embeddings, rel_pos_emb, abs_pos_emb
 

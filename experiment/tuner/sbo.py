@@ -150,9 +150,9 @@ class SpanCollator(WholeWordMaskingCollator):
 
     def forward(self, batched: List[Dict[str, Tensor]]) -> Dict:
         """ Abstract Method for Collator, you must implement this method in child class """
-        input_ids = [torch.tensor(x["input_ids"]) for x in batched]
-        token_type_ids = [torch.tensor(x["token_type_ids"]) for x in batched]
-        attention_mask = [torch.tensor(x["attention_mask"]) for x in batched]
+        input_ids = [torch.as_tensor(x["input_ids"]) for x in batched]
+        token_type_ids = [torch.as_tensor(x["token_type_ids"]) for x in batched]
+        attention_mask = [torch.as_tensor(x["attention_mask"]) for x in batched]
 
         padding_mask = [self.get_padding_mask(x) for x in input_ids]
         padding_mask = pad_sequence(padding_mask, batch_first=True, padding_value=True)
@@ -166,7 +166,7 @@ class SpanCollator(WholeWordMaskingCollator):
                 ref_tokens.append(token)
             mask_labels.append(self._whole_word_mask(ref_tokens))
 
-        mask_labels = [torch.tensor(x) for x in mask_labels]
+        mask_labels = [torch.as_tensor(x) for x in mask_labels]
         mask_labels = pad_sequence(mask_labels, batch_first=True, padding_value=0)
         input_ids, labels = self.get_mask_tokens(
             input_ids,
@@ -263,7 +263,7 @@ class SBOHead(nn.Module):
             for j, span in enumerate(batch):  # span level
                 start, end = span["start"], span["end"]
                 length = end - start + 1
-                idx = torch.arange(length).to(self.cfg.device)
+                idx = torch.arange(length, device="cuda")   # .to(self.cfg.device)
                 context_s, context_e = hidden_states[i, start - 1, :], hidden_states[i, end + 1, :]
                 span_pos_emb = self.span_pos_emb(idx).squeeze(0)
                 if length > 1:
