@@ -9,8 +9,7 @@ from configuration import CFG
 
 
 def build_relative_position(x_size: int) -> Tensor:
-    """
-    Build Relative Position Matrix for Disentangled Self-attention in DeBERTa
+    """ Build Relative Position Matrix for Disentangled Self-attention in DeBERTa
     Args:
         x_size: sequence length of query matrix
     Reference:
@@ -32,8 +31,7 @@ def disentangled_attention(
         padding_mask: Tensor = None,
         attention_mask: Tensor = None
 ) -> Tensor:
-    """
-    Disentangled Self-attention for DeBERTa, same role as Module "DisentangledSelfAttention" in official Repo
+    """ Disentangled Self-attention for DeBERTa, same role as Module "DisentangledSelfAttention" in official Repo
     Args:
         q: content query matrix, shape (batch_size, seq_len, dim_head)
         k: content key matrix, shape (batch_size, seq_len, dim_head)
@@ -89,8 +87,7 @@ def disentangled_attention(
 
 
 class AttentionHead(nn.Module):
-    """
-    In this class, we implement workflow of single attention head in DeBERTa-Large
+    """ In this class, we implement workflow of single attention head in DeBERTa-Large
     This class has same role as Module "BertAttention" in official Repo (bert.py)
     Args:
         dim_model: dimension of model's latent vector space, default 1024 from official paper
@@ -124,8 +121,7 @@ class AttentionHead(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    """
-    In this class, we implement workflow of Multi-Head Self-attention for DeBERTa-Large
+    """ In this class, we implement workflow of Multi-Head Self-attention for DeBERTa-Large
     This class has same role as Module "BertAttention" in official Repo (bert.py)
     In official repo, they use post-layer norm, but we use pre-layer norm which is more stable & efficient for training
     Args:
@@ -161,8 +157,7 @@ class MultiHeadAttention(nn.Module):
 
 
 class FeedForward(nn.Module):
-    """
-    Class for Feed-Forward Network module in Transformer Encoder Block, this module for DeBERTa-Large
+    """ Class for Feed-Forward Network module in Transformer Encoder Block, this module for DeBERTa-Large
     Same role as Module "BertIntermediate" in official Repo (bert.py)
     Args:
         dim_model: dimension of model's latent vector space, default 1024
@@ -186,8 +181,7 @@ class FeedForward(nn.Module):
 
 
 class DeBERTaEncoderLayer(nn.Module):
-    """
-    Class for encoder model module in DeBERTa-Large
+    """ Class for encoder model module in DeBERTa-Large
     In this class, we stack each encoder_model module (Multi-Head attention, Residual-Connection, LayerNorm, FFN)
     This class has same role as Module "BertEncoder" in official Repo (bert.py)
     In official repo, they use post-layer norm, but we use pre-layer norm which is more stable & efficient for training
@@ -229,8 +223,7 @@ class DeBERTaEncoderLayer(nn.Module):
 
 
 class DeBERTaEncoder(nn.Module, AbstractModel):
-    """
-    In this class, 1) encode input sequence, 2) make relative position embedding, 3) stack num_layers DeBERTaEncoderLayer
+    """ In this class, 1) encode input sequence, 2) make relative position embedding, 3) stack num_layers DeBERTaEncoderLayer
     This class's forward output is not integrated with EMD Layer's output
     Output have ONLY result of disentangled self-attention
     All ops order is from official paper & repo by microsoft, but ops operating is slightly different,
@@ -272,10 +265,11 @@ class DeBERTaEncoder(nn.Module, AbstractModel):
 
     def forward(self, inputs: Tensor, rel_pos_emb: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
         """
-        inputs: embedding from input sequence
-        rel_pos_emb: relative position embedding
-        padding_mask: mask for Encoder padded token for speeding up to calculate attention score or MLM
-        attention_mask: mask for CLM
+        Args:
+            inputs: embedding from input sequence
+            rel_pos_emb: relative position embedding
+            padding_mask: mask for Encoder padded token for speeding up to calculate attention score or MLM
+            attention_mask: mask for CLM
         """
         layer_output = []
         x, pos_x = inputs, rel_pos_emb  # x is same as word_embeddings or embeddings in official repo
@@ -302,14 +296,15 @@ class DeBERTaEncoder(nn.Module, AbstractModel):
 
 
 class EnhancedMaskDecoder(nn.Module, AbstractModel):
-    """
-    Class for Enhanced Mask Decoder module in DeBERTa, which is used for Masked Language Model (Pretrain Task)
+    """ Class for Enhanced Mask Decoder module in DeBERTa, which is used for Masked Language Model (Pretrain Task)
     Word 'Decoder' means that denoise masked token by predicting masked token
     In official paper & repo, they might use 2 EMD layers for MLM Task
-        First-EMD layer: query input == Absolute Position Embedding
-        Second-EMD layer: query input == previous EMD layer's output
+        1) First-EMD layer: query input == Absolute Position Embedding
+        2) Second-EMD layer: query input == previous EMD layer's output
+
     And this layer's key & value input is output from last disentangled self-attention encoder layer,
     Also, all of them can share parameters and this layer also do disentangled self-attention
+
     In official repo, they implement this layer so hard coding that we can't understand directly & easily
     So, we implement this layer with our own style, as closely as possible to paper statement
     Notes:
@@ -363,11 +358,12 @@ class EnhancedMaskDecoder(nn.Module, AbstractModel):
 
     def forward(self, hidden_states: Tensor, abs_pos_emb: nn.Embedding, rel_pos_emb, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
         """
-        hidden_states: output from last disentangled self-attention encoder layer
-        abs_pos_emb: absolute position embedding
-        rel_pos_emb: relative position embedding
-        padding_mask: mask for Encoder padded token for speeding up to calculate attention score or MLM
-        attention_mask: mask for CLM
+        Args:
+            hidden_states: output from last disentangled self-attention encoder layer
+            abs_pos_emb: absolute position embedding
+            rel_pos_emb: relative position embedding
+            padding_mask: mask for Encoder padded token for speeding up to calculate attention score or MLM
+            attention_mask: mask for CLM
         """
         last_hidden_state, emd_hidden_states = self.emd_context_layer(
             hidden_states,
@@ -382,7 +378,7 @@ class EnhancedMaskDecoder(nn.Module, AbstractModel):
 class Embedding(nn.Module):
     """ DeBERTa Embedding Module class
     This Module set & initialize 3 Embedding Layers:
-        1) Word Embedding. 2) Relative Positional Embedding, 3) Absolute Positional Embedding
+        1) Word Embedding, 2) Relative Positional Embedding, 3) Absolute Positional Embedding
     Args:
         cfg: configuration.py
     Notes:
