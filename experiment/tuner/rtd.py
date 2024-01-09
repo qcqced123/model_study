@@ -21,7 +21,7 @@ def get_discriminator_input(inputs: Tensor, labels: Tensor, pred: Tensor) -> Tup
         d_labels: torch.Tensor, shape of [Sequence], for Discriminator labels
     """
     # 1) flatten pred to 2D Tensor
-    d_inputs, d_labels = inputs.clone().detach().view(-1), None
+    d_inputs, d_labels = inputs.clone().detach().view(-1), None  # detach to prevent back-propagation
     flat_pred, flat_label = pred.view(-1, pred.size(-1)), labels.view(-1)  # (batch * sequence, vocab_size)
 
     # 2) get index of the highest probability of [MASK] token

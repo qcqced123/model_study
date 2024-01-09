@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 from experiment.models.abstract_model import AbstractModel
 from torch import Tensor
@@ -38,10 +39,9 @@ class ELECTRA(nn.Module, AbstractModel):
         self.discriminator = model_func()  # init generator
         self.rtd_head = RTDHead(self.cfg)
 
-        self.share_embed = self.cfg.is_share_embed
-        if self.share_embed:
-            self.share_embed_method = self.cfg.share_embed_method
-            self.discriminator.embeddings = self.generator.embeddings
+        # sharing options
+        self.share_embed_method = self.cfg.share_embed_method  # ES, GDES
+        self.discriminator.embeddings = self.generator.embeddings  # share word embedding layer
 
     def forward(self, inputs: Tensor, labels: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor, Tensor]:
         assert inputs.ndim == 2, f'Expected (batch, sequence) got {inputs.shape}'

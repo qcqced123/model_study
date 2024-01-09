@@ -537,11 +537,24 @@ class SBOTuner(PreTrainTuner):
 
 class RTDTuner(PreTrainTuner):
     """ Trainer class for Replaced Token Detection, you can use three types of training options
+
     1) Embedding Sharing (ES):
         Generator & Discriminator share word embedding, Backward jointly with sum of two losses
+        (loss = generator loss + discriminator loss)
+
     2) No Embedding Sharing (NES):
-        Generator & Discriminator have different word embedding, Backward separately with two losses
+        Generator & Discriminator do not share same word embedding, Backward separately with two losses
+        generator loss update ONLY generator's weight, discriminator loss update ONLY discriminator's weight
+        This method prevents 'tag-of-war' problem, but has pain point: it takes more time & memory to train
+
     3) Gradient Disentangled Embedding Sharing (GDES):
+        Generator & Discriminator share word embedding limited, GDES Algorithms are described blow:
+            1) share generator & discriminator's word embedding
+            2) calculate MLM loss, backward with MLM loss for updating generator's word embedding (shared)
+            3) make inputs for discriminator used by generator's output
+            4) initialize Delta Embedding matrix with zero matrix, and then
+               sum Delta E, Generator's E(must be detached), called Discriminator's E
+            5) calculate BCE loss, backward with BCE loss for updating Discriminator's E
 
     """
     def __init__(self, cfg: CFG, generator: torch.Generator) -> None:
