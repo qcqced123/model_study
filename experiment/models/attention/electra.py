@@ -1,7 +1,7 @@
 import torch.nn as nn
 from experiment.models.abstract_model import AbstractModel
 from torch import Tensor
-from typing import Tuple, List, Callable
+from typing import Tuple, Callable
 from einops.layers.torch import Rearrange
 from experiment.tuner.mlm import MLMHead
 from experiment.tuner.rtd import get_discriminator_input, RTDHead

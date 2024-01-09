@@ -119,7 +119,14 @@ class SpanBoundaryObjective(nn.Module, AbstractTask):
         if self.cfg.gradient_checkpoint:
             self.model.gradient_checkpointing_enable()
 
-    def feature(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
+    def feature(
+        self,
+        inputs: Tensor,
+        padding_mask: Tensor,
+        attention_mask: Tensor = None
+    ) -> Tuple[Tensor, Tensor]:
+        """ Extract feature embedding from backbone model
+        """
         outputs = self.model(inputs, padding_mask)
         return outputs
 
@@ -130,6 +137,8 @@ class SpanBoundaryObjective(nn.Module, AbstractTask):
         mask_labels: Tensor,
         attention_mask: Tensor = None
     ) -> Tuple[Tensor, Tensor]:
+        """ Forwarding inputs into model & return 2 types of logit
+        """
         last_hidden_states, _ = self.feature(inputs, padding_mask)
         mlm_logit = self.mlm_head(last_hidden_states)
         sbo_logit = self.sbo_head(

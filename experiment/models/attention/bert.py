@@ -17,8 +17,7 @@ def scaled_dot_product_attention(
     padding_mask: Tensor = None,
     attention_mask: Tensor = None
 ) -> Tensor:
-    """
-    Scaled Dot-Product attention with Masking for Decoder
+    """ Scaled Dot-Product attention with Masking for padding mask
     Args:
         q: query matrix, shape (batch_size, seq_len, dim_head)
         k: key matrix, shape (batch_size, seq_len, dim_head)
@@ -42,8 +41,7 @@ def scaled_dot_product_attention(
 
 
 class AttentionHead(nn.Module):
-    """
-    In this class, we implement workflow of single attention head in BERT
+    """ In this class, we implement workflow of single attention head in BERT
     This class has same role as Module "BertAttention" in official Repo (bert.py)
     Args:
         dim_model: dimension of model's latent vector space, default 1024 from official paper
@@ -115,8 +113,7 @@ class MultiHeadAttention(nn.Module):
 
 
 class FeedForward(nn.Module):
-    """
-    Class for Feed-Forward Network module in Transformer Encoder Block, this module for BERT
+    """ Class for Feed-Forward Network module in Transformer Encoder Block, this module for BERT
     Same role as Module "BertIntermediate" in official Repo (bert.py)
     Args:
         dim_model: dimension of model's latent vector space, default 1024
@@ -183,8 +180,7 @@ class BERTEncoderLayer(nn.Module):
 
 
 class BERTEncoder(nn.Module, AbstractModel):
-    """
-    In this class, 1) encode input sequence, 2) make absolute position embedding,
+    """ In this class, 1) encode input sequence, 2) make absolute position embedding,
     3) matrix sum with word embedding, absolute position embedding
     4) stack num_layers BERTEncoderLayer
     Output have ONLY result of pure self-attention
@@ -220,10 +216,12 @@ class BERTEncoder(nn.Module, AbstractModel):
         self.gradient_checkpointing = gradient_checkpointing
 
     def forward(self, inputs: Tensor, abs_pos_emb: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> tuple[Tensor, Tensor]:
-        """ inputs: embedding from input sequence
-        abs_pos_emb: absolute position embedding
-        padding_mask: mask for Encoder padded token for speeding up to calculate attention score or MLM
-        attention_mask: mask for CLM
+        """
+        Args:
+            inputs: embedding from input sequence
+            abs_pos_emb: absolute position embedding
+            padding_mask: mask for Encoder padded token for speeding up to calculate attention score or MLM
+            attention_mask: mask for CLM
         """
         layer_output = []
         x = inputs + abs_pos_emb  # add absolute position embedding with word embedding
@@ -290,6 +288,7 @@ class Embedding(nn.Module):
 class BERT(nn.Module, AbstractModel):
     """ Main class for BERT, having all of sub-blocks & modules such as self-attention, feed-forward, BERTEncoder ..
     Init Scale of BERT Hyper-Parameters, Embedding Layer, Encoder Blocks
+
     Args:
         cfg: configuration.CFG
 
