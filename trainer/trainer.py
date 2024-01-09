@@ -536,7 +536,13 @@ class SBOTuner(PreTrainTuner):
 
 
 class RTDTuner(PreTrainTuner):
-    """ Trainer class for Replaced Token Detection
+    """ Trainer class for Replaced Token Detection, you can use three types of training options
+    1) Embedding Sharing (ES):
+        Generator & Discriminator share word embedding, Backward jointly with sum of two losses
+    2) No Embedding Sharing (NES):
+        Generator & Discriminator have different word embedding, Backward separately with two losses
+    3) Gradient Disentangled Embedding Sharing (GDES):
+
     """
     def __init__(self, cfg: CFG, generator: torch.Generator) -> None:
         super(RTDTuner, self).__init__(cfg, generator)
@@ -630,6 +636,7 @@ class RTDTuner(PreTrainTuner):
             labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
             padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
             batch_size = inputs.size(0)
+
             with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
                 g_logit, d_logit, d_labels = model(inputs, labels, padding_mask)  # generator logit, discriminator logit
                 g_loss = criterion(g_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
@@ -638,6 +645,7 @@ class RTDTuner(PreTrainTuner):
 
             if self.cfg.n_gradient_accumulation_steps > 1:
                 loss = loss / self.cfg.n_gradient_accumulation_steps
+
             scaler.scale(loss).backward()
             losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
             g_losses.update(g_loss.detach().cpu().numpy(), batch_size)

@@ -10,16 +10,18 @@ def get_discriminator_input(inputs: Tensor, labels: Tensor, pred: Tensor) -> Tup
     1) get index of the highest probability of [MASK] token in pred tensor
     2) convert [MASK] token to prediction token
     3) make label for Discriminator
+
     Args:
         inputs: pure inputs from tokenizing by tokenizer
         labels: labels for masked language modeling
         pred: prediction tensor from Generator
+
     returns:
         d_inputs: torch.Tensor, shape of [Batch, Sequence], for Discriminator inputs
         d_labels: torch.Tensor, shape of [Sequence], for Discriminator labels
     """
     # 1) flatten pred to 2D Tensor
-    d_inputs, d_labels = inputs.clone().view(-1), None
+    d_inputs, d_labels = inputs.clone().detach().view(-1), None
     flat_pred, flat_label = pred.view(-1, pred.size(-1)), labels.view(-1)  # (batch * sequence, vocab_size)
 
     # 2) get index of the highest probability of [MASK] token
