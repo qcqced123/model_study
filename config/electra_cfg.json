@@ -16,7 +16,7 @@
         "arch_name": "attention",
         "model_name": "bert",
         "module_name": "BERT",
-        "tmp_model": "bert-base-uncased",
+        "tokenizer_name": "bert-base-uncased",
         "task": "ReplacedTokenDetection",
         "pooling": "MeanPooling"
     },

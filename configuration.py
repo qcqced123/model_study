@@ -23,9 +23,9 @@ class CFG:
     dataset = 'MLMDataset'  # dataset_class.dataclass.py -> MLMDataset, CLMDataset ... etc
     arch_name = 'attention'
     model_name = 'deberta'
-    module_name = 'DeBERTa'
-    tmp_model = 'microsoft/deberta-v3-large'  # later, remove this line
-    tokenizer = AutoTokenizer.from_pretrained(tmp_model)
+    module_name = 'BERT'
+    tokenizer_name = 'microsoft/deberta-v3-large'  # later, remove this line
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
     task = 'MaskedLanguageModel'  # options: MaskedLanguageModel, CasualLanguageModel
     pooling = 'MeanPooling'
 
