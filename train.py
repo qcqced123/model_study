@@ -19,11 +19,9 @@ notebook_login()  # login to huggingface hub
 
 def main(config_path: str, cfg: CFG) -> None:
     sync_config(OmegaConf.load(config_path))  # load json config
-    # cfg = OmegaConf.structured(CFG)
-    # OmegaConf.merge(cfg)  # merge with cli_options
     getattr(train_loop, cfg.loop)(cfg)  # init object
 
 
 if __name__ == '__main__':
-    main('config/electra_cfg.json', CFG)
+    main('config/pretrain/electra.json', CFG)
 

@@ -8,10 +8,13 @@ This Project implement with Pytorch. The overview structure is as follows.
 Experiment Application
 │
 ├── config
-│   ├──bert_cfg.json
-│   ├──electra_cfg.json
-│   ├──spanbert_cfg.json
-│   └──deberta_cfg.json
+│	├── pretrain
+│       │    ├──bert.json
+│       │    ├──electra.json
+│       │    ├──spanbert.json
+│       │    ├──deberta.json
+│       │    └──deberta_v3.json
+│       └── fine_tune
 │
 ├── experiment
 │	├── losses

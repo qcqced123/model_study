@@ -7,6 +7,17 @@ from collections import OrderedDict
 from configuration import CFG
 
 
+def sync_config(json_config: json) -> None:
+    """ Sync configuration settings from json file to CFG
+    Args:
+        json_config: json configuration file, loaded from OmegaConf.load('your_path.json')
+
+    """
+    for settings in json_config.values():
+        for k, v in settings.items():
+            setattr(CFG, k, v)
+
+
 def ensure_dir(dirname):
     dirname = Path(dirname)
     if not dirname.is_dir():
@@ -50,6 +61,7 @@ def prepare_device(n_gpu_use):
     list_ids = list(range(n_gpu_use))
     return device, list_ids
 
+
 class MetricTracker:
     def __init__(self, *keys, writer=None):
         self.writer = writer
@@ -72,14 +84,3 @@ class MetricTracker:
 
     def result(self):
         return dict(self._data.average)
-
-
-def sync_config(json_config: json) -> None:
-    """ Sync configuration settings from json file to CFG
-    Args:
-        json_config: json configuration file, loaded from OmegaConf.load('your_path.json')
-
-    """
-    for settings in json_config.values():
-        for k, v in settings.items():
-            setattr(CFG, k, v)
