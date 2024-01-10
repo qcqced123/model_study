@@ -13,7 +13,7 @@
         "arch_name": "attention",
         "model_name": "deberta",
         "module_name": "DeBERTa",
-        "tmp_model": "microsoft/deberta-v3-large",
+        "tokenizer_name": "microsoft/deberta-v3-large",
         "task": "MaskedLanguageModel"
     },
 

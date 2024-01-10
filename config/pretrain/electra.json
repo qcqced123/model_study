@@ -17,8 +17,27 @@
         "model_name": "bert",
         "module_name": "BERT",
         "tokenizer_name": "bert-base-uncased",
-        "task": "ReplacedTokenDetection",
-        "pooling": "MeanPooling"
+        "task": "ReplacedTokenDetection"
+    },
+
+    "pretrain_options": {
+        "is_mf_embedding": false,
+        "mlm_masking": "WholeWordMasking",
+        "mlm_probability": 0.15,
+        "rtd_masking": "MaskedLanguageModel",
+        "generator": "BERT",
+        "discriminator": "BERT",
+        "is_share_embed": true,
+        "share_embed_method": "GDES",
+        "is_generator_resume": false,
+        "is_discriminator_resume": false,
+        "generator_load_pretrained": false,
+        "discriminator_load_pretrained": false,
+        "span_encoder_name": "BERT",
+        "masking_budget": 0.15,
+        "span_probability": 0.2,
+        "max_span_length": 10,
+        "is_concatenate": true
     },
 
     "common_settings": {
@@ -107,25 +126,5 @@
         "nth_awp_start_epoch": 1,
         "awp_eps": 1e-2,
         "awp_lr": 1e-4
-    },
-
-    "pretrain_options": {
-        "is_mf_embedding": false,
-        "mlm_masking": "WholeWordMasking",
-        "mlm_probability": 0.15,
-        "rtd_masking": "MaskedLanguageModel",
-        "generator": "BERT",
-        "discriminator": "BERT",
-        "is_share_embed": true,
-        "share_embed_method": "GDES",
-        "is_generator_resume": false,
-        "is_discriminator_resume": false,
-        "generator_load_pretrained": false,
-        "discriminator_load_pretrained": false,
-        "span_encoder_name": "BERT",
-        "masking_budget": 0.15,
-        "span_probability": 0.2,
-        "max_span_length": 10,
-        "is_concatenate": true
     }
 }

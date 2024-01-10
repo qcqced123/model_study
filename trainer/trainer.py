@@ -25,7 +25,7 @@ from trainer.trainer_utils import AverageMeter, AWP, get_dataloader, get_swa_sch
 
 
 class PreTrainTuner:
-    """ Trainer class for Pre-Train Pipeline, such as MLM, CLM ... etc
+    """ Trainer class for Pre-Train Pipeline, such as MLM, CLM
     So, if you want set options, go to cfg.json file or configuration.py
     Args:
         cfg: configuration module, configuration.py
