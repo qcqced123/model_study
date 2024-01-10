@@ -14,6 +14,10 @@ class ELECTRA(nn.Module, AbstractModel):
     Init Scale of ELECTRA Hyper-Parameters, Embedding Layer, Encoder Blocks of Generator, Discriminator
     You can select any other backbone model architecture for Generator & Discriminator, in original paper, BERT is used
 
+    if you want to use pure ELECTRA, you should set share_embedding = es
+    elif you want to use ELECTRA with GDES, you should set share_embedding = gdes
+    GDES is new approach of embedding sharing method from DeBERTa-V3 paper
+
     Args:
         cfg: configuration.CFG
         model_func: make model instance in runtime from config.json
@@ -31,6 +35,7 @@ class ELECTRA(nn.Module, AbstractModel):
 
     References:
         https://arxiv.org/pdf/2003.10555.pdf
+        https://arxiv.org/pdf/2111.09543.pdf
         https://github.com/google-research/electra
     """
     def __init__(self, cfg: CFG, model_func: Callable) -> None:
@@ -43,16 +48,16 @@ class ELECTRA(nn.Module, AbstractModel):
         self.rtd_head = RTDHead(self.cfg)
 
         self.share_embed_method = self.cfg.share_embed_method  # instance, es, gdes
-        if self.share_embed_method == 'gdes':
+        if self.share_embed_method == 'GDES':
             self.word_bias = nn.Parameter(
-                torch.zeros(self.discriminator.embeddings.word_embeddings.weight)
+                torch.zeros_like(self.discriminator.embeddings.word_embedding.weight)
             )
             self.abs_pos_bias = nn.Parameter(
-                torch.zeros(self.discriminator.embeddings.abs_pos_emb.weight)
+                torch.zeros_like(self.discriminator.embeddings.abs_pos_emb.weight)
             )
             if self.cfg.model_name == 'DeBERTa':
                 self.rel_pos_bias = nn.Parameter(
-                    torch.zeros(self.discriminator.embeddings.rel_pos_emb.weight)
+                    torch.zeros_like(self.discriminator.embeddings.rel_pos_emb.weight)
                 )
         self.share_embedding()
 
@@ -61,25 +66,25 @@ class ELECTRA(nn.Module, AbstractModel):
         if self.share_embed_method == 'instance':  # Instance Sharing
             self.discriminator.embeddings = self.generator.embeddings
 
-        elif self.share_embed_method == 'es':  # ES (Embedding Sharing)
-            self.discriminator.embeddings.word_embeddings.weight = self.generator.word_embeddings.weight
+        elif self.share_embed_method == 'ES':  # ES (Embedding Sharing)
+            self.discriminator.embeddings.word_embedding.weight = self.generator.embeddings.word_embedding.weight
             self.discriminator.embeddings.abs_pos_emb.weight = self.generator.embeddings.abs_pos_emb.weight
 
             if self.cfg.model_name == 'DeBERTa':
                 self.discriminator.embeddings.rel_pos_emb.weight = self.generator.embeddings.rel_pos_emb.weight
 
-        elif self.share_embed_method == 'gdes':  # GDES (Generator Discriminator Embedding Sharing)
-            self.discriminator.embeddings.word_embeddings.weight = (
-                self.generator.embeddings.word_embeddings.weight.detach() + self.word_bias
+        elif self.share_embed_method == 'GDES':  # GDES (Generator Discriminator Embedding Sharing)
+            self.discriminator.embeddings.word_embedding.weight = (
+                nn.Parameter(self.generator.embeddings.word_embedding.weight.detach() + self.word_bias)
             )
 
             self.discriminator.embeddings.abs_pos_emb.weight = (
-                self.generator.embeddings.abs_pos_emb.weight.detach() + self.abs_pos_bias
+                nn.Parameter(self.generator.embeddings.abs_pos_emb.weight.detach() + self.abs_pos_bias)
             )
 
             if self.cfg.model_name == 'DeBERTa':
                 self.discriminator.embeddings.rel_pos_emb.weight = (
-                    self.generator.embeddings.rel_pos_emb.weight.detach() + self.rel_pos_bias
+                    nn.Parameter(self.generator.embeddings.rel_pos_emb.weight.detach() + self.rel_pos_bias)
                 )
 
     def generator_fw(
@@ -90,6 +95,11 @@ class ELECTRA(nn.Module, AbstractModel):
             attention_mask: Tensor = None
     ) -> Tuple[Tensor, Tensor, Tensor]:
         """ forward pass for generator model
+        Args:
+            inputs: generator inputs
+            labels: labels for generator outputs, using to make discriminator inputs, labels
+            padding_mask: padding mask for inputs
+            attention_mask: attention mask for inputs
         """
         assert inputs.ndim == 2, f'Expected (batch, sequence) got {inputs.shape}'
         g_last_hidden_states, _ = self.generator(
@@ -105,7 +115,6 @@ class ELECTRA(nn.Module, AbstractModel):
             labels,
             g_logit,
         )
-
         return g_logit, d_inputs, d_labels
 
     def discriminator_fw(
@@ -115,6 +124,10 @@ class ELECTRA(nn.Module, AbstractModel):
             attention_mask: Tensor = None
     ) -> Tensor:
         """ forward pass for discriminator model
+        Args:
+            inputs: discriminator inputs
+            padding_mask: padding mask for inputs
+            attention_mask: attention mask for inputs
         """
         assert inputs.ndim == 2, f'Expected (batch, sequence) got {inputs.shape}'
         d_last_hidden_states, _ = self.discriminator(

@@ -33,9 +33,10 @@ def train_loop(cfg: CFG) -> None:
     model, criterion, val_criterion, val_metric_list, optimizer, lr_scheduler, awp, swa_model, swa_scheduler = train_input.model_setting(
         len_train
     )
+    train_val_method = train_input.train_val_fn if not cfg.share_embed_method == 'GDES' else train_input.gdes_train_val_fn
     for epoch in tqdm(range(cfg.epochs)):
         print(f'[{epoch + 1}/{cfg.epochs}] Train & Validation')
-        train_loss, val_score_max = train_input.train_val_fn(
+        train_loss, val_score_max = train_val_method(
             loader_train,
             model,
             criterion,
@@ -47,9 +48,6 @@ def train_loop(cfg: CFG) -> None:
             val_score_max,
             epoch,
             awp,
-            swa_model,
-            cfg.swa_start,
-            swa_scheduler
         )
         wandb.log({
             '<epoch> Train Loss': train_loss,

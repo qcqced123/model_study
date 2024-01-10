@@ -14,6 +14,8 @@ class CFG:
     train, test = True, False
     checkpoint_dir = 'saved/model'
     resume, load_pretrained, state_dict = True, False, '/'
+    generator_state_dict = '/'
+    discriminator_state_dict = '/'
     name = 'MaskedLanguageModel'
     datafolder = 'wikipedia_en'
     trainer = 'PreTrainTuner'
@@ -118,11 +120,12 @@ class CFG:
     generator = 'DeBERTa'
     discriminator = 'DeBERTa'
     is_share_embed = True
-    share_embed_method = 'GDES'  # options: GDES (Gradient Disentangled Embedding Space)
+    share_embed_method = 'ES'  # options: GDES (Gradient Disentangled Embedding Space)
     is_generator_resume = False  # load pretrained generator's weight
     is_discriminator_resume = False  # load pretrained discriminator's weight
     generator_load_pretrained = False
     discriminator_load_pretrained = False
+    discriminator_lambda = 10
     generator_num_layers = 6
     discriminator_num_layers = 12
 

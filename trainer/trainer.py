@@ -538,16 +538,16 @@ class SBOTuner(PreTrainTuner):
 class RTDTuner(PreTrainTuner):
     """ Trainer class for Replaced Token Detection, you can use three types of training options
 
-    1) Embedding Sharing (ES):
+    1) Embedding Sharing (ES) (Implemented):
         Generator & Discriminator share word embedding, Backward jointly with sum of two losses
         (loss = generator loss + discriminator loss)
 
-    2) No Embedding Sharing (NES):
+    2) No Embedding Sharing (NES) (Not Implemented):
         Generator & Discriminator do not share same word embedding, Backward separately with two losses
         generator loss update ONLY generator's weight, discriminator loss update ONLY discriminator's weight
         This method prevents 'tag-of-war' problem, but has pain point: it takes more time & memory to train
 
-    3) Gradient Disentangled Embedding Sharing (GDES):
+    3) Gradient Disentangled Embedding Sharing (GDES) (Implemented):
         Generator & Discriminator share word embedding limited, GDES Algorithms are described blow:
             1) share generator & discriminator's word embedding
             2) calculate MLM loss, backward with MLM loss for updating generator's word embedding (shared)
@@ -560,28 +560,31 @@ class RTDTuner(PreTrainTuner):
     def __init__(self, cfg: CFG, generator: torch.Generator) -> None:
         super(RTDTuner, self).__init__(cfg, generator)
         self.model_name = self.cfg.module_name
-        self.generator_name = self.cfg.generator
-        self.discriminator_name = self.cfg.discriminator
+        self.share_embed_method = self.cfg.share_embed_method
 
     def model_setting(self, len_train: int):
         """ Function for init backbone's configuration & train utils setting,
         The design is inspired by the Builder Pattern
         """
         model = getattr(task, self.cfg.task)(self.cfg)
+
         # load checkpoint when you set 'resume' to True
         if self.cfg.is_generator_resume:
             model.model.generator.load_state_dict(
-                torch.load(self.cfg.checkpoint_dir + self.cfg.state_dict)
+                torch.load(self.cfg.checkpoint_dir + self.cfg.generator_state_dict),
+                strict=False
             )
         if self.cfg.is_discriminator_resume:
             model.model.discriminator.load_state_dict(
-                torch.load(self.cfg.checkpoint_dir + self.cfg.state_dict)
+                torch.load(self.cfg.checkpoint_dir + self.cfg.discriminator_state_dict),
+                strict=True
             )
         model.to(self.cfg.device)
 
         criterion = getattr(loss, self.cfg.loss_fn)(self.cfg.reduction)
         val_criterion = getattr(loss, self.cfg.val_loss_fn)(self.cfg.reduction)
         val_metric_list = [getattr(metric, f'{metrics}') for metrics in self.metric_list]
+
         grouped_optimizer_params = get_optimizer_grouped_parameters(
             model,
             self.cfg.layerwise_lr,
@@ -637,8 +640,7 @@ class RTDTuner(PreTrainTuner):
         Models can be under-fitted like tag-of-war if they simply sum losses with different characteristics
         in situations where they share word embeddings, or backwards as it were.
 
-        This is a demo version, so it's a simple matrix sum and backwards, but in the future we'll develop several gradient update methods
-        like GDES as described in the DeBERTa-V3 paper.
+        This Method is implemented for Embedding Sharing
         """
         scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
         losses, g_losses, d_losses = AverageMeter(), AverageMeter(), AverageMeter()
@@ -648,13 +650,21 @@ class RTDTuner(PreTrainTuner):
             inputs = batch['input_ids'].to(self.cfg.device)
             labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
             padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
-            batch_size = inputs.size(0)
+            batch_size = inputs.size(0)  # same as ES, GDES
 
             with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
-                g_logit, d_logit, d_labels = model(inputs, labels, padding_mask)  # generator logit, discriminator logit
+                g_logit, d_inputs, d_labels = model.generator_fw(
+                    inputs,
+                    labels,
+                    padding_mask
+                )
+                d_logit = model.discriminator_fw(
+                    d_inputs,
+                    padding_mask
+                )
                 g_loss = criterion(g_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
                 d_loss = criterion(d_logit.view(-1, 2), d_labels)
-                loss = g_loss + d_loss
+                loss = g_loss + self.cfg.discriminator_lambda*d_loss
 
             if self.cfg.n_gradient_accumulation_steps > 1:
                 loss = loss / self.cfg.n_gradient_accumulation_steps
@@ -742,6 +752,146 @@ class RTDTuner(PreTrainTuner):
                 torch.cuda.empty_cache()
         return losses.avg * self.cfg.n_gradien_accumulation_steps, val_score_max
 
+    def gdes_train_val_fn(
+            self,
+            loader_train,
+            model: nn.Module,
+            criterion: nn.Module,
+            optimizer,
+            scheduler,
+            loader_valid,
+            val_criterion: nn.Module,
+            val_metric_list: List[Callable],
+            val_score_max: float,
+            epoch: int = None,
+            awp: nn.Module = None,
+    ) -> Tuple[Any, Union[float, ndarray, ndarray]]:
+        """ Function for train loop with validation for each batch*N Steps
+        ELECTRA has two loss, one is generator loss, the other is discriminator loss Each of two losses are quite different,
+        Models can be under-fitted like tag-of-war if they simply sum losses with different characteristics
+        in situations where they share word embeddings, or backwards as it were.
+
+        This Method is implemented for Gradient Disentangled Embedding Sharing (GDES)
+        """
+        scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
+        g_losses, d_losses = AverageMeter(), AverageMeter()
+        model.train()
+        for step, batch in enumerate(tqdm(loader_train)):
+            optimizer.zero_grad()
+            inputs = batch['input_ids'].to(self.cfg.device)
+            labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
+            padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
+            batch_size = inputs.size(0)
+
+            # Tune for Generator
+            with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
+                g_logit, d_inputs, d_labels = model.generator_fw(
+                    inputs,
+                    labels,
+                    padding_mask
+                )
+                g_loss = criterion(g_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
+            if self.cfg.n_gradient_accumulation_steps > 1:
+                g_loss = g_loss / self.cfg.n_gradient_accumulation_steps
+
+            scaler.scale(g_loss).backward()
+            g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
+
+            if self.cfg.clipping_grad and (step + 1) % self.cfg.n_gradient_accumulation_steps == 0 or self.cfg.n_gradient_accumulation_steps == 1:
+                scaler.unscale_(optimizer)
+                g_grad_norm = torch.nn.utils.clip_grad_norm(
+                    model.parameters(),
+                    self.cfg.max_grad_norm * self.cfg.n_gradient_accumulation_steps
+                )
+                scaler.step(optimizer)
+                scaler.update()
+                scheduler.step()
+
+            # Tune for Discriminator
+            with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
+                d_logit = model.discriminator_fw(
+                    d_inputs,
+                    padding_mask
+                )
+                d_loss = criterion(d_logit.view(-1, 2), d_labels)
+
+            if self.cfg.n_gradient_accumulation_steps > 1:
+                d_losses = d_losses / self.cfg.n_gradient_accumulation_steps
+
+            scaler.scale(d_loss).backward()
+            d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
+
+            if self.cfg.clipping_grad and (step + 1) % self.cfg.n_gradient_accumulation_steps == 0 or self.cfg.n_gradient_accumulation_steps == 1:
+                scaler.unscale_(optimizer)
+                d_grad_norm = torch.nn.utils.clip_grad_norm(
+                    model.parameters(),
+                    self.cfg.max_grad_norm * self.cfg.n_gradient_accumulation_steps
+                )
+                scaler.step(optimizer)
+                scaler.update()
+                scheduler.step()
+
+            # logging train loss, gradient norm, lr to wandb
+            lr = scheduler.get_lr()[0]
+            g_grad_norm = g_grad_norm.detach().cpu().numpy()
+            d_grad_norm = d_grad_norm.detach().cpu().numpy()
+
+            avg_loss = g_losses.avg + d_losses.avg
+            wandb.log({
+                '<Per Step> Total Train Loss': avg_loss,
+                '<Per Step> Generator Train Loss': g_losses.avg,
+                '<Per Step> Discriminator Train Loss': d_losses.avg,
+                '<Per Step> Generator Gradient Norm': g_grad_norm,
+                '<Per Step> Discriminator Gradient Norm': d_grad_norm,
+                '<Per Step> lr': lr,
+            })
+
+            # validate for each size of batch*N Steps
+            if ((step + 1) % self.cfg.val_check == 0) or ((step + 1) == len(loader_train)):
+                valid_loss, g_valid_loss, d_valid_loss, g_score_list, d_score_list = self.valid_fn(
+                    loader_valid,
+                    model,
+                    val_criterion,
+                    val_metric_list
+                )
+                print(f'[Validation Check: {step}/{len(loader_train)}] Total Train Loss: {np.round(avg_loss, 4)}')
+                print(f'[Validation Check: {step}/{len(loader_train)}] Generator Train Loss: {np.round(g_losses.avg, 4)}')
+                print(f'[Validation Check: {step}/{len(loader_train)}] Discriminator Train Loss: {np.round(d_losses.avg, 4)}')
+
+                print(f'[Validation Check: {step}/{len(loader_train)}] Total Valid Loss: {np.round(valid_loss, 4)}')
+                print(f'[Validation Check: {step}/{len(loader_train)}] Generator Valid Loss: {np.round(g_valid_loss, 4)}')
+                print(f'[Validation Check: {step}/{len(loader_train)}] Discriminator Valid Loss: {np.round(d_valid_loss, 4)}')
+
+                for i, metric_name in enumerate(self.metric_list):
+                    print(f'[{step}/{len(loader_train)}] Generator Valid {metric_name}: {g_score_list[i]}')
+                    print(f'[{step}/{len(loader_train)}] Discriminator Valid {metric_name}: {d_score_list[i]}')
+                    wandb.log({
+                        f'<Validation Check Step> Generator Valid {metric_name}': g_score_list[i],
+                        f'<Validation Check Step> Discriminator Valid {metric_name}': d_score_list[i]
+                    })
+
+                wandb.log({
+                    '<Val Check Step> Total Train Loss': avg_loss,
+                    '<Val Check Step> Generator Train Loss': g_losses.avg,
+                    '<Val Check Step> Discriminator Train Loss': d_losses.avg,
+                    '<Val Check Step> Total Valid Loss': valid_loss,
+                    '<Val Check Step> Generator Valid Loss': g_valid_loss,
+                    '<Val Check Step> Discriminator Valid Loss': d_valid_loss,
+                })
+
+                if val_score_max >= valid_loss:
+                    print(f'[Update] Valid Score : ({val_score_max:.4f} => {valid_loss:.4f}) Save Parameter')
+                    print(f'Best Score: {valid_loss}')
+                    torch.save(
+                        model.state_dict(),
+                        f'{self.cfg.checkpoint_dir}{self.cfg.rtd_masking}_{self.cfg.mlm_masking}_ELECTRA_{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
+                    )
+                    val_score_max = valid_loss
+                del valid_loss
+                gc.collect()
+                torch.cuda.empty_cache()
+        return avg_loss * self.cfg.n_gradient_accumulation_steps, val_score_max
+
     def valid_fn(
             self,
             loader_valid,
@@ -795,4 +945,3 @@ class RTDTuner(PreTrainTuner):
         g_avg_scores = [g_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
         d_avg_scores = [d_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
         return valid_losses.avg, valid_g_losses.avg, valid_d_losses.avg, g_avg_scores, d_avg_scores
-
