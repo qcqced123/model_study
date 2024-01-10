@@ -124,6 +124,8 @@ class CFG:
     is_discriminator_resume = False  # load pretrained discriminator's weight
     generator_load_pretrained = False
     discriminator_load_pretrained = False
+    generator_num_layers = 6
+    discriminator_num_layers = 12
 
     # 3) SBO Option
     span_encoder_name = 'DeBERTa'

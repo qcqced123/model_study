@@ -21,7 +21,7 @@ class MaskedLanguageModel(nn.Module, AbstractTask):
     def __init__(self, cfg: CFG) -> None:
         super(MaskedLanguageModel, self).__init__()
         self.cfg = cfg
-        self.model = self.select_model()
+        self.model = self.select_model(cfg.num_layers)
         self.mlm_head = MLMHead(cfg)
 
         self._init_weights(self.model)
@@ -45,48 +45,6 @@ class MaskedLanguageModel(nn.Module, AbstractTask):
         return logit
 
 
-class ReplacedTokenDetection(nn.Module, AbstractTask):
-    """ Custom Model for RTD Task, which is used for pre-training Auto-Encoding Model such as ELECTRA
-    Args:
-        cfg: configuration.CFG
-    """
-    def __init__(self, cfg: CFG) -> None:
-        super(ReplacedTokenDetection, self).__init__()
-        self.cfg = cfg
-        self.model = ELECTRA(
-            self.cfg,
-            self.select_model
-        )
-        self._init_weights(self.model)
-        if self.cfg.generator_load_pretrained:  # for generator
-            self.model.generator.load_state_dict(
-                torch.load(cfg.checkpoint_dir + cfg.state_dict),
-                strict=True
-            )
-        if self.cfg.discriminator_load_pretrained:  # for discriminator
-            self.model.discriminator.load_state_dict(
-                torch.load(cfg.checkpoint_dir + cfg.state_dict),
-                strict=True
-            )
-        if self.cfg.gradient_checkpoint:
-            self.model.gradient_checkpointing_enable()
-
-    def forward(
-            self,
-            inputs: Tensor,
-            labels: Tensor,
-            padding_mask: Tensor,
-            attention_mask: Tensor = None
-    ) -> Tuple[Tensor, Tensor, Tensor]:
-        g_logit, d_logit, d_labels = self.model(
-            inputs,
-            labels,
-            padding_mask,
-            attention_mask
-        )
-        return g_logit, d_logit, d_labels
-
-
 class SpanBoundaryObjective(nn.Module, AbstractTask):
     """ Custom Model for SBO Task, which is used for pre-training Auto-Encoding Model such as SpanBERT
     Original SpanBERT has two tasks, MLM & SBO, so we need to create instance of MLMHead & SBOHead
@@ -102,7 +60,7 @@ class SpanBoundaryObjective(nn.Module, AbstractTask):
         self.cfg = cfg
         self.model = SpanBERT(
             self.cfg,
-            self.select_model()
+            self.select_model(cfg.num_layers)
         )
         self.mlm_head = MLMHead(self.cfg)
         self.sbo_head = SBOHead(self.cfg)
@@ -146,3 +104,75 @@ class SpanBoundaryObjective(nn.Module, AbstractTask):
             mask_labels
         )
         return mlm_logit, sbo_logit
+
+
+class ReplacedTokenDetection(nn.Module, AbstractTask):
+    """ Custom Model for RTD Task, which is used for pre-training Auto-Encoding Model such as ELECTRA
+
+    We add 3 task options:
+        1) select masking method:
+            - pure MLM (Sub-Word Masking)
+            - WWM (Whole Word Masking)
+            - SBO (Span Boundary Objective)
+        2) select backbone model: BERT, DeBERTa, ...
+        3) select sharing embedding method:
+            - ES (Embedding Sharing)
+            - GDES (Generator Discriminator Embedding Sharing)
+
+    you can select any other 3 options in config json file
+    Args:
+        cfg: configuration.CFG
+    """
+    def __init__(self, cfg: CFG) -> None:
+        super(ReplacedTokenDetection, self).__init__()
+        self.cfg = cfg
+        self.model = ELECTRA(
+            self.cfg,
+            self.select_model
+        )
+        if self.cfg.generator_load_pretrained:  # for generator
+            self.model.generator.load_state_dict(
+                torch.load(cfg.checkpoint_dir + cfg.state_dict),
+                strict=False
+            )
+        if self.cfg.discriminator_load_pretrained:  # for discriminator
+            self.model.discriminator.load_state_dict(
+                torch.load(cfg.checkpoint_dir + cfg.state_dict),
+                strict=True
+            )
+        self._init_weights(self.model)
+        if self.cfg.gradient_checkpoint:
+            self.model.gradient_checkpointing_enable()
+
+    def generator_fw(
+            self,
+            inputs: Tensor,
+            labels: Tensor,
+            padding_mask: Tensor,
+            attention_mask: Tensor = None
+    ) -> Tuple[Tensor, Tensor, Tensor]:
+        """ forward pass for generator model
+        """
+        g_logit, d_inputs, d_labels = self.model.generator_fw(
+            inputs,
+            labels,
+            padding_mask,
+            attention_mask
+        )
+        return g_logit, d_inputs, d_labels
+
+    def discriminator_fw(
+            self,
+            inputs: Tensor,
+            padding_mask: Tensor,
+            attention_mask: Tensor = None
+    ) -> Tensor:
+        """ forward pass for discriminator model
+        """
+        d_logit = self.model.discriminator_fw(
+            inputs,
+            padding_mask,
+            attention_mask
+        )
+        return d_logit
+

@@ -48,14 +48,14 @@ class AbstractTask:
             module.weight.data.fill_(1.0)
             module.bias.data.zero_()
 
-    def select_model(self) -> nn.Module:
+    def select_model(self, num_layers: int) -> nn.Module:
         """ Selects architecture for each task,
         you can easily select your model for experiment from json config files
         1) select .py file from input config settings
         2) select class object from input config settings
         Args:
-            cfg (:obj:`configuration.CFG`):
-                The configuration to select architecture
+            num_layers:
+                The number of layers for each task
         Returns:
             model (:obj:`nn.Module`):
                 The model to use for each task
@@ -65,6 +65,6 @@ class AbstractTask:
         spec = importlib.util.spec_from_file_location(self.cfg.model_name, arch_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        model = getattr(module, self.cfg.module_name)(self.cfg)  # get instance in runtime
+        model = getattr(module, self.cfg.module_name)(self.cfg, num_layers)  # get instance in runtime
         return model
 

@@ -33,17 +33,29 @@ class ELECTRA(nn.Module, AbstractModel):
     def __init__(self, cfg: CFG, model_func: Callable) -> None:
         super(ELECTRA, self).__init__()
         self.cfg = cfg
-        self.generator = model_func()  # init generator
+        self.generator = model_func(cfg.generator_num_layers)  # init generator
         self.mlm_head = MLMHead(self.cfg)
 
-        self.discriminator = model_func()  # init generator
+        self.discriminator = model_func(cfg.discriminator_num_layers)  # init generator
         self.rtd_head = RTDHead(self.cfg)
 
         # sharing options
         self.share_embed_method = self.cfg.share_embed_method  # ES, GDES
-        self.discriminator.embeddings = self.generator.embeddings  # share word embedding layer
+        if self.share_embed_method == 'ES':
+            self.discriminator.embeddings = self.generator.embeddings
+        elif self.share_embed_method == 'GDES':
+            self.share_embedding = True
+            self.generator.embeddings = self.discriminator.embeddings
 
-    def forward(self, inputs: Tensor, labels: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor, Tensor]:
+    def generator_fw(
+            self,
+            inputs: Tensor,
+            labels: Tensor,
+            padding_mask: Tensor,
+            attention_mask: Tensor = None
+    ) -> Tuple[Tensor, Tensor, Tensor]:
+        """ forward pass for generator model
+        """
         assert inputs.ndim == 2, f'Expected (batch, sequence) got {inputs.shape}'
         g_last_hidden_states, _ = self.generator(
             inputs,
@@ -58,12 +70,24 @@ class ELECTRA(nn.Module, AbstractModel):
             labels,
             g_logit,
         )
+
+        return g_logit, d_inputs, d_labels
+
+    def discriminator_fw(
+            self,
+            inputs: Tensor,
+            padding_mask: Tensor,
+            attention_mask: Tensor = None
+    ) -> Tensor:
+        """ forward pass for discriminator model
+        """
+        assert inputs.ndim == 2, f'Expected (batch, sequence) got {inputs.shape}'
         d_last_hidden_states, _ = self.discriminator(
-            d_inputs,
+            inputs,
             padding_mask,
             attention_mask
         )
         d_logit = self.rtd_head(
             d_last_hidden_states
         )
-        return g_logit, d_logit, d_labels
+        return d_logit

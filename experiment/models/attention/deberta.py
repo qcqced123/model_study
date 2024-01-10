@@ -427,6 +427,13 @@ class DeBERTa(nn.Module, AbstractModel):
     Main class for DeBERTa, having all of sub-blocks & modules such as Disentangled Self-attention, DeBERTaEncoder, EMD
     Init Scale of DeBERTa Hyper-Parameters, Embedding Layer, Encoder Blocks, EMD Blocks
     And then make 3-types of Embedding Layer, Word Embedding, Absolute Position Embedding, Relative Position Embedding
+
+    Args:
+        cfg: configuration.CFG
+        num_layers: number of EncoderLayer, default 12 for base model
+        this value must be init by user for objective task
+        if you select electra, you should set num_layers twice (generator, discriminator)
+
     Var:
         vocab_size: size of vocab in DeBERTa's Native Tokenizer
         max_seq: maximum sequence length
@@ -439,8 +446,10 @@ class DeBERTa(nn.Module, AbstractModel):
         dim_ffn: dimension of feed-forward network, same as intermediate size in official repo
         hidden_dropout_prob: dropout rate for embedding, hidden layer
         attention_probs_dropout_prob: dropout rate for attention
+
     Notes:
         MLM Task is not implemented yet, will be implemented ASAP, but you can get token encode output (embedding)
+
     References:
         https://arxiv.org/abs/2006.03654
         https://arxiv.org/abs/2111.09543
@@ -451,14 +460,14 @@ class DeBERTa(nn.Module, AbstractModel):
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/disentangled_attention.py
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/apps/models/masked_language_model.py
     """
-    def __init__(self, cfg: CFG) -> None:
+    def __init__(self, cfg: CFG, num_layers: int = 12) -> None:
         super(DeBERTa, self).__init__()
         # Init Scale of DeBERTa Module
         self.cfg = cfg
         self.vocab_size = cfg.vocab_size
         self.max_seq = cfg.max_seq
         self.max_rel_pos = 2 * self.max_seq
-        self.num_layers = cfg.num_layers
+        self.num_layers = num_layers
         self.num_attention_heads = cfg.num_attention_heads
         self.num_emd = cfg.num_emd
         self.dim_model = cfg.dim_model
