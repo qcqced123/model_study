@@ -25,6 +25,9 @@ class ELECTRA(nn.Module, AbstractModel):
         discriminator: Discriminator, which is used for detecting replaced tokens for RTD
                        should select backbone model ex) BERT, RoBERTa, DeBERTa, ...
         share_embedding: whether or not to share embedding layer (word & pos) between Generator & Discriminator
+        self.word_bias: Delta_E in paper
+        self.abs_pos_bias: Delta_E in paper
+        self.rel_pos_bias: Delta_E in paper
 
     References:
         https://arxiv.org/pdf/2003.10555.pdf
@@ -39,13 +42,45 @@ class ELECTRA(nn.Module, AbstractModel):
         self.discriminator = model_func(cfg.discriminator_num_layers)  # init generator
         self.rtd_head = RTDHead(self.cfg)
 
-        # sharing options
-        self.share_embed_method = self.cfg.share_embed_method  # ES, GDES
-        if self.share_embed_method == 'ES':
+        self.share_embed_method = self.cfg.share_embed_method  # instance, es, gdes
+        if self.share_embed_method == 'gdes':
+            self.word_bias = nn.Parameter(
+                torch.zeros(self.discriminator.embeddings.word_embeddings.weight)
+            )
+            self.abs_pos_bias = nn.Parameter(
+                torch.zeros(self.discriminator.embeddings.abs_pos_emb.weight)
+            )
+            if self.cfg.model_name == 'DeBERTa':
+                self.rel_pos_bias = nn.Parameter(
+                    torch.zeros(self.discriminator.embeddings.rel_pos_emb.weight)
+                )
+        self.share_embedding()
+
+    def share_embedding(self) -> None:
+        """ init sharing options """
+        if self.share_embed_method == 'instance':  # Instance Sharing
             self.discriminator.embeddings = self.generator.embeddings
-        elif self.share_embed_method == 'GDES':
-            self.share_embedding = True
-            self.generator.embeddings = self.discriminator.embeddings
+
+        elif self.share_embed_method == 'es':  # ES (Embedding Sharing)
+            self.discriminator.embeddings.word_embeddings.weight = self.generator.word_embeddings.weight
+            self.discriminator.embeddings.abs_pos_emb.weight = self.generator.embeddings.abs_pos_emb.weight
+
+            if self.cfg.model_name == 'DeBERTa':
+                self.discriminator.embeddings.rel_pos_emb.weight = self.generator.embeddings.rel_pos_emb.weight
+
+        elif self.share_embed_method == 'gdes':  # GDES (Generator Discriminator Embedding Sharing)
+            self.discriminator.embeddings.word_embeddings.weight = (
+                self.generator.embeddings.word_embeddings.weight.detach() + self.word_bias
+            )
+
+            self.discriminator.embeddings.abs_pos_emb.weight = (
+                self.generator.embeddings.abs_pos_emb.weight.detach() + self.abs_pos_bias
+            )
+
+            if self.cfg.model_name == 'DeBERTa':
+                self.discriminator.embeddings.rel_pos_emb.weight = (
+                    self.generator.embeddings.rel_pos_emb.weight.detach() + self.rel_pos_bias
+                )
 
     def generator_fw(
             self,

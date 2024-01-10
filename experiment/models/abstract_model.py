@@ -58,3 +58,12 @@ class AbstractModel:
         """ Deactivates gradient checkpointing for the current model
         """
         self._set_gradient_checkpointing(enable=False)
+
+    def share_embedding(self) -> None:
+        """ method for embedding share (E), there are 2 options:
+            1) share embedding instances => share all of attributes of embedding instances
+            2) share embedding weights => share only embedding weights
+                - implementation's are quite different for each backbone model's architecture
+        implementations are optional, so you can implement embedding share method above 2 options in your model
+        """
+        pass
