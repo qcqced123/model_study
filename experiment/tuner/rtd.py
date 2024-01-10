@@ -32,7 +32,7 @@ def get_discriminator_input(inputs: Tensor, labels: Tensor, pred: Tensor) -> Tup
     d_inputs[mlm_mask_idx[0]] = pred_tokens
 
     # 4) make label for Discriminator
-    original_tokens = inputs.view(-1)
+    original_tokens = inputs.clone().detach().view(-1)
     original_tokens[mlm_mask_idx[0]] = flat_label[mlm_mask_idx[0]]
     d_labels = torch.eq(original_tokens, d_inputs).long()  # unnecessary recover to original label shape, keep flatten state
     d_inputs = d_inputs.view(pred.size(0), -1)  # covert to [batch, sequence]
