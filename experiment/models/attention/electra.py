@@ -55,37 +55,57 @@ class ELECTRA(nn.Module, AbstractModel):
             self.abs_pos_bias = nn.Parameter(
                 torch.zeros_like(self.discriminator.embeddings.abs_pos_emb.weight)
             )
+
+            delattr(self.discriminator.embeddings.word_embedding, 'weight')
+            self.discriminator.embeddings.word_embedding.register_parameter('weight', self.word_bias)
+
+            delattr(self.discriminator.embeddings.abs_pos_emb, 'weight')
+            self.discriminator.embeddings.abs_pos_emb.register_parameter('weight', self.abs_pos_bias)
+
             if self.cfg.model_name == 'DeBERTa':
                 self.rel_pos_bias = nn.Parameter(
                     torch.zeros_like(self.discriminator.embeddings.rel_pos_emb.weight)
                 )
+                delattr(self.discriminator.embeddings.rel_pos_emb, 'weight')
+                self.discriminator.embeddings.rel_pos_emb.register_parameter('weight', self.rel_pos_emb)
         self.share_embedding()
 
     def share_embedding(self) -> None:
         """ init sharing options """
-        if self.share_embed_method == 'instance':  # Instance Sharing
-            self.discriminator.embeddings = self.generator.embeddings
+        def discriminator_hook(module, *inputs):
+            if self.share_embed_method == 'instance':  # Instance Sharing
+                self.discriminator.embeddings = self.generator.embeddings
 
-        elif self.share_embed_method == 'ES':  # ES (Embedding Sharing)
-            self.discriminator.embeddings.word_embedding.weight = self.generator.embeddings.word_embedding.weight
-            self.discriminator.embeddings.abs_pos_emb.weight = self.generator.embeddings.abs_pos_emb.weight
+            elif self.share_embed_method == 'ES':  # ES (Embedding Sharing)
+                self.discriminator.embeddings.word_embedding.weight = self.generator.embeddings.word_embedding.weight
+                self.discriminator.embeddings.abs_pos_emb.weight = self.generator.embeddings.abs_pos_emb.weight
+                if self.cfg.model_name == 'DeBERTa':
+                    self.discriminator.embeddings.rel_pos_emb.weight = self.generator.embeddings.rel_pos_emb.weight
 
-            if self.cfg.model_name == 'DeBERTa':
-                self.discriminator.embeddings.rel_pos_emb.weight = self.generator.embeddings.rel_pos_emb.weight
+            elif self.share_embed_method == 'GDES':  # GDES (Generator Discriminator Embedding Sharing)
+                g_w_emb = self.generator.embeddings.word_embedding
+                d_w_emb = self.discriminator.embeddings.word_embedding
+                self._set_param(d_w_emb, 'weight', g_w_emb.weight.detach() + d_w_emb.weight)
 
-        elif self.share_embed_method == 'GDES':  # GDES (Generator Discriminator Embedding Sharing)
-            self.discriminator.embeddings.word_embedding.weight = (
-                nn.Parameter(self.generator.embeddings.word_embedding.weight.detach() + self.word_bias)
-            )
+                g_p_emb = self.generator.embeddings.abs_pos_emb
+                d_p_emb = self.discriminator.embeddings.abs_pos_emb
+                self._set_param(d_p_emb, 'weight', g_p_emb.weight.detach() + d_p_emb.weight)
 
-            self.discriminator.embeddings.abs_pos_emb.weight = (
-                nn.Parameter(self.generator.embeddings.abs_pos_emb.weight.detach() + self.abs_pos_bias)
-            )
+                if self.cfg.model_name == 'DeBERTa':
+                    g_rp_emb = self.generator.embeddings.rel_pos_emb
+                    d_rp_emb = self.discriminator.embeddings.rel_pos_emb
+                    self._set_param(d_rp_emb, 'weight', g_rp_emb.weight.detach() + d_rp_emb.weight)
+        self.discriminator.register_forward_pre_hook(discriminator_hook)
 
-            if self.cfg.model_name == 'DeBERTa':
-                self.discriminator.embeddings.rel_pos_emb.weight = (
-                    nn.Parameter(self.generator.embeddings.rel_pos_emb.weight.detach() + self.rel_pos_bias)
-                )
+    @staticmethod
+    def _set_param(module, param_name, value):
+        """ set param for module
+        References:
+             https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/apps/tasks/rtd_task.py#L132
+        """
+        if hasattr(module, param_name):
+            delattr(module, param_name)
+        module.register_buffer(param_name, value)
 
     def generator_fw(
             self,
@@ -110,10 +130,11 @@ class ELECTRA(nn.Module, AbstractModel):
         g_logit = self.mlm_head(
             g_last_hidden_states
         )
+        pred = g_logit.clone().detach()
         d_inputs, d_labels = get_discriminator_input(
             inputs,
             labels,
-            g_logit,
+            pred,
         )
         return g_logit, d_inputs, d_labels
 

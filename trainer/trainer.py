@@ -104,14 +104,9 @@ class PreTrainTuner:
         criterion = getattr(loss, self.cfg.loss_fn)(self.cfg.reduction)
         val_criterion = getattr(loss, self.cfg.val_loss_fn)(self.cfg.reduction)
         val_metric_list = [getattr(metric, f'{metrics}') for metrics in self.metric_list]
-        grouped_optimizer_params = get_optimizer_grouped_parameters(
-            model,
-            self.cfg.layerwise_lr,
-            self.cfg.layerwise_weight_decay,
-            self.cfg.layerwise_lr_decay
-        )
+
         optimizer = getattr(transformers, self.cfg.optimizer)(
-            params=grouped_optimizer_params,
+            params=model.parameters(),
             lr=self.cfg.layerwise_lr,
             eps=self.cfg.layerwise_adam_epsilon,
             correct_bias=not self.cfg.layerwise_use_bertadam
@@ -154,7 +149,7 @@ class PreTrainTuner:
             swa_model: nn.Module = None,
             swa_start: int = None,
             swa_scheduler=None
-    ) -> Tuple[Any, Union[float, ndarray], float]:
+    ) -> Tuple[Any, Union[float, ndarray, ndarray]]:
         """ function for train loop with validation for each batch*N Steps """
         scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
         losses = AverageMeter()
@@ -228,7 +223,7 @@ class PreTrainTuner:
                         f'{self.cfg.checkpoint_dir}{self.cfg.mlm_masking}_{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
                     )
                     val_score_max = valid_loss
-        return losses.avg * self.cfg.n_gradien_accumulation_steps, val_score_max, val_score_max_2
+        return losses.avg * self.cfg.n_gradient_accumulation_steps, val_score_max
 
     def train_fn(self, loader_train, model, criterion, optimizer, scheduler, epoch, awp=None, swa_model=None, swa_start=None, swa_scheduler=None) -> Tuple[Tensor, Tensor, Tensor]:
         """ function for train loop
@@ -368,7 +363,7 @@ class SBOTuner(PreTrainTuner):
             swa_model: nn.Module = None,
             swa_start: int = None,
             swa_scheduler=None
-    ) -> Tuple[Any, Union[float, Any], float]:
+    ) -> tuple[Any, Union[float, Any]]:
         """ function for train loop with validation for each batch*N Steps
         SpanBERT has two loss, one is MLM loss, the other is SBO loss
         """
@@ -474,7 +469,7 @@ class SBOTuner(PreTrainTuner):
                         f'{self.cfg.checkpoint_dir}{self.cfg.task}_SpanBERT_{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
                     )
                     val_score_max = valid_loss
-        return losses.avg * self.cfg.n_gradien_accumulation_steps, val_score_max, val_score_max_2
+        return losses.avg * self.cfg.n_gradient_accumulation_steps, val_score_max
 
     def valid_fn(
             self,
@@ -560,6 +555,8 @@ class RTDTuner(PreTrainTuner):
                sum Delta E, Generator's E(must be detached), called Discriminator's E
             5) calculate BCE loss, backward with BCE loss for updating Discriminator's E
 
+    we return only discriminator's train & validation loss, because we use discriminator's checkpoint for fine-tuning
+    but save both generator & discriminator's state_dict for tuning process
     """
     def __init__(self, cfg: CFG, generator: torch.Generator) -> None:
         super(RTDTuner, self).__init__(cfg, generator)
@@ -589,14 +586,8 @@ class RTDTuner(PreTrainTuner):
         val_criterion = getattr(loss, self.cfg.val_loss_fn)(self.cfg.reduction)
         val_metric_list = [getattr(metric, f'{metrics}') for metrics in self.metric_list]
 
-        grouped_optimizer_params = get_optimizer_grouped_parameters(
-            model,
-            self.cfg.layerwise_lr,
-            self.cfg.layerwise_weight_decay,
-            self.cfg.layerwise_lr_decay
-        )
         optimizer = getattr(transformers, self.cfg.optimizer)(
-            params=grouped_optimizer_params,
+            params=model.parameters(),
             lr=self.cfg.layerwise_lr,
             eps=self.cfg.layerwise_adam_epsilon,
             correct_bias=not self.cfg.layerwise_use_bertadam
@@ -639,13 +630,15 @@ class RTDTuner(PreTrainTuner):
             swa_model: nn.Module = None,
             swa_start: int = None,
             swa_scheduler=None
-    ) -> Tuple[Any, Union[float, Any], Union[float, Any]]:
+    ) -> Tuple[Any, Union[float, Any]]:
         """ Function for train loop with validation for each batch*N Steps
         ELECTRA has two loss, one is generator loss, the other is discriminator loss Each of two losses are quite different,
         Models can be under-fitted like tag-of-war if they simply sum losses with different characteristics
         in situations where they share word embeddings, or backwards as it were.
 
         This Method is implemented for Embedding Sharing
+        Discriminator's loss can't backward to Generator, except for Embedding Layers (word, position)
+        Embedding Layers are updated by sum of two losses
         """
         scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
         losses, g_losses, d_losses = AverageMeter(), AverageMeter(), AverageMeter()
@@ -669,13 +662,12 @@ class RTDTuner(PreTrainTuner):
                 )
                 g_loss = criterion(g_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
                 d_loss = criterion(d_logit.view(-1, 2), d_labels)
-                loss = g_loss + self.cfg.discriminator_lambda*d_loss
+                loss = g_loss + self.cfg.discriminator_lambda*d_loss  # discriminator's loss can't backward to generator
 
             if self.cfg.n_gradient_accumulation_steps > 1:
                 loss = loss / self.cfg.n_gradient_accumulation_steps
 
             scaler.scale(loss).backward()
-
             losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
             g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
             d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
@@ -711,7 +703,6 @@ class RTDTuner(PreTrainTuner):
                 '<Per Step> Gradient Norm': grad_norm,
                 '<Per Step> lr': lr,
             })
-
             """
             1) validate for each size of batch*N Steps
             2) save each part of model's checkpoint when BEST validation score is updated
@@ -755,8 +746,7 @@ class RTDTuner(PreTrainTuner):
 
                 # save checkpoint of generator
                 if g_val_score_max >= g_valid_loss:
-                    print(
-                        f'[Update] Generator Valid Score : ({g_val_score_max:.4f} => {g_valid_loss:.4f}) Save Parameter')
+                    print(f'[Update] Generator Valid Score : ({g_val_score_max:.4f} => {g_valid_loss:.4f}) Save Parameter')
                     print(f'Generator Best Score: {g_valid_loss}')
                     torch.save(
                         model.model.generator.state_dict(),
@@ -766,15 +756,14 @@ class RTDTuner(PreTrainTuner):
 
                 # save checkpoint of Discriminator
                 if d_val_score_max >= d_valid_loss:
-                    print(
-                        f'[Update] Discriminator Valid Score : ({d_val_score_max:.4f} => {d_valid_loss:.4f}) Save Parameter')
+                    print(f'[Update] Discriminator Valid Score : ({d_val_score_max:.4f} => {d_valid_loss:.4f}) Save Parameter')
                     print(f'Discriminator Best Score: {d_valid_loss}')
                     torch.save(
                         model.model.discriminator.state_dict(),
                         f'{self.cfg.checkpoint_dir}ELECTRA_Discriminator_{self.cfg.rtd_masking}_{self.cfg.mlm_masking}{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
                     )
                     d_val_score_max = d_valid_loss
-        return losses.avg * self.cfg.n_gradien_accumulation_steps, g_val_score_max, d_val_score_max
+        return d_losses.avg * self.cfg.n_gradient_accumulation_steps, d_val_score_max
 
     def gdes_train_val_fn(
             self,
@@ -790,13 +779,15 @@ class RTDTuner(PreTrainTuner):
             d_val_score_max: float,
             epoch: int = None,
             awp: nn.Module = None,
-    ) -> Tuple[Any, Union[float, Any], Union[float, Any]]:
+    ) -> Tuple[Any, Union[float, Any]]:
         """ Function for train loop with validation for each batch*N Steps
         ELECTRA has two loss, one is generator loss, the other is discriminator loss Each of two losses are quite different,
         Models can be under-fitted like tag-of-war if they simply sum losses with different characteristics
         in situations where they share word embeddings, or backwards as it were.
 
         This Method is implemented for Gradient Disentangled Embedding Sharing (GDES)
+        Discriminator's loss can't backward to Generator, also not updating Embedding Layers (word, position) too
+        Generator's Embedding Layers are updated by ONLY Generator's Loss
         """
         scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
         g_losses, d_losses = AverageMeter(), AverageMeter()
@@ -838,7 +829,7 @@ class RTDTuner(PreTrainTuner):
                     d_inputs,
                     padding_mask
                 )
-                d_loss = criterion(d_logit.view(-1, 2), d_labels)
+                d_loss = criterion(d_logit.view(-1, 2), d_labels) * self.cfg.discriminator_lambda  # lambda is hyper-parameter, in original paper, lambda is 50
 
             if self.cfg.n_gradient_accumulation_steps > 1:
                 d_losses = d_losses / self.cfg.n_gradient_accumulation_steps
@@ -920,15 +911,14 @@ class RTDTuner(PreTrainTuner):
 
                 # save checkpoint of Discriminator
                 if d_val_score_max >= d_valid_loss:
-                    print(
-                        f'[Update] Discriminator Valid Score : ({d_val_score_max:.4f} => {d_valid_loss:.4f}) Save Parameter')
+                    print(f'[Update] Discriminator Valid Score : ({d_val_score_max:.4f} => {d_valid_loss:.4f}) Save Parameter')
                     print(f'Discriminator Best Score: {d_valid_loss}')
                     torch.save(
                         model.model.discriminator.state_dict(),
                         f'{self.cfg.checkpoint_dir}ELECTRA_Discriminator_{self.cfg.rtd_masking}_{self.cfg.mlm_masking}{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
                     )
                     d_val_score_max = d_valid_loss
-        return avg_loss * self.cfg.n_gradient_accumulation_steps, g_val_score_max, d_val_score_max
+        return d_losses.avg * self.cfg.n_gradient_accumulation_steps, d_val_score_max
 
     def valid_fn(
         self,
@@ -993,3 +983,119 @@ class RTDTuner(PreTrainTuner):
         g_avg_scores = [g_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
         d_avg_scores = [d_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
         return valid_g_losses.avg, valid_d_losses.avg, g_avg_scores, d_avg_scores
+
+
+class FineTuningTuner:
+    """ Trainer class for Fine-Tuning Pipeline, such as SQUAD, Glue, SuperGlue ... etc
+    This module will be updated to support various tasks ASAP
+
+    So, if you want set options, go to cfg.json file or configuration.py
+    Args:
+        cfg: configuration module, configuration.py
+        generator: torch.Generator, for init pytorch random seed
+    """
+    def __init__(self, cfg: CFG, generator: torch.Generator) -> None:
+        self.cfg = cfg
+        self.model_name = self.cfg.module_name
+        self.tokenizer = self.cfg.tokenizer
+        self.generator = generator
+        self.metric_list = self.cfg.metrics
+
+    def make_batch(self) -> Tuple[DataLoader, DataLoader, int]:
+        """ Function for making batch instance """
+        train = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_train')
+        valid = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_valid')
+
+        # 1) Custom Datasets
+        train_dataset = getattr(dataset_class, self.cfg.dataset)(train)
+        valid_dataset = getattr(dataset_class, self.cfg.dataset)(valid)
+
+        # 2) selecting custom masking method for each task
+        collate_fn = None
+        if self.cfg.task == 'MaskedLanguageModel':
+            collate_fn = getattr(mlm, 'MLMCollator')(self.cfg)
+        elif self.cfg.task == 'CasualLanguageModel':
+            collate_fn = getattr(clm, 'CLMCollator')(self.cfg)
+        elif self.cfg.task == 'SpanBoundaryObjective':
+            collate_fn = getattr(sbo, 'SpanCollator')(
+                self.cfg,
+                self.cfg.masking_budget,
+                self.cfg.span_probability,
+                self.cfg.max_span_length,
+            )
+        elif self.cfg.task == 'ReplacedTokenDetection':
+            if self.cfg.rtd_masking == 'MaskedLanguageModel':
+                collate_fn = getattr(mlm, 'MLMCollator')(self.cfg)
+            elif self.cfg.rtd_masking == 'SpanBoundaryObjective':
+                collate_fn = getattr(sbo, 'SpanCollator')(
+                    self.cfg,
+                    self.cfg.masking_budget,
+                    self.cfg.span_probability,
+                    self.cfg.max_span_length,
+                )
+
+        # 3) Initializing torch.utils.data.DataLoader Module
+        loader_train = get_dataloader(
+            cfg=self.cfg,
+            dataset=train_dataset,
+            collate_fn=collate_fn,
+            generator=self.generator
+        )
+        loader_valid = get_dataloader(
+            cfg=self.cfg,
+            dataset=valid_dataset,
+            collate_fn=collate_fn,
+            generator=self.generator,
+            shuffle=False,
+            drop_last=False
+        )
+        return loader_train, loader_valid, len(train['input_ids'])
+
+    def model_setting(self, len_train: int):
+        """ Function for init backbone's configuration & train utils setting,
+        The design is inspired by the Builder Pattern
+        """
+        model = getattr(task, self.cfg.task)(self.cfg)
+        # load checkpoint when you set 'resume' to True
+        if self.cfg.resume:
+            model.load_state_dict(
+                torch.load(self.cfg.checkpoint_dir + self.cfg.state_dict),
+                strict=False
+            )
+        model.to(self.cfg.device)
+
+        criterion = getattr(loss, self.cfg.loss_fn)(self.cfg.reduction)
+        val_criterion = getattr(loss, self.cfg.val_loss_fn)(self.cfg.reduction)
+        val_metric_list = [getattr(metric, f'{metrics}') for metrics in self.metric_list]
+        grouped_optimizer_params = get_optimizer_grouped_parameters(
+            model,
+            self.cfg.layerwise_lr,
+            self.cfg.layerwise_weight_decay,
+            self.cfg.layerwise_lr_decay
+        )
+        optimizer = getattr(transformers, self.cfg.optimizer)(
+            params=grouped_optimizer_params,
+            lr=self.cfg.layerwise_lr,
+            eps=self.cfg.layerwise_adam_epsilon,
+            correct_bias=not self.cfg.layerwise_use_bertadam
+        )
+        lr_scheduler = get_scheduler(self.cfg, optimizer, len_train)
+
+        # init SWA Module
+        swa_model, swa_scheduler = None, None
+        if self.cfg.swa:
+            swa_model = AveragedModel(model)
+            swa_scheduler = get_swa_scheduler(self.cfg, optimizer)
+
+        # init AWP Module
+        awp = None
+        if self.cfg.awp:
+            awp = AWP(
+                model,
+                criterion,
+                optimizer,
+                self.cfg.awp,
+                adv_lr=self.cfg.awp_lr,
+                adv_eps=self.cfg.awp_eps
+            )
+        return model, criterion, val_criterion, val_metric_list, optimizer, lr_scheduler, awp, swa_model, swa_scheduler

@@ -17,8 +17,12 @@ def get_optimizer_grouped_parameters(
     layerwise_lr_decay: float
 ) -> List[Dict[str, float]]:
     """ Grouped Version Layer-wise learning rate decay
+    This function implemented for fine-tuning pre-trained model to task specific model or domain specific model
+    So not used in pre-training phase, in pre-training phase, you can use only pure optimizer without layer-wise lr decay
+
     1) initialize lr for task specific layer
     2) initialize lr for every layer
+
     Args:
         model: model instance from customizing model
         layerwise_lr: learning rate for task specific layer
@@ -32,17 +36,7 @@ def get_optimizer_grouped_parameters(
          "lr": layerwise_lr
          },
     ]
-    if configuration.CFG.task == 'SpanBoundaryObjective':
-        layers = [model.model.backbone.embeddings] + list(model.model.backbone.encoder.layer)
-    elif configuration.CFG.task == 'ReplacedTokenDetection':
-        layers = (
-                [model.model.generator.embeddings] +
-                list(model.model.generator.encoder.layer) +
-                list(model.model.discriminator.encoder.layer)
-        )
-    else:
-        layers = [model.model.embeddings] + list(model.model.encoder.layer)
-
+    layers = [model.model.embeddings] + list(model.model.encoder.layer)
     layers.reverse()
     lr = layerwise_lr
     for layer in layers:

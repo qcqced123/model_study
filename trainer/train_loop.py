@@ -43,7 +43,7 @@ def train_loop(cfg: CFG) -> None:
     train_val_method = train_input.train_val_fn if not cfg.share_embed_method == 'GDES' else train_input.gdes_train_val_fn
     for epoch in tqdm(range(cfg.epochs)):
         print(f'[{epoch + 1}/{cfg.epochs}] Train & Validation')
-        train_loss, val_score_max, val_score_max_2 = train_val_method(
+        train_loss, val_score_max = train_val_method(
             loader_train,
             model,
             criterion,
@@ -76,6 +76,7 @@ def train_loop(cfg: CFG) -> None:
         early_stopping(val_score_max)
         if early_stopping.early_stop:
             break
+
         del train_loss
         gc.collect(), torch.cuda.empty_cache()
 
