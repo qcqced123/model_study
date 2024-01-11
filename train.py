@@ -23,5 +23,5 @@ def main(config_path: str, cfg: CFG) -> None:
 
 
 if __name__ == '__main__':
-    main('config/pretrain/bert.json', CFG)
+    main('config/pretrain/electra.json', CFG)
 
