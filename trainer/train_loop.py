@@ -27,7 +27,14 @@ def train_loop(cfg: CFG) -> None:
     early_stopping = EarlyStopping(mode=cfg.stop_mode, patience=10)
     early_stopping.detecting_anomaly()
 
-    epoch_val_score_max, val_score_max = np.inf, np.inf
+    metric_checker = []
+    for _ in range(3):
+        if cfg.stop_mode == 'min':
+            metric_checker.append(np.inf)
+        if cfg.stop_mode == 'max':
+            metric_checker.append(-np.inf)
+    epoch_val_score_max, val_score_max, val_score_max_2 = metric_checker
+
     train_input = getattr(trainer, cfg.trainer)(cfg, g)  # init object
     loader_train, loader_valid, len_train = train_input.make_batch()
     model, criterion, val_criterion, val_metric_list, optimizer, lr_scheduler, awp, swa_model, swa_scheduler = train_input.model_setting(
@@ -36,7 +43,7 @@ def train_loop(cfg: CFG) -> None:
     train_val_method = train_input.train_val_fn if not cfg.share_embed_method == 'GDES' else train_input.gdes_train_val_fn
     for epoch in tqdm(range(cfg.epochs)):
         print(f'[{epoch + 1}/{cfg.epochs}] Train & Validation')
-        train_loss, val_score_max = train_val_method(
+        train_loss, val_score_max, val_score_max_2 = train_val_method(
             loader_train,
             model,
             criterion,
@@ -46,6 +53,7 @@ def train_loop(cfg: CFG) -> None:
             val_criterion,
             val_metric_list,
             val_score_max,
+            val_score_max_2,
             epoch,
             awp,
         )

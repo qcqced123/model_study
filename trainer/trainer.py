@@ -148,12 +148,13 @@ class PreTrainTuner:
             val_criterion: nn.Module,
             val_metric_list: List[Callable],
             val_score_max: float,
+            val_score_max_2: float,
             epoch: int,
             awp: nn.Module = None,
             swa_model: nn.Module = None,
             swa_start: int = None,
             swa_scheduler=None
-    ) -> Tuple[Any, Union[float, ndarray, ndarray]]:
+    ) -> Tuple[Any, Union[float, ndarray], float]:
         """ function for train loop with validation for each batch*N Steps """
         scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
         losses = AverageMeter()
@@ -227,7 +228,7 @@ class PreTrainTuner:
                         f'{self.cfg.checkpoint_dir}{self.cfg.mlm_masking}_{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
                     )
                     val_score_max = valid_loss
-        return losses.avg * self.cfg.n_gradien_accumulation_steps, val_score_max
+        return losses.avg * self.cfg.n_gradien_accumulation_steps, val_score_max, val_score_max_2
 
     def train_fn(self, loader_train, model, criterion, optimizer, scheduler, epoch, awp=None, swa_model=None, swa_start=None, swa_scheduler=None) -> Tuple[Tensor, Tensor, Tensor]:
         """ function for train loop
@@ -343,7 +344,9 @@ class PreTrainTuner:
 
 
 class SBOTuner(PreTrainTuner):
-    """ Trainer class for Span Boundary Objective
+    """ Trainer class for Span Boundary Objective Task
+    you can select any other implemented Auto-Encoder Model to backbone of this task,
+    please check now available models in README.md
     """
     def __init__(self, cfg: CFG, generator: torch.Generator) -> None:
         super(SBOTuner, self).__init__(cfg, generator)
@@ -359,12 +362,13 @@ class SBOTuner(PreTrainTuner):
             val_criterion: nn.Module,
             val_metric_list: List[Callable],
             val_score_max: float,
+            val_score_max_2: float,
             epoch: int,
             awp: nn.Module = None,
             swa_model: nn.Module = None,
             swa_start: int = None,
             swa_scheduler=None
-    ) -> Tuple[Any, Union[float, ndarray, ndarray]]:
+    ) -> Tuple[Any, Union[float, Any], float]:
         """ function for train loop with validation for each batch*N Steps
         SpanBERT has two loss, one is MLM loss, the other is SBO loss
         """
@@ -470,7 +474,7 @@ class SBOTuner(PreTrainTuner):
                         f'{self.cfg.checkpoint_dir}{self.cfg.task}_SpanBERT_{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
                     )
                     val_score_max = valid_loss
-        return losses.avg * self.cfg.n_gradien_accumulation_steps, val_score_max
+        return losses.avg * self.cfg.n_gradien_accumulation_steps, val_score_max, val_score_max_2
 
     def valid_fn(
             self,
@@ -628,13 +632,14 @@ class RTDTuner(PreTrainTuner):
             loader_valid,
             val_criterion: nn.Module,
             val_metric_list: List[Callable],
-            val_score_max: float,
+            g_val_score_max: float,
+            d_val_score_max: float,
             epoch: int,
             awp: nn.Module = None,
             swa_model: nn.Module = None,
             swa_start: int = None,
             swa_scheduler=None
-    ) -> Tuple[Any, Union[float, ndarray, ndarray]]:
+    ) -> Tuple[Any, Union[float, Any], Union[float, Any]]:
         """ Function for train loop with validation for each batch*N Steps
         ELECTRA has two loss, one is generator loss, the other is discriminator loss Each of two losses are quite different,
         Models can be under-fitted like tag-of-war if they simply sum losses with different characteristics
@@ -670,6 +675,7 @@ class RTDTuner(PreTrainTuner):
                 loss = loss / self.cfg.n_gradient_accumulation_steps
 
             scaler.scale(loss).backward()
+
             losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
             g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
             d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
@@ -706,21 +712,29 @@ class RTDTuner(PreTrainTuner):
                 '<Per Step> lr': lr,
             })
 
-            # validate for each size of batch*N Steps
+            """
+            1) validate for each size of batch*N Steps
+            2) save each part of model's checkpoint when BEST validation score is updated
+            """
             if ((step + 1) % self.cfg.val_check == 0) or ((step + 1) == len(loader_train)):
-                valid_loss, g_valid_loss, d_valid_loss, g_score_list, d_score_list = self.valid_fn(
+                g_valid_loss, d_valid_loss, g_score_list, d_score_list = self.valid_fn(
                     loader_valid,
                     model,
                     val_criterion,
                     val_metric_list
                 )
+                valid_loss = g_valid_loss + d_valid_loss
                 print(f'[Validation Check: {step}/{len(loader_train)}] Total Train Loss: {np.round(losses.avg, 4)}')
-                print(f'[Validation Check: {step}/{len(loader_train)}] Generator Train Loss: {np.round(g_losses.avg, 4)}')
-                print(f'[Validation Check: {step}/{len(loader_train)}] Discriminator Train Loss: {np.round(d_losses.avg, 4)}')
+                print(
+                    f'[Validation Check: {step}/{len(loader_train)}] Generator Train Loss: {np.round(g_losses.avg, 4)}')
+                print(
+                    f'[Validation Check: {step}/{len(loader_train)}] Discriminator Train Loss: {np.round(d_losses.avg, 4)}')
 
                 print(f'[Validation Check: {step}/{len(loader_train)}] Total Valid Loss: {np.round(valid_loss, 4)}')
-                print(f'[Validation Check: {step}/{len(loader_train)}] Generator Valid Loss: {np.round(g_valid_loss, 4)}')
-                print(f'[Validation Check: {step}/{len(loader_train)}] Discriminator Valid Loss: {np.round(d_valid_loss, 4)}')
+                print(
+                    f'[Validation Check: {step}/{len(loader_train)}] Generator Valid Loss: {np.round(g_valid_loss, 4)}')
+                print(
+                    f'[Validation Check: {step}/{len(loader_train)}] Discriminator Valid Loss: {np.round(d_valid_loss, 4)}')
 
                 for i, metric_name in enumerate(self.metric_list):
                     print(f'[{step}/{len(loader_train)}] Generator Valid {metric_name}: {g_score_list[i]}')
@@ -739,18 +753,28 @@ class RTDTuner(PreTrainTuner):
                     '<Val Check Step> Discriminator Valid Loss': d_valid_loss,
                 })
 
-                if val_score_max >= valid_loss:
-                    print(f'[Update] Valid Score : ({val_score_max:.4f} => {valid_loss:.4f}) Save Parameter')
-                    print(f'Best Score: {valid_loss}')
+                # save checkpoint of generator
+                if g_val_score_max >= g_valid_loss:
+                    print(
+                        f'[Update] Generator Valid Score : ({g_val_score_max:.4f} => {g_valid_loss:.4f}) Save Parameter')
+                    print(f'Generator Best Score: {g_valid_loss}')
                     torch.save(
-                        model.state_dict(),
-                        f'{self.cfg.checkpoint_dir}{self.cfg.rtd_masking}_{self.cfg.mlm_masking}_ELECTRA_{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
+                        model.model.generator.state_dict(),
+                        f'{self.cfg.checkpoint_dir}ELECTRA_Generator_{self.cfg.rtd_masking}_{self.cfg.mlm_masking}{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
                     )
-                    val_score_max = valid_loss
-                del valid_loss
-                gc.collect()
-                torch.cuda.empty_cache()
-        return losses.avg * self.cfg.n_gradien_accumulation_steps, val_score_max
+                    g_val_score_max = g_valid_loss
+
+                # save checkpoint of Discriminator
+                if d_val_score_max >= d_valid_loss:
+                    print(
+                        f'[Update] Discriminator Valid Score : ({d_val_score_max:.4f} => {d_valid_loss:.4f}) Save Parameter')
+                    print(f'Discriminator Best Score: {d_valid_loss}')
+                    torch.save(
+                        model.model.discriminator.state_dict(),
+                        f'{self.cfg.checkpoint_dir}ELECTRA_Discriminator_{self.cfg.rtd_masking}_{self.cfg.mlm_masking}{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
+                    )
+                    d_val_score_max = d_valid_loss
+        return losses.avg * self.cfg.n_gradien_accumulation_steps, g_val_score_max, d_val_score_max
 
     def gdes_train_val_fn(
             self,
@@ -762,10 +786,11 @@ class RTDTuner(PreTrainTuner):
             loader_valid,
             val_criterion: nn.Module,
             val_metric_list: List[Callable],
-            val_score_max: float,
+            g_val_score_max: float,
+            d_val_score_max: float,
             epoch: int = None,
             awp: nn.Module = None,
-    ) -> Tuple[Any, Union[float, ndarray, ndarray]]:
+    ) -> Tuple[Any, Union[float, Any], Union[float, Any]]:
         """ Function for train loop with validation for each batch*N Steps
         ELECTRA has two loss, one is generator loss, the other is discriminator loss Each of two losses are quite different,
         Models can be under-fitted like tag-of-war if they simply sum losses with different characteristics
@@ -846,14 +871,17 @@ class RTDTuner(PreTrainTuner):
                 '<Per Step> lr': lr,
             })
 
-            # validate for each size of batch*N Steps
+            """ 1) validate for each size of batch*N Steps
+            2) save each part of model's checkpoint when BEST validation score is updated
+            """
             if ((step + 1) % self.cfg.val_check == 0) or ((step + 1) == len(loader_train)):
-                valid_loss, g_valid_loss, d_valid_loss, g_score_list, d_score_list = self.valid_fn(
+                g_valid_loss, d_valid_loss, g_score_list, d_score_list = self.valid_fn(
                     loader_valid,
                     model,
                     val_criterion,
                     val_metric_list
                 )
+                valid_loss = g_valid_loss + d_valid_loss
                 print(f'[Validation Check: {step}/{len(loader_train)}] Total Train Loss: {np.round(avg_loss, 4)}')
                 print(f'[Validation Check: {step}/{len(loader_train)}] Generator Train Loss: {np.round(g_losses.avg, 4)}')
                 print(f'[Validation Check: {step}/{len(loader_train)}] Discriminator Train Loss: {np.round(d_losses.avg, 4)}')
@@ -879,50 +907,70 @@ class RTDTuner(PreTrainTuner):
                     '<Val Check Step> Discriminator Valid Loss': d_valid_loss,
                 })
 
-                if val_score_max >= valid_loss:
-                    print(f'[Update] Valid Score : ({val_score_max:.4f} => {valid_loss:.4f}) Save Parameter')
-                    print(f'Best Score: {valid_loss}')
+                # save checkpoint of generator
+                if g_val_score_max >= g_valid_loss:
+                    print(
+                        f'[Update] Generator Valid Score : ({g_val_score_max:.4f} => {g_valid_loss:.4f}) Save Parameter')
+                    print(f'Generator Best Score: {g_valid_loss}')
                     torch.save(
-                        model.state_dict(),
-                        f'{self.cfg.checkpoint_dir}{self.cfg.rtd_masking}_{self.cfg.mlm_masking}_ELECTRA_{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
+                        model.model.generator.state_dict(),
+                        f'{self.cfg.checkpoint_dir}ELECTRA_Generator_{self.cfg.rtd_masking}_{self.cfg.mlm_masking}{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
                     )
-                    val_score_max = valid_loss
-                del valid_loss
-                gc.collect()
-                torch.cuda.empty_cache()
-        return avg_loss * self.cfg.n_gradient_accumulation_steps, val_score_max
+                    g_val_score_max = g_valid_loss
+
+                # save checkpoint of Discriminator
+                if d_val_score_max >= d_valid_loss:
+                    print(
+                        f'[Update] Discriminator Valid Score : ({d_val_score_max:.4f} => {d_valid_loss:.4f}) Save Parameter')
+                    print(f'Discriminator Best Score: {d_valid_loss}')
+                    torch.save(
+                        model.model.discriminator.state_dict(),
+                        f'{self.cfg.checkpoint_dir}ELECTRA_Discriminator_{self.cfg.rtd_masking}_{self.cfg.mlm_masking}{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
+                    )
+                    d_val_score_max = d_valid_loss
+        return avg_loss * self.cfg.n_gradient_accumulation_steps, g_val_score_max, d_val_score_max
 
     def valid_fn(
-            self,
-            loader_valid,
-            model: nn.Module,
-            val_criterion: nn.Module,
-            val_metric_list: List[Callable]
-    ) -> Tuple[Any, Any, Any, List[Any], List[Any]]:
-        """ function for validation loop
+        self,
+        loader_valid,
+        model: nn.Module,
+        val_criterion: nn.Module,
+        val_metric_list: List[Callable]
+    ) -> Tuple[Any, Any, List[Any], List[Any]]:
+        """ method for pure Embedding Sharing, Gradient-Disentangled Embedding Sharing ELECTRA validation loop
         """
-        valid_losses, valid_g_losses, valid_d_losses = AverageMeter(), AverageMeter(), AverageMeter()
+        valid_g_losses, valid_d_losses = AverageMeter(), AverageMeter()
         g_valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
         d_valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
         model.eval()
         with torch.no_grad():
             for step, batch in enumerate(tqdm(loader_valid)):
                 inputs = batch['input_ids'].to(self.cfg.device)
-                labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
-                padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
+                labels = batch['labels'].to(self.cfg.device)
+                padding_mask = batch['padding_mask'].to(self.cfg.device)
                 batch_size = inputs.size(0)
 
-                g_logit, d_logit, d_labels = model(inputs, padding_mask)
+                # Generator validation part
+                g_logit, d_inputs, d_labels = model.generator_fw(
+                    inputs,
+                    labels,
+                    padding_mask
+                )
                 g_loss = val_criterion(g_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
-                d_loss = val_criterion(d_logit.view(-1, self.cfg.vocab_size), d_labels)
-                loss = g_loss + d_loss
 
-                valid_losses.update(loss.detach().cpu().numpy(), batch_size)
+                # Discriminator validation part
+                d_logit = model.discriminator_fw(
+                    d_inputs,
+                    padding_mask
+                )
+                d_loss = val_criterion(d_logit.view(-1, 2), d_labels)
+
                 valid_g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
                 valid_d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
 
+                valid_loss = valid_g_losses.avg + valid_d_losses.avg
                 wandb.log({
-                    '<Val Step> Valid Loss': valid_losses.avg,
+                    '<Val Step> Valid Loss': valid_loss,
                     '<Val Step> Generator Valid Loss': valid_g_losses.avg,
                     '<Val Step> Discriminator Valid Loss': valid_d_losses.avg,
                 })
@@ -944,4 +992,4 @@ class RTDTuner(PreTrainTuner):
                     })
         g_avg_scores = [g_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
         d_avg_scores = [d_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
-        return valid_losses.avg, valid_g_losses.avg, valid_d_losses.avg, g_avg_scores, d_avg_scores
+        return valid_g_losses.avg, valid_d_losses.avg, g_avg_scores, d_avg_scores

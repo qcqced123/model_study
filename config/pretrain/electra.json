@@ -28,7 +28,7 @@
         "is_discriminator_resume": false,
         "generator_load_pretrained": false,
         "discriminator_load_pretrained": false,
-        "discriminator_lambda": 10,
+        "discriminator_lambda": 1,
         "masking_budget": 0.15,
         "span_probability": 0.2,
         "max_span_length": 10,
