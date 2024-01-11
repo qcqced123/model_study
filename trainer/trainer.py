@@ -107,9 +107,11 @@ class PreTrainTuner:
 
         optimizer = getattr(transformers, self.cfg.optimizer)(
             params=model.parameters(),
-            lr=self.cfg.layerwise_lr,
-            eps=self.cfg.layerwise_adam_epsilon,
-            correct_bias=not self.cfg.layerwise_use_bertadam
+            lr=self.cfg.lr,
+            betas=self.cfg.betas,
+            eps=self.cfg.adam_epsilon,
+            weight_decay=self.cfg.weight_decay,
+            correct_bias=not self.cfg.use_bertadam
         )
         lr_scheduler = get_scheduler(self.cfg, optimizer, len_train)
 
@@ -588,9 +590,11 @@ class RTDTuner(PreTrainTuner):
 
         optimizer = getattr(transformers, self.cfg.optimizer)(
             params=model.parameters(),
-            lr=self.cfg.layerwise_lr,
-            eps=self.cfg.layerwise_adam_epsilon,
-            correct_bias=not self.cfg.layerwise_use_bertadam
+            lr=self.cfg.lr,
+            betas=self.cfg.betas,
+            eps=self.cfg.adam_epsilon,
+            weight_decay=self.cfg.weight_decay,
+            correct_bias=not self.cfg.use_bertadam
         )
         lr_scheduler = get_scheduler(self.cfg, optimizer, len_train)
 

@@ -51,12 +51,11 @@
 
     "optimizer_options": {
         "optimizer": "AdamW",
-        "llrd": true,
-        "layerwise_lr": 2e-4,
-        "layerwise_lr_decay": 0.9,
-        "layerwise_weight_decay": 1e-2,
-        "layerwise_adam_epsilon": 1e-6,
-        "layerwise_use_bertadam": false,
+        "llrd": false,
+        "lr": 2e-4,
+        "weight_decay": 1e-2,
+        "adam_epsilon": 1e-6,
+        "use_bertadam": false,
         "betas": [0.9, 0.999]
     },
 

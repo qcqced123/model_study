@@ -71,6 +71,10 @@ class CFG:
     layerwise_weight_decay = 1e-2
     layerwise_adam_epsilon = 1e-6
     layerwise_use_bertadam = False
+    lr = 5e-5
+    weight_decay = 1e-2
+    adam_epsilon = 1e-6
+    use_bertadam = False
     betas = (0.9, 0.999)
 
     """ Scheduler Options """
