@@ -5,7 +5,7 @@
         "checkpoint_dir": "./saved/",
         "state_dict": "WholeWordMasking_512_DeBERTa_state_dict.pth",
         "load_pretrained": false,
-        "resume": true,
+        "resume": false,
         "name": "MaskedLanguageModel",
         "trainer": "PreTrainTuner",
         "loop": "train_loop",
@@ -44,7 +44,7 @@
         "language": "20231101.en",
         "split_ratio": 0.2,
         "epochs": 20,
-        "batch_size": 22,
+        "batch_size": 24,
         "val_batch_size": 16,
         "val_check": 999999
     },
