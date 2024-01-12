@@ -26,7 +26,8 @@ class DistilBERT(nn.Module, AbstractModel):
 
     you can select any other backbone model architecture for Teacher & Student Model for knowledge distillation
     but, in original paper, BERT is used for Teacher Model & Student
-    and you must select pretrained model for Teacher Model, because Teacher Model is used for knowledge distillation
+    and you must select pretrained model for Teacher Model, because Teacher Model is used for knowledge distillation,
+    which is containing pretrained mlm head
 
     Do not pass gradient backward to teacher model!!
     (teacher model must be frozen or register_buffer to model or use no_grad() context manager)
@@ -41,8 +42,26 @@ class DistilBERT(nn.Module, AbstractModel):
     def __init__(self, cfg: CFG, model_func: Callable) -> None:
         super(DistilBERT, self).__init__()
         self.cfg = cfg
-        self.teacher = model_func(self.cfg.teacher_num_layers)  # must be loading pretrained model
+        self.teacher = model_func(self.cfg.teacher_num_layers)  # must be loading pretrained model containing mlm head
+        self.mlm_head = MLMHead(self.cfg)  # must be loading pretrained model's mlm head
+
         self.student = model_func(self.cfg.student_num_layers)
 
+    def teacher_fw(
+        self,
+        inputs: Tensor,
+        padding_mask: Tensor,
+        attention_mask: Tensor = None
+    ) -> Tensor:
+        """ forward pass for teacher model
+        """
+        last_hidden_state, _ = self.teacher(
+            inputs,
+            padding_mask,
+            attention_mask
+        )
+        t_logit = self.mlm_head(last_hidden_state)
+
+        return t_logit
 
 
