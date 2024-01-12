@@ -49,7 +49,7 @@ class PreTrainTuner:
 
         # 2) selecting custom masking method for each task
         collate_fn = None
-        if self.cfg.task == 'MaskedLanguageModel':
+        if self.cfg.task in ['MaskedLanguageModel', 'DistillationKnowledge']:
             collate_fn = getattr(mlm, 'MLMCollator')(self.cfg)
         elif self.cfg.task == 'CasualLanguageModel':
             collate_fn = getattr(clm, 'CLMCollator')(self.cfg)
@@ -988,6 +988,293 @@ class RTDTuner(PreTrainTuner):
         d_avg_scores = [d_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
         return valid_g_losses.avg, valid_d_losses.avg, g_avg_scores, d_avg_scores
 
+
+class DistillKnowledgeTuner(PreTrainTuner):
+    """ Trainer class for Distill Knowledge Pipeline, you can use three types of training options
+    Now, This module only support for Distill Knowledge with Auto-Encoder Based Model like as BERT, DeBERTa ... etc
+    ASAP, we will update this module to support different architecture like as RNN, LSTM, GRU ... etc
+
+    Args:
+        cfg: configuration module, configuration.py
+        generator: torch.Generator, for init pytorch random seed
+    """
+    def __init__(self, cfg: CFG, generator: torch.Generator) -> None:
+        super(DistillKnowledgeTuner, self).__init__(cfg, generator)
+
+    def model_setting(self, len_train: int):
+        """ Function for init backbone's configuration & train utils setting,
+        The design is inspired by the Builder Pattern
+        """
+        model = getattr(task, self.cfg.task)(self.cfg)
+
+        # load checkpoint when you set 'resume' to True
+        if self.cfg.is_teacher_resume:  # load teacher's pretrained weight: backbone & mlm head
+            tmp_teacher = model.teacher + model.mlm_head
+            tmp_teacher.load_state_dict(
+                torch.load(self.cfg.checkpoint_dir + self.cfg.teacher_state_dict),
+                strict=True
+            )
+        if self.cfg.is_student_resume:  # load student's checkpoint
+            model.student.load_state_dict(
+                torch.load(self.cfg.checkpoint_dir + self.cfg.student_state_dict),
+                strict=False
+            )
+
+        model.to(self.cfg.device)
+
+        criterion = getattr(loss, self.cfg.loss_fn)(self.cfg.reduction)
+        val_criterion = getattr(loss, self.cfg.val_loss_fn)(self.cfg.reduction)
+        val_metric_list = [getattr(metric, f'{metrics}') for metrics in self.metric_list]
+
+        optimizer = getattr(transformers, self.cfg.optimizer)(
+            params=model.parameters(),
+            lr=self.cfg.lr,
+            betas=self.cfg.betas,
+            eps=self.cfg.adam_epsilon,
+            weight_decay=self.cfg.weight_decay,
+            correct_bias=not self.cfg.use_bertadam
+        )
+        lr_scheduler = get_scheduler(self.cfg, optimizer, len_train)
+
+        # init SWA Module
+        swa_model, swa_scheduler = None, None
+        if self.cfg.swa:
+            swa_model = AveragedModel(model)
+            swa_scheduler = get_swa_scheduler(self.cfg, optimizer)
+
+        # init AWP Module
+        awp = None
+        if self.cfg.awp:
+            awp = AWP(
+                model,
+                criterion,
+                optimizer,
+                self.cfg.awp,
+                adv_lr=self.cfg.awp_lr,
+                adv_eps=self.cfg.awp_eps
+            )
+        return model, criterion, val_criterion, val_metric_list, optimizer, lr_scheduler, awp, swa_model, swa_scheduler
+
+    def train_val_fn(
+            self,
+            loader_train,
+            model: nn.Module,
+            criterion: nn.Module,
+            optimizer,
+            scheduler,
+            loader_valid,
+            val_criterion: nn.Module,
+            val_metric_list: List[Callable],
+            g_val_score_max: float,
+            d_val_score_max: float,
+            epoch: int,
+            awp: nn.Module = None,
+            swa_model: nn.Module = None,
+            swa_start: int = None,
+            swa_scheduler=None
+    ) -> Tuple[Any, Union[float, Any]]:
+        """ Function for train loop with validation for each batch*N Steps
+        DistillBERT has three loss:
+            1) distillation loss, calculated by soft targets & soft predictions
+            2) student loss, calculated by hard targets & hard predictions
+            3) cosine similarity loss, calculated by student & teacher logit similarity
+
+        Those 3 losses are summed jointly and then backward to student model
+        """
+        scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
+        d_losses, s_losses, c_losses = AverageMeter(), AverageMeter(), AverageMeter()
+        model.train()
+        for step, batch in enumerate(tqdm(loader_train)):
+            optimizer.zero_grad()
+            inputs = batch['input_ids'].to(self.cfg.device)
+            labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
+            padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
+            batch_size = inputs.size(0)  # same as ES, GDES
+
+            with torch.no_grad():
+                soft_target, hard_target = model.teacher_fw(
+                    inputs,
+                    padding_mask
+                )  # teacher model's pred => hard logit
+
+            with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
+                g_logit, d_inputs, d_labels = model.generator_fw(
+                    inputs,
+                    labels,
+                    padding_mask
+                )
+                d_logit = model.discriminator_fw(
+                    d_inputs,
+                    padding_mask
+                )
+                g_loss = criterion(g_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
+                d_loss = criterion(d_logit.view(-1, 2), d_labels)
+                loss = g_loss + self.cfg.discriminator_lambda*d_loss  # discriminator's loss can't backward to generator
+
+            if self.cfg.n_gradient_accumulation_steps > 1:
+                loss = loss / self.cfg.n_gradient_accumulation_steps
+
+            scaler.scale(loss).backward()
+            losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
+            g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
+            d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
+
+            if self.cfg.awp and epoch >= self.cfg.nth_awp_start_epoch:  # later update
+                adv_loss = awp.attack_backward(inputs, padding_mask, labels)
+                scaler.scale(adv_loss).backward()
+                awp._restore()
+
+            if self.cfg.clipping_grad and (step + 1) % self.cfg.n_gradient_accumulation_steps == 0 or self.cfg.n_gradient_accumulation_steps == 1:
+                scaler.unscale_(optimizer)
+                grad_norm = torch.nn.utils.clip_grad_norm(
+                    model.parameters(),
+                    self.cfg.max_grad_norm * self.cfg.n_gradient_accumulation_steps
+                )
+                # Stochastic Weight Averaging
+                if self.cfg.swa and epoch >= int(swa_start):
+                    swa_model.update_parameters(model)
+                    swa_scheduler.step()
+
+                scaler.step(optimizer)
+                scaler.update()
+                scheduler.step()
+
+            # logging train loss, gradient norm, lr to wandb
+            lr = scheduler.get_lr()[0]
+            grad_norm = grad_norm.detach().cpu().numpy()
+
+            wandb.log({
+                '<Per Step> Total Train Loss': losses.avg,
+                '<Per Step> Generator Train Loss': g_losses.avg,
+                '<Per Step> Discriminator Train Loss': d_losses.avg,
+                '<Per Step> Gradient Norm': grad_norm,
+                '<Per Step> lr': lr,
+            })
+            """
+            1) validate for each size of batch*N Steps
+            2) save each part of model's checkpoint when BEST validation score is updated
+            """
+            if ((step + 1) % self.cfg.val_check == 0) or ((step + 1) == len(loader_train)):
+                g_valid_loss, d_valid_loss, g_score_list, d_score_list = self.valid_fn(
+                    loader_valid,
+                    model,
+                    val_criterion,
+                    val_metric_list
+                )
+                valid_loss = g_valid_loss + d_valid_loss
+                print(f'[Validation Check: {step}/{len(loader_train)}] Total Train Loss: {np.round(losses.avg, 4)}')
+                print(
+                    f'[Validation Check: {step}/{len(loader_train)}] Generator Train Loss: {np.round(g_losses.avg, 4)}')
+                print(
+                    f'[Validation Check: {step}/{len(loader_train)}] Discriminator Train Loss: {np.round(d_losses.avg, 4)}')
+
+                print(f'[Validation Check: {step}/{len(loader_train)}] Total Valid Loss: {np.round(valid_loss, 4)}')
+                print(
+                    f'[Validation Check: {step}/{len(loader_train)}] Generator Valid Loss: {np.round(g_valid_loss, 4)}')
+                print(
+                    f'[Validation Check: {step}/{len(loader_train)}] Discriminator Valid Loss: {np.round(d_valid_loss, 4)}')
+
+                for i, metric_name in enumerate(self.metric_list):
+                    print(f'[{step}/{len(loader_train)}] Generator Valid {metric_name}: {g_score_list[i]}')
+                    print(f'[{step}/{len(loader_train)}] Discriminator Valid {metric_name}: {d_score_list[i]}')
+                    wandb.log({
+                        f'<Validation Check Step> Generator Valid {metric_name}': g_score_list[i],
+                        f'<Validation Check Step> Discriminator Valid {metric_name}': d_score_list[i]
+                    })
+
+                wandb.log({
+                    '<Val Check Step> Total Train Loss': losses.avg,
+                    '<Val Check Step> Generator Train Loss': g_losses.avg,
+                    '<Val Check Step> Discriminator Train Loss': d_losses.avg,
+                    '<Val Check Step> Total Valid Loss': valid_loss,
+                    '<Val Check Step> Generator Valid Loss': g_valid_loss,
+                    '<Val Check Step> Discriminator Valid Loss': d_valid_loss,
+                })
+
+                # save checkpoint of generator
+                if g_val_score_max >= g_valid_loss:
+                    print(f'[Update] Generator Valid Score : ({g_val_score_max:.4f} => {g_valid_loss:.4f}) Save Parameter')
+                    print(f'Generator Best Score: {g_valid_loss}')
+                    torch.save(
+                        model.model.generator.state_dict(),
+                        f'{self.cfg.checkpoint_dir}ELECTRA_Generator_{self.cfg.rtd_masking}_{self.cfg.mlm_masking}{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
+                    )
+                    g_val_score_max = g_valid_loss
+
+                # save checkpoint of Discriminator
+                if d_val_score_max >= d_valid_loss:
+                    print(f'[Update] Discriminator Valid Score : ({d_val_score_max:.4f} => {d_valid_loss:.4f}) Save Parameter')
+                    print(f'Discriminator Best Score: {d_valid_loss}')
+                    torch.save(
+                        model.model.discriminator.state_dict(),
+                        f'{self.cfg.checkpoint_dir}ELECTRA_Discriminator_{self.cfg.rtd_masking}_{self.cfg.mlm_masking}{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
+                    )
+                    d_val_score_max = d_valid_loss
+        return d_losses.avg * self.cfg.n_gradient_accumulation_steps, d_val_score_max
+
+    def valid_fn(
+        self,
+        loader_valid,
+        model: nn.Module,
+        val_criterion: nn.Module,
+        val_metric_list: List[Callable]
+    ) -> Tuple[Any, Any, List[Any], List[Any]]:
+        """ method for pure Embedding Sharing, Gradient-Disentangled Embedding Sharing ELECTRA validation loop
+        """
+        valid_g_losses, valid_d_losses = AverageMeter(), AverageMeter()
+        g_valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
+        d_valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
+        model.eval()
+        with torch.no_grad():
+            for step, batch in enumerate(tqdm(loader_valid)):
+                inputs = batch['input_ids'].to(self.cfg.device)
+                labels = batch['labels'].to(self.cfg.device)
+                padding_mask = batch['padding_mask'].to(self.cfg.device)
+                batch_size = inputs.size(0)
+
+                # Generator validation part
+                g_logit, d_inputs, d_labels = model.generator_fw(
+                    inputs,
+                    labels,
+                    padding_mask
+                )
+                g_loss = val_criterion(g_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
+
+                # Discriminator validation part
+                d_logit = model.discriminator_fw(
+                    d_inputs,
+                    padding_mask
+                )
+                d_loss = val_criterion(d_logit.view(-1, 2), d_labels)
+
+                valid_g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
+                valid_d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
+
+                valid_loss = valid_g_losses.avg + valid_d_losses.avg
+                wandb.log({
+                    '<Val Step> Valid Loss': valid_loss,
+                    '<Val Step> Generator Valid Loss': valid_g_losses.avg,
+                    '<Val Step> Discriminator Valid Loss': valid_d_losses.avg,
+                })
+
+                for i, metric_fn in enumerate(val_metric_list):
+                    g_scores = metric_fn(
+                        g_logit.view(-1, self.cfg.vocab_size).detach().cpu().numpy(),
+                        labels.view(-1).detach().cpu().numpy()
+                    )
+                    d_scores = metric_fn(
+                        d_logit.view(-1, self.cfg.vocab_size).detach().cpu().numpy(),
+                        d_labels.detach().cpu().numpy()
+                    )
+                    g_valid_metrics[self.metric_list[i]].update(g_scores, batch_size)
+                    d_valid_metrics[self.metric_list[i]].update(d_scores, batch_size)
+                    wandb.log({
+                        f'<Val Step> Generator Valid {self.metric_list[i]}': g_scores,
+                        f'<Val Step> Discriminator Valid {self.metric_list[i]}': d_scores,
+                    })
+        g_avg_scores = [g_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
+        d_avg_scores = [d_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
+        return valid_g_losses.avg, valid_d_losses.avg, g_avg_scores, d_avg_scores
 
 class FineTuningTuner:
     """ Trainer class for Fine-Tuning Pipeline, such as SQUAD, Glue, SuperGlue ... etc

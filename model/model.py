@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch import Tensor
 from typing import List, Dict, Tuple
 from experiment.tuner.mlm import MLMHead
@@ -197,12 +198,12 @@ class DistillationKnowledge(nn.Module, AbstractTask):
             self.select_model
         )
         self._init_weights(self.model)
-        if self.cfg.teacher_load_pretrained:  # for generator
+        if self.cfg.teacher_load_pretrained:  # for teacher model
             self.model.teacher.load_state_dict(
                 torch.load(cfg.checkpoint_dir + cfg.teacher_state_dict),
                 strict=False
             )
-        if self.cfg.student_load_pretrained:  # for discriminator
+        if self.cfg.student_load_pretrained:  # for student model
             self.model.student.load_state_dict(
                 torch.load(cfg.checkpoint_dir + cfg.student_state_dict),
                 strict=True
@@ -210,5 +211,42 @@ class DistillationKnowledge(nn.Module, AbstractTask):
         if self.cfg.gradient_checkpoint:
             self.model.gradient_checkpointing_enable()
 
-    def forward(self) -> Tensor:
-        pass
+    def teacher_fw(
+        self,
+        inputs: Tensor,
+        padding_mask: Tensor,
+        attention_mask: Tensor = None
+    ) -> Tuple[Tensor, Tensor]:
+        """ teacher forward pass to make soft target, hard target for distillation loss """
+        # 1) make soft target
+        t_hard_logit = self.model.teacher_fw(
+            inputs,
+            padding_mask,
+            attention_mask
+        )
+        soft_target = F.softmax(
+            t_hard_logit.view(-1, self.cfg.vocab_size) / self.cfg.temperature,  # flatten softmax distribution
+            dim=-1
+        )  # [bs* seq, vocab_size]
+
+        # 2) make hard target
+        hard_target = torch.zeros_like(soft_target, device="cuda")
+        hard_target_idx = soft_target.argmax(dim=-1)  # [bs * seq]
+        hard_target.scatter_(1, hard_target_idx.view(-1, 1), 1)  # [bs * seq, vocab_size]
+        return soft_target, hard_target
+
+    def student_fw(
+        self,
+        inputs: Tensor,
+        padding_mask: Tensor,
+        attention_mask: Tensor = None
+    ) -> Tensor:
+        s_hard_logit = self.model.teacher_fw(
+            inputs,
+            padding_mask,
+            attention_mask
+        )
+        soft_target = F.softmax(
+            t_hard_logit.view(-1, self.cfg.vocab_size) / self.cfg.temperature,  # flatten softmax distribution
+            dim=-1
+        )  # [bs* seq, vocab_size]

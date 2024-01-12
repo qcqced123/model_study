@@ -11,7 +11,7 @@ from configuration import CFG
 class DistilBERT(nn.Module, AbstractModel):
     """ Main class for DistilBERT Style Model, Teacher-Student Framework
     for Knowledge Distillation aim to lighter Large Scale LLM model. This model have 3 objective functions:
-        1) distillation loss, calculated bys soft targets & soft predictions
+        1) distillation loss, calculated by soft targets & soft predictions
         2) student loss, calculated by hard targets & hard predictions
         3) cosine similarity loss, calculated by student & teacher logit similarity
 
@@ -60,8 +60,17 @@ class DistilBERT(nn.Module, AbstractModel):
             padding_mask,
             attention_mask
         )
-        t_logit = self.mlm_head(last_hidden_state)
-
+        t_logit = self.mlm_head(last_hidden_state)  # hard logit => to make soft logit
         return t_logit
+
+    def student_fw(
+        self,
+        inputs: Tensor,
+        padding_mask: Tensor,
+        attention_mask: Tensor = None
+    ) -> Tensor:
+        """ forward pass for student model
+        """
+        pass
 
 
