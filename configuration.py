@@ -16,6 +16,8 @@ class CFG:
     resume, load_pretrained, state_dict = True, False, '/'
     generator_state_dict = '/'
     discriminator_state_dict = '/'
+    teacher_state_dict = '/'
+    student_state_dict = '/'
     name = 'MaskedLanguageModel'
     datafolder = 'wikipedia_en'
     trainer = 'PreTrainTuner'
@@ -139,3 +141,13 @@ class CFG:
     span_probability = 0.2
     max_span_length = 10
     is_concatenate = True
+
+    # 4) Distillation Knowledge Option
+    teacher_num_layers = 12
+    student_num_layers = 6
+    is_teacher_resume = False
+    is_student_resume = False
+    teacher_load_pretrained = False
+    student_load_pretrained = False
+    temperature = 5
+

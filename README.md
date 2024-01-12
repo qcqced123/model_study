@@ -10,6 +10,7 @@ Experiment Application
 ├── config
 │	├── pretrain
 │       │    ├──bert.json
+│       │    ├──distilbert.json
 │       │    ├──electra.json
 │       │    ├──spanbert.json
 │       │    ├──deberta.json
@@ -26,6 +27,7 @@ Experiment Application
 │	│	├── abstract_model.py
 │	│	├── attention
 │	│	│    ├── bert.py
+│	│	│    ├── distilbert.py
 │	│	│    ├── transformer.py
 │	│	│    ├── vit.py  # vision transformer
 │	│	│    ├── deberta.py
@@ -77,7 +79,7 @@ Experiment Application
 - [Roformer] RoFormer: Enhanced Transformer with Rotary Position Embedding (Continue)
 - **[ELECTRA] Pre-training Text Encoders as Discriminators Rather Than Generators (Complete)**
 - **[SpanBERT] SpanBERT: Improving Pre-training by Representing and Predicting Spans (Complete)**
-- [DistilBERT] DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter
+- [DistilBERT] DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter (Complete)
 - [Sentence-BERT] Sentence Embeddings using Siamese BERT-Networks (Continue)
 - **[DeBERTa] DeBERTa: Decoding-Enhanced BERT with Disentangled-Attention (Complete, [Review](https://qcqced123.github.io/nlp/deberta))**
 - **[DeBERTa-V3] Improving DeBERTa using ELECTRA-Style Pre-Training with Gradient-Disentangled Embedding Sharing (Complete)**

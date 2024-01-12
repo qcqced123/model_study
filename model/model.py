@@ -8,6 +8,7 @@ from configuration import CFG
 from model.abstract_task import AbstractTask
 from experiment.models.attention.electra import ELECTRA
 from experiment.models.attention.spanbert import SpanBERT
+from experiment.models.attention.distilbert import DistilBERT
 
 
 class MaskedLanguageModel(nn.Module, AbstractTask):
@@ -130,6 +131,7 @@ class ReplacedTokenDetection(nn.Module, AbstractTask):
             self.cfg,
             self.select_model
         )
+        self._init_weights(self.model)
         if self.cfg.generator_load_pretrained:  # for generator
             self.model.generator.load_state_dict(
                 torch.load(cfg.checkpoint_dir + cfg.state_dict),
@@ -140,7 +142,6 @@ class ReplacedTokenDetection(nn.Module, AbstractTask):
                 torch.load(cfg.checkpoint_dir + cfg.state_dict),
                 strict=True
             )
-        self._init_weights(self.model)
         if self.cfg.gradient_checkpoint:
             self.model.gradient_checkpointing_enable()
 
@@ -176,3 +177,38 @@ class ReplacedTokenDetection(nn.Module, AbstractTask):
         )
         return d_logit
 
+
+class DistillationKnowledge(nn.Module, AbstractTask):
+    """ Custom Task Module for Knowledge Distillation by DistilBERT Style Architecture
+    DistilBERT Style Architecture is Teacher-Student Framework for Knowledge Distillation,
+
+    And then they have 3 objective functions:
+        1) distillation loss, calculated bys soft targets & soft predictions
+        2) student loss, calculated by hard targets & hard predictions
+        3) cosine similarity loss, calculated by student & teacher logit similarity
+
+
+    """
+    def __init__(self, cfg: CFG) -> None:
+        super(DistillationKnowledge, self).__init__()
+        self.cfg = CFG
+        self.model = DistilBERT(
+            self.cfg,
+            self.select_model
+        )
+        self._init_weights(self.model)
+        if self.cfg.teacher_load_pretrained:  # for generator
+            self.model.teacher.load_state_dict(
+                torch.load(cfg.checkpoint_dir + cfg.teacher_state_dict),
+                strict=False
+            )
+        if self.cfg.student_load_pretrained:  # for discriminator
+            self.model.student.load_state_dict(
+                torch.load(cfg.checkpoint_dir + cfg.student_state_dict),
+                strict=True
+            )
+        if self.cfg.gradient_checkpoint:
+            self.model.gradient_checkpointing_enable()
+
+    def forward(self) -> Tensor:
+        pass
