@@ -7,6 +7,7 @@ from experiment.tuner.mlm import MLMHead
 from experiment.tuner.sbo import SBOHead
 from configuration import CFG
 from model.abstract_task import AbstractTask
+from model_utils import freeze, get_freeze_parameters
 from experiment.models.attention.electra import ELECTRA
 from experiment.models.attention.spanbert import SpanBERT
 from experiment.models.attention.distilbert import DistilBERT
@@ -184,10 +185,12 @@ class DistillationKnowledge(nn.Module, AbstractTask):
     DistilBERT Style Architecture is Teacher-Student Framework for Knowledge Distillation,
 
     And then they have 3 objective functions:
-        1) distillation loss, calculated bys soft targets & soft predictions
+        1) distillation loss, calculated by soft targets & soft predictions
+            (nn.KLDIVLoss(reduction='batchmean'))
         2) student loss, calculated by hard targets & hard predictions
+            (nn.CrossEntropyLoss(reduction='mean')), same as pure MLM Loss
         3) cosine similarity loss, calculated by student & teacher logit similarity
-
+            (nn.CosineEmbeddingLoss(reduction='mean')), similar as contrastive loss
 
     """
     def __init__(self, cfg: CFG) -> None:
@@ -208,6 +211,10 @@ class DistillationKnowledge(nn.Module, AbstractTask):
                 torch.load(cfg.checkpoint_dir + cfg.student_state_dict),
                 strict=True
             )
+        if self.cfg.freeze:
+            freeze(self.model.teacher)
+            freeze(self.model.mlm_head)
+
         if self.cfg.gradient_checkpoint:
             self.model.gradient_checkpointing_enable()
 
@@ -215,38 +222,42 @@ class DistillationKnowledge(nn.Module, AbstractTask):
         self,
         inputs: Tensor,
         padding_mask: Tensor,
-        attention_mask: Tensor = None
+        attention_mask: Tensor = None,
+        is_valid: bool = False
     ) -> Tuple[Tensor, Tensor]:
-        """ teacher forward pass to make soft target, hard target for distillation loss """
+        """ teacher forward pass to make soft target, last_hidden_state for distillation loss """
         # 1) make soft target
-        t_hard_logit = self.model.teacher_fw(
+        temperature = 1.0 if is_valid else self.cfg.temperature
+        last_hidden_state, t_logit = self.model.teacher_fw(
             inputs,
             padding_mask,
             attention_mask
         )
+        last_hidden_state = last_hidden_state.view(-1, self.cfg.dim_model)  # flatten last_hidden_state
         soft_target = F.softmax(
-            t_hard_logit.view(-1, self.cfg.vocab_size) / self.cfg.temperature,  # flatten softmax distribution
+            t_logit.view(-1, self.cfg.vocab_size) / temperature,  # flatten softmax distribution
             dim=-1
         )  # [bs* seq, vocab_size]
-
-        # 2) make hard target
-        hard_target = torch.zeros_like(soft_target, device="cuda")
-        hard_target_idx = soft_target.argmax(dim=-1)  # [bs * seq]
-        hard_target.scatter_(1, hard_target_idx.view(-1, 1), 1)  # [bs * seq, vocab_size]
-        return soft_target, hard_target
+        return last_hidden_state, soft_target
 
     def student_fw(
         self,
         inputs: Tensor,
         padding_mask: Tensor,
-        attention_mask: Tensor = None
-    ) -> Tensor:
-        s_hard_logit = self.model.teacher_fw(
+        attention_mask: Tensor = None,
+        is_valid: bool = False
+    ) -> Tuple[Tensor, Tensor, Tensor]:
+        """ student forward pass to make soft prediction, hard prediction for student loss """
+        temperature = 1.0 if is_valid else self.cfg.temperature
+        last_hidden_state, s_logit = self.model.teacher_fw(
             inputs,
             padding_mask,
             attention_mask
         )
-        soft_target = F.softmax(
-            t_hard_logit.view(-1, self.cfg.vocab_size) / self.cfg.temperature,  # flatten softmax distribution
+        last_hidden_state = last_hidden_state.view(-1, self.cfg.dim_model)  # flatten last_hidden_state
+        soft_pred = F.softmax(
+            s_logit.view(-1, self.cfg.vocab_size) / temperature,  # flatten softmax distribution
             dim=-1
-        )  # [bs* seq, vocab_size]
+        )
+        return last_hidden_state, s_logit, soft_pred
+

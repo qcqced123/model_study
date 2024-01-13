@@ -1,4 +1,6 @@
+import torch.nn as nn
 import numpy as np
+from torch import Tensor
 
 
 def accuracy(y_true: np.array, y_pred: np.array) -> float:
@@ -49,7 +51,7 @@ def precision(y_true, y_pred) -> float:
 
 
 def f_beta(y_true: np.ndarray, y_pred: np.ndarray, beta: float = 2) -> float:
-    """
+    """ method for F_beta score
     Math:
         TP (true positive): pred == 1 && true == 1
         FP (false positive): pred == 1 && true == 0
@@ -68,4 +70,18 @@ def f_beta(y_true: np.ndarray, y_pred: np.ndarray, beta: float = 2) -> float:
     f_recall = tp / (tp + fn)
     score = (1 + beta ** 2) * f_precision * f_recall / (beta ** 2 * f_precision + f_recall)
     return round(score.mean(), 4)
+
+
+def cosine_similarity(a: Tensor, b: Tensor, eps=1e-8) -> np.ndarray:
+    """ calculate cosine similarity for two tensors of hidden states
+    you must pass detached tensor which is already on CPU not GPU
+    Args:
+        a: Tensor, shape of [batch*seq, dim]
+        b: Tensor, shape of [batch*seq, dim]
+        eps: for numerical stability
+    """
+    metric = nn.CosineSimilarity(dim=-1, eps=eps)
+    output = metric(a, b).mean().numpy()
+    return output
+
 

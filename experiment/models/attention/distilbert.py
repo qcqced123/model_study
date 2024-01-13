@@ -12,14 +12,17 @@ class DistilBERT(nn.Module, AbstractModel):
     """ Main class for DistilBERT Style Model, Teacher-Student Framework
     for Knowledge Distillation aim to lighter Large Scale LLM model. This model have 3 objective functions:
         1) distillation loss, calculated by soft targets & soft predictions
+            (nn.KLDIVLoss(reduction='batchmean'))
         2) student loss, calculated by hard targets & hard predictions
+            (nn.CrossEntropyLoss(reduction='mean')), same as pure MLM Loss
         3) cosine similarity loss, calculated by student & teacher logit similarity
+            (nn.CosineEmbeddingLoss(reduction='mean')), similar as contrastive loss
 
     soft targets & soft predictions are meaning that logit are passed through softmax function applied with temperature T
     temperature T aim to flatten softmax layer distribution for making "Dark Knowledge" from teacher model
 
     hard targets & hard predictions are meaning that logit are passed through softmax function without temperature T
-    hard targets must be converted to one-hot vector for calculating cross entropy loss
+    hard targets are same as just simple labels from MLM Collator returns for calculating cross entropy loss
 
     cosine similarity loss is calculated by cosine similarity between student & teacher logit
     cosine similarity is calculated by nn.CosineSimilarity() function, values are range to [-1, 1]
@@ -46,13 +49,14 @@ class DistilBERT(nn.Module, AbstractModel):
         self.mlm_head = MLMHead(self.cfg)  # must be loading pretrained model's mlm head
 
         self.student = model_func(self.cfg.student_num_layers)
+        self.s_mlm_head = MLMHead(self.cfg)
 
     def teacher_fw(
         self,
         inputs: Tensor,
         padding_mask: Tensor,
-        attention_mask: Tensor = None
-    ) -> Tensor:
+        attention_mask: Tensor = None,
+    ) -> Tuple[Tensor, Tensor]:
         """ forward pass for teacher model
         """
         last_hidden_state, _ = self.teacher(
@@ -61,16 +65,21 @@ class DistilBERT(nn.Module, AbstractModel):
             attention_mask
         )
         t_logit = self.mlm_head(last_hidden_state)  # hard logit => to make soft logit
-        return t_logit
+        return last_hidden_state, t_logit
 
     def student_fw(
         self,
         inputs: Tensor,
         padding_mask: Tensor,
         attention_mask: Tensor = None
-    ) -> Tensor:
+    ) -> Tuple[Tensor, Tensor]:
         """ forward pass for student model
         """
-        pass
-
+        last_hidden_state, _ = self.student(
+            inputs,
+            padding_mask,
+            attention_mask
+        )
+        s_logit = self.s_mlm_head(last_hidden_state)  # hard logit => to make soft logit
+        return last_hidden_state, s_logit
 

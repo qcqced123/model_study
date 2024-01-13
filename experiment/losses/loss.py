@@ -105,6 +105,34 @@ class WeightedMSELoss(nn.Module):
         return loss
 
 
+class KLDivLoss(nn.Module):
+    """ KL-Divergence Loss
+    Args:
+        reduction: str, reduction method of losses
+    """
+    def __init__(self, reduction: str = 'mean') -> None:
+        super(KLDivLoss, self).__init__()
+        self.reduction = reduction
+
+    def forward(self, y_pred: Tensor, y_true: Tensor) -> Tensor:
+        criterion = nn.KLDivLoss(reduction=self.reduction)
+        return criterion(y_pred, y_true)
+
+
+class BinaryCrossEntropyLoss(nn.Module):
+    """ Binary Cross-Entropy Loss for Binary Classification
+    Args:
+        reduction: str, reduction method of losses
+    """
+    def __init__(self, reduction):
+        super(BinaryCrossEntropyLoss, self).__init__()
+        self.reduction = reduction
+
+    def forward(self, y_pred, y_true) -> Tensor:
+        criterion = nn.BCEWithLogitsLoss(reduction=self.reduction)
+        return criterion(y_pred, y_true)
+
+
 class CrossEntropyLoss(nn.Module):
     """ Cross-Entropy Loss for Multi-Class Classification """
     def __init__(self, reduction: str = 'mean') -> None:
@@ -113,17 +141,6 @@ class CrossEntropyLoss(nn.Module):
 
     def forward(self, y_pred: Tensor, y_true: Tensor) -> Tensor:
         criterion = nn.CrossEntropyLoss(reduction=self.reduction)
-        return criterion(y_pred, y_true)
-
-
-class BinaryCrossEntropyLoss(nn.Module):
-    """ Binary Cross-Entropy Loss for Binary Classification """
-    def __init__(self, reduction):
-        super(BinaryCrossEntropyLoss, self).__init__()
-        self.reduction = reduction
-
-    def forward(self, y_pred, y_true) -> Tensor:
-        criterion = nn.BCEWithLogitsLoss(reduction=self.reduction)
         return criterion(y_pred, y_true)
 
 
@@ -143,6 +160,25 @@ class PearsonLoss(nn.Module):
         corr = cov / (torch.sqrt(torch.sum(vx ** 2)) * torch.sqrt(torch.sum(vy ** 2)) + 1e-12)
         corr = torch.maximum(torch.minimum(corr, torch.tensor(1)), torch.tensor(-1))
         return torch.sub(torch.tensor(1), corr ** 2)
+
+
+class CosineEmbeddingLoss(nn.Module):
+    """ Cosine Embedding Loss for Metric Learning, same concept with Contrastive Loss
+    but some setting is different, Cosine Embedding Loss is more range to [-1, 1]
+
+    This Module is API Wrapper of nn.CosineEmbeddingLoss from pytorch
+    Args:
+        reduction: str, reduction method of losses
+        margin: float, default = 0, margin value for cosine embedding loss
+    """
+    def __init__(self, reduction: str = 'mean', margin: float = 0.0) -> None:
+        super(CosineEmbeddingLoss, self).__init__()
+        self.reduction = reduction
+        self.margin = margin
+
+    def forward(self, y_pred: Tensor, y_true: Tensor) -> Tensor:
+        criterion = nn.CosineEmbeddingLoss(margin=self.margin, reduction=self.reduction)
+        return criterion(y_pred, y_true)
 
 
 # Contrastive Loss for NLP Semantic Search

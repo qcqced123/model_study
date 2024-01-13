@@ -11,7 +11,7 @@ from torch.optim.swa_utils import AveragedModel
 
 from tqdm.auto import tqdm
 from torch import Tensor
-from typing import Tuple, Any, Union, List, Callable
+from typing import Tuple, Any, Union, List, Callable, Dict
 
 import dataset_class.dataclass as dataset_class
 from experiment.tuner import mlm, clm, sbo, rtd
@@ -584,7 +584,7 @@ class RTDTuner(PreTrainTuner):
             )
         model.to(self.cfg.device)
 
-        criterion = getattr(loss, self.cfg.loss_fn)(self.cfg.reduction)
+        criterion = getattr(loss, self.cfg.loss_fn)(self.cfg.reduction)  # make list of loss function same as val metric logicp
         val_criterion = getattr(loss, self.cfg.val_loss_fn)(self.cfg.reduction)
         val_metric_list = [getattr(metric, f'{metrics}') for metrics in self.metric_list]
 
@@ -1022,8 +1022,8 @@ class DistillKnowledgeTuner(PreTrainTuner):
 
         model.to(self.cfg.device)
 
-        criterion = getattr(loss, self.cfg.loss_fn)(self.cfg.reduction)
-        val_criterion = getattr(loss, self.cfg.val_loss_fn)(self.cfg.reduction)
+        criterion = {loss_fn: getattr(loss, f'{loss_fn}') for loss_fn in self.cfg.losses_fn}
+        val_criterion = {val_loss_fn: getattr(loss, f'{val_loss_fn}') for val_loss_fn in self.cfg.val_losses_fn}
         val_metric_list = [getattr(metric, f'{metrics}') for metrics in self.metric_list]
 
         optimizer = getattr(transformers, self.cfg.optimizer)(
@@ -1059,14 +1059,14 @@ class DistillKnowledgeTuner(PreTrainTuner):
             self,
             loader_train,
             model: nn.Module,
-            criterion: nn.Module,
+            criterion: Dict[str, nn.Module],
             optimizer,
             scheduler,
             loader_valid,
-            val_criterion: nn.Module,
+            val_criterion: Dict[str, nn.Module],
             val_metric_list: List[Callable],
-            g_val_score_max: float,
-            d_val_score_max: float,
+            val_score_max: float,
+            val_score_max_2: float,
             epoch: int,
             awp: nn.Module = None,
             swa_model: nn.Module = None,
@@ -1076,9 +1076,11 @@ class DistillKnowledgeTuner(PreTrainTuner):
         """ Function for train loop with validation for each batch*N Steps
         DistillBERT has three loss:
             1) distillation loss, calculated by soft targets & soft predictions
+                (nn.KLDIVLoss(reduction='batchmean'))
             2) student loss, calculated by hard targets & hard predictions
+                (nn.CrossEntropyLoss(reduction='mean')), same as pure MLM Loss
             3) cosine similarity loss, calculated by student & teacher logit similarity
-
+                (nn.CosineEmbeddingLoss(reduction='mean')), similar as contrastive loss
         Those 3 losses are summed jointly and then backward to student model
         """
         scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
@@ -1092,34 +1094,32 @@ class DistillKnowledgeTuner(PreTrainTuner):
             batch_size = inputs.size(0)  # same as ES, GDES
 
             with torch.no_grad():
-                soft_target, hard_target = model.teacher_fw(
+                t_hidden_state, soft_target = model.teacher_fw(
                     inputs,
                     padding_mask
                 )  # teacher model's pred => hard logit
 
             with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
-                g_logit, d_inputs, d_labels = model.generator_fw(
+                s_hidden_state, s_logit, soft_pred = model.student_fw(
                     inputs,
                     labels,
                     padding_mask
                 )
-                d_logit = model.discriminator_fw(
-                    d_inputs,
-                    padding_mask
-                )
-                g_loss = criterion(g_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
-                d_loss = criterion(d_logit.view(-1, 2), d_labels)
-                loss = g_loss + self.cfg.discriminator_lambda*d_loss  # discriminator's loss can't backward to generator
+                d_loss = criterion["KLDivLoss"](soft_pred, soft_target)  # nn.KLDIVLoss
+                s_loss = criterion["CrossEntropyLoss"](s_logit.view(-1, self.cfg.vocab_size), labels.view(-1))  # nn.CrossEntropyLoss
+                c_loss = criterion["CosineEmbeddingLoss"](s_hidden_state, t_hidden_state)  # nn.CosineEmbeddingLoss
+                loss = d_loss + s_loss + c_loss  # linear combination loss
 
             if self.cfg.n_gradient_accumulation_steps > 1:
                 loss = loss / self.cfg.n_gradient_accumulation_steps
 
             scaler.scale(loss).backward()
-            losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
-            g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
-            d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
 
-            if self.cfg.awp and epoch >= self.cfg.nth_awp_start_epoch:  # later update
+            d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
+            s_losses.update(s_loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
+            c_losses.update(c_loss.detach().cpu().numpy(), batch_size)
+
+            if self.cfg.awp and epoch >= self.cfg.nth_awp_start_epoch:  # later update, current version is not supported
                 adv_loss = awp.attack_backward(inputs, padding_mask, labels)
                 scaler.scale(adv_loss).backward()
                 awp._restore()
@@ -1143,10 +1143,12 @@ class DistillKnowledgeTuner(PreTrainTuner):
             lr = scheduler.get_lr()[0]
             grad_norm = grad_norm.detach().cpu().numpy()
 
+            avg_loss = d_losses.avg + s_losses.avg + c_losses.avg
             wandb.log({
-                '<Per Step> Total Train Loss': losses.avg,
-                '<Per Step> Generator Train Loss': g_losses.avg,
-                '<Per Step> Discriminator Train Loss': d_losses.avg,
+                '<Per Step> Total Train Loss': avg_loss,
+                '<Per Step> Distillation Train Loss': d_losses.avg,
+                '<Per Step> Student Train Loss': s_losses.avg,
+                '<Per Step> Cosine Embedding Loss Train Loss': c_losses.avg,
                 '<Per Step> Gradient Norm': grad_norm,
                 '<Per Step> lr': lr,
             })
@@ -1155,75 +1157,37 @@ class DistillKnowledgeTuner(PreTrainTuner):
             2) save each part of model's checkpoint when BEST validation score is updated
             """
             if ((step + 1) % self.cfg.val_check == 0) or ((step + 1) == len(loader_train)):
-                g_valid_loss, d_valid_loss, g_score_list, d_score_list = self.valid_fn(
+                d_valid_loss, s_valid_loss, c_valid_loss = self.valid_fn(
                     loader_valid,
                     model,
                     val_criterion,
                     val_metric_list
                 )
-                valid_loss = g_valid_loss + d_valid_loss
-                print(f'[Validation Check: {step}/{len(loader_train)}] Total Train Loss: {np.round(losses.avg, 4)}')
-                print(
-                    f'[Validation Check: {step}/{len(loader_train)}] Generator Train Loss: {np.round(g_losses.avg, 4)}')
-                print(
-                    f'[Validation Check: {step}/{len(loader_train)}] Discriminator Train Loss: {np.round(d_losses.avg, 4)}')
+                valid_loss = d_valid_loss + s_valid_loss + c_valid_loss
 
-                print(f'[Validation Check: {step}/{len(loader_train)}] Total Valid Loss: {np.round(valid_loss, 4)}')
-                print(
-                    f'[Validation Check: {step}/{len(loader_train)}] Generator Valid Loss: {np.round(g_valid_loss, 4)}')
-                print(
-                    f'[Validation Check: {step}/{len(loader_train)}] Discriminator Valid Loss: {np.round(d_valid_loss, 4)}')
-
-                for i, metric_name in enumerate(self.metric_list):
-                    print(f'[{step}/{len(loader_train)}] Generator Valid {metric_name}: {g_score_list[i]}')
-                    print(f'[{step}/{len(loader_train)}] Discriminator Valid {metric_name}: {d_score_list[i]}')
-                    wandb.log({
-                        f'<Validation Check Step> Generator Valid {metric_name}': g_score_list[i],
-                        f'<Validation Check Step> Discriminator Valid {metric_name}': d_score_list[i]
-                    })
-
-                wandb.log({
-                    '<Val Check Step> Total Train Loss': losses.avg,
-                    '<Val Check Step> Generator Train Loss': g_losses.avg,
-                    '<Val Check Step> Discriminator Train Loss': d_losses.avg,
-                    '<Val Check Step> Total Valid Loss': valid_loss,
-                    '<Val Check Step> Generator Valid Loss': g_valid_loss,
-                    '<Val Check Step> Discriminator Valid Loss': d_valid_loss,
-                })
-
-                # save checkpoint of generator
-                if g_val_score_max >= g_valid_loss:
-                    print(f'[Update] Generator Valid Score : ({g_val_score_max:.4f} => {g_valid_loss:.4f}) Save Parameter')
-                    print(f'Generator Best Score: {g_valid_loss}')
+                # save checkpoint of ONLY student, not including mlm head
+                if val_score_max >= valid_loss:
+                    print(f'[Update] Total Valid Score : ({val_score_max:.4f} => {valid_loss:.4f}) Save Parameter')
+                    print(f'Total Best Score: {valid_loss}')
                     torch.save(
-                        model.model.generator.state_dict(),
-                        f'{self.cfg.checkpoint_dir}ELECTRA_Generator_{self.cfg.rtd_masking}_{self.cfg.mlm_masking}{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
+                        model.model.student.state_dict(),
+                        f'{self.cfg.checkpoint_dir}DistilBERT_Student_{self.cfg.mlm_masking}_{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
                     )
-                    g_val_score_max = g_valid_loss
+                    val_score_max = valid_loss
 
-                # save checkpoint of Discriminator
-                if d_val_score_max >= d_valid_loss:
-                    print(f'[Update] Discriminator Valid Score : ({d_val_score_max:.4f} => {d_valid_loss:.4f}) Save Parameter')
-                    print(f'Discriminator Best Score: {d_valid_loss}')
-                    torch.save(
-                        model.model.discriminator.state_dict(),
-                        f'{self.cfg.checkpoint_dir}ELECTRA_Discriminator_{self.cfg.rtd_masking}_{self.cfg.mlm_masking}{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
-                    )
-                    d_val_score_max = d_valid_loss
-        return d_losses.avg * self.cfg.n_gradient_accumulation_steps, d_val_score_max
+        return d_losses.avg * self.cfg.n_gradient_accumulation_steps, val_score_max
 
     def valid_fn(
         self,
         loader_valid,
         model: nn.Module,
-        val_criterion: nn.Module,
+        val_criterion: Dict[str, nn.Module],
         val_metric_list: List[Callable]
-    ) -> Tuple[Any, Any, List[Any], List[Any]]:
-        """ method for pure Embedding Sharing, Gradient-Disentangled Embedding Sharing ELECTRA validation loop
+    ) -> Tuple[float, float, float]:
+        """ method for validating DistillBERT model, this model recover temperature for pure softmax(T=1)
         """
-        valid_g_losses, valid_d_losses = AverageMeter(), AverageMeter()
-        g_valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
-        d_valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
+        valid_d_losses, valid_s_losses, valid_c_losses = AverageMeter(), AverageMeter(), AverageMeter()
+        valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
         model.eval()
         with torch.no_grad():
             for step, batch in enumerate(tqdm(loader_valid)):
@@ -1232,49 +1196,52 @@ class DistillKnowledgeTuner(PreTrainTuner):
                 padding_mask = batch['padding_mask'].to(self.cfg.device)
                 batch_size = inputs.size(0)
 
-                # Generator validation part
-                g_logit, d_inputs, d_labels = model.generator_fw(
+                # 1) Teacher model valid pred
+                t_hidden_state, soft_target = model.teacher_fw(
+                    inputs,
+                    padding_mask,
+                    is_valid=True
+                )
+
+                # 2) Student model valid pred
+                s_hidden_state, s_logit, soft_pred = model.student_fw(
                     inputs,
                     labels,
                     padding_mask
                 )
-                g_loss = val_criterion(g_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
+                d_loss = val_criterion["KLDivLoss"](soft_pred, soft_target)  # nn.KLDIVLoss
+                s_loss = val_criterion["CrossEntropyLoss"](s_logit.view(-1, self.cfg.vocab_size), labels.view(-1))  # nn.CrossEntropyLoss
+                c_loss = val_criterion["CosineEmbeddingLoss"](s_hidden_state, t_hidden_state)  # nn.CosineEmbeddingLoss
 
-                # Discriminator validation part
-                d_logit = model.discriminator_fw(
-                    d_inputs,
-                    padding_mask
-                )
-                d_loss = val_criterion(d_logit.view(-1, 2), d_labels)
-
-                valid_g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
                 valid_d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
+                valid_s_losses.update(s_loss.detach().cpu().numpy(), batch_size)
+                valid_c_losses.update(c_loss.detach().cpu().numpy(), batch_size)
 
-                valid_loss = valid_g_losses.avg + valid_d_losses.avg
+                valid_loss = valid_d_losses.avg + valid_s_losses.avg + valid_c_losses.avg
                 wandb.log({
                     '<Val Step> Valid Loss': valid_loss,
-                    '<Val Step> Generator Valid Loss': valid_g_losses.avg,
-                    '<Val Step> Discriminator Valid Loss': valid_d_losses.avg,
+                    '<Val Step> Distillation Valid Loss': valid_d_losses.avg,
+                    '<Val Step> Student Valid Loss': valid_s_losses.avg,
+                    '<Val Step> Cosine Embedding Valid Loss': valid_c_losses.avg,
                 })
 
                 for i, metric_fn in enumerate(val_metric_list):
-                    g_scores = metric_fn(
-                        g_logit.view(-1, self.cfg.vocab_size).detach().cpu().numpy(),
-                        labels.view(-1).detach().cpu().numpy()
-                    )
-                    d_scores = metric_fn(
-                        d_logit.view(-1, self.cfg.vocab_size).detach().cpu().numpy(),
-                        d_labels.detach().cpu().numpy()
-                    )
-                    g_valid_metrics[self.metric_list[i]].update(g_scores, batch_size)
-                    d_valid_metrics[self.metric_list[i]].update(d_scores, batch_size)
+                    if self.metric_list[i] == 'accuracy':
+                        scores = metric_fn(
+                            s_logit.view(-1, self.cfg.vocab_size).detach().cpu().numpy(),
+                            labels.view(-1).detach().cpu().numpy()
+                        )
+                    elif self.metric_list[i] == 'cosine_similarity':
+                        scores = metric_fn(
+                            s_hidden_state.detach().cpu().numpy(),
+                            t_hidden_state.detach().cpu().numpy()
+                        )
+                    valid_metrics[self.metric_list[i]].update(scores, batch_size)
                     wandb.log({
-                        f'<Val Step> Generator Valid {self.metric_list[i]}': g_scores,
-                        f'<Val Step> Discriminator Valid {self.metric_list[i]}': d_scores,
+                        f'<Val Step> Student Valid {self.metric_list[i]}': scores,
                     })
-        g_avg_scores = [g_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
-        d_avg_scores = [d_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
-        return valid_g_losses.avg, valid_d_losses.avg, g_avg_scores, d_avg_scores
+        return valid_d_losses.avg, valid_s_losses.avg, valid_c_losses.avg
+
 
 class FineTuningTuner:
     """ Trainer class for Fine-Tuning Pipeline, such as SQUAD, Glue, SuperGlue ... etc

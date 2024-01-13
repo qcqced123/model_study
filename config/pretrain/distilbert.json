@@ -84,13 +84,13 @@
     },
 
     "loss_options": {
-        "loss_fn": "CrossEntropyLoss",
-        "val_loss_fn": "CrossEntropyLoss",
+        "losses_fn": ["KLDivLoss", "CrossEntropyLoss", "CosineEmbeddingLoss"],
+        "val_losses_fn": ["KLDivLoss", "CrossEntropyLoss", "CosineEmbeddingLoss"],
         "reduction": "mean"
     },
 
     "metrics_options": {
-        "metrics": ["accuracy"]
+        "metrics": ["accuracy", "cosine_similarity"]
     },
 
     "common_settings": {
@@ -111,8 +111,8 @@
 
     "model_utils": {
         "stop_mode": "min",
-        "freeze": false,
-        "num_freeze": 1,
+        "freeze": true,
+        "num_freeze": -1,
         "reinit": false,
         "num_reinit": 1,
         "awp": false,

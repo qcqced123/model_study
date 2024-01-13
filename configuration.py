@@ -60,10 +60,12 @@ class CFG:
     max_grad_norm = 1
 
     """ Loss & Metrics Options """
-    loss_fn = 'CrossEntropyLoss'
+    loss_fn = 'CrossEntropyLoss'  # single loss function
     val_loss_fn = 'CrossEntropyLoss'
     reduction = 'mean'
     metrics = ['accuracy', 'precision', 'recall']
+    losses_fn = ['CrossEntropyLoss', 'KLDivLoss', 'CosineEmbeddingLoss']  # multiple loss function
+    val_losses_fn = ['CrossEntropyLoss', 'KLDivLoss', 'CosineEmbeddingLoss']
 
     """ Optimizer with LLRD Options """
     optimizer = 'AdamW'  # options: SWA, AdamW
