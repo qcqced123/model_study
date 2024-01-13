@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 from experiment.models.abstract_model import AbstractModel
 from torch import Tensor

@@ -191,7 +191,6 @@ class DistillationKnowledge(nn.Module, AbstractTask):
             (nn.CrossEntropyLoss(reduction='mean')), same as pure MLM Loss
         3) cosine similarity loss, calculated by student & teacher logit similarity
             (nn.CosineEmbeddingLoss(reduction='mean')), similar as contrastive loss
-
     """
     def __init__(self, cfg: CFG) -> None:
         super(DistillationKnowledge, self).__init__()
