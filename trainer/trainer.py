@@ -204,14 +204,7 @@ class PreTrainTuner:
 
             # validate for each size of batch*N Steps
             if ((step + 1) % self.cfg.val_check == 0) or ((step + 1) == len(loader_train)):
-                valid_loss, score_list = self.valid_fn(loader_valid, model, val_criterion, val_metric_list)
-
-                print(f'[Validation Check: {step}/{len(loader_train)}] Train Loss: {np.round(losses.avg, 4)}')
-                print(f'[Validation Check: {step}/{len(loader_train)}] Valid Loss: {np.round(valid_loss, 4)}')
-                for i, metric_name in enumerate(self.metric_list):
-                    print(f'[{step}/{len(loader_train)}] Valid {metric_name}: {score_list[i]}')
-                    wandb.log({f'<Validation Check Step> Valid {metric_name}': score_list[i]})
-
+                valid_loss = self.valid_fn(loader_valid, model, val_criterion, val_metric_list)
                 wandb.log({
                     '<Val Check Step> Train Loss': losses.avg,
                     '<Val Check Step> Valid Loss': valid_loss,
@@ -305,10 +298,10 @@ class PreTrainTuner:
                     scores = metric_fn(flat_labels.detach().cpu().numpy(), flat_logit.detach().cpu().numpy())
                     valid_metrics[self.metric_list[i]].update(scores, batch_size)
                     wandb.log({
-                        f'<Val Step> Valid {self.metric_list[i]}': scores
+                        f'<Val Step> Valid {self.metric_list[i]}': valid_metrics[self.metric_list[i]].avg
                     })
-        avg_scores = [valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
-        return valid_losses.avg, avg_scores
+
+        return valid_losses.avg
 
     def swa_fn(
             self,
@@ -432,28 +425,12 @@ class SBOTuner(PreTrainTuner):
 
             # validate for each size of batch*N Steps
             if ((step + 1) % self.cfg.val_check == 0) or ((step + 1) == len(loader_train)):
-                valid_loss, mlm_valid_loss, sbo_valid_loss, mlm_score_list, sbo_score_list = self.valid_fn(
+                valid_loss, mlm_valid_loss, sbo_valid_loss = self.valid_fn(
                     loader_valid,
                     model,
                     val_criterion,
                     val_metric_list
                 )
-                print(f'[Validation Check: {step}/{len(loader_train)}] Total Train Loss: {np.round(losses.avg, 4)}')
-                print(f'[Validation Check: {step}/{len(loader_train)}] MLM Train Loss: {np.round(mlm_losses.avg, 4)}')
-                print(f'[Validation Check: {step}/{len(loader_train)}] SBO Train Loss: {np.round(sbo_losses.avg, 4)}')
-
-                print(f'[Validation Check: {step}/{len(loader_train)}] Total Valid Loss: {np.round(valid_loss, 4)}')
-                print(f'[Validation Check: {step}/{len(loader_train)}] MLM Valid Loss: {np.round(mlm_valid_loss, 4)}')
-                print(f'[Validation Check: {step}/{len(loader_train)}] SBO Valid Loss: {np.round(sbo_valid_loss, 4)}')
-
-                for i, metric_name in enumerate(self.metric_list):
-                    print(f'[{step}/{len(loader_train)}] MLM Valid {metric_name}: {mlm_score_list[i]}')
-                    print(f'[{step}/{len(loader_train)}] SBO Valid {metric_name}: {sbo_score_list[i]}')
-                    wandb.log({
-                        f'<Validation Check Step> MLM Valid {metric_name}': mlm_score_list[i],
-                        f'<Validation Check Step> SBO Valid {metric_name}': sbo_score_list[i]
-                    })
-
                 wandb.log({
                     '<Val Check Step> Total Train Loss': losses.avg,
                     '<Val Check Step> MLM Train Loss': mlm_losses.avg,
@@ -479,7 +456,7 @@ class SBOTuner(PreTrainTuner):
             model: nn.Module,
             val_criterion: nn.Module,
             val_metric_list: List[Callable]
-    ) -> Tuple[Any, Any, Any, List[Any], List[Any]]:
+    ) -> Tuple[float, float, float]:
         """ function for validation loop
         """
         valid_losses, valid_mlm_losses, valid_sbo_losses = AverageMeter(), AverageMeter(), AverageMeter()
@@ -528,12 +505,11 @@ class SBOTuner(PreTrainTuner):
                     mlm_valid_metrics[self.metric_list[i]].update(mlm_scores, batch_size)
                     sbo_valid_metrics[self.metric_list[i]].update(sbo_scores, batch_size)
                     wandb.log({
-                        f'<Val Step> MLM Valid {self.metric_list[i]}': mlm_scores,
-                        f'<Val Step> SBO Valid {self.metric_list[i]}': sbo_scores,
+                        f'<Val Step> MLM Valid {self.metric_list[i]}': mlm_valid_metrics[self.metric_list[i]].avg,
+                        f'<Val Step> SBO Valid {self.metric_list[i]}': sbo_valid_metrics[self.metric_list[i]].avg,
                     })
-        mlm_avg_scores = [mlm_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
-        sbo_avg_scores = [sbo_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
-        return valid_losses.avg, valid_mlm_losses.avg, valid_sbo_losses.avg, mlm_avg_scores, sbo_avg_scores
+
+        return valid_losses.avg, valid_mlm_losses.avg, valid_sbo_losses.avg
 
 
 class RTDTuner(PreTrainTuner):
@@ -712,33 +688,13 @@ class RTDTuner(PreTrainTuner):
             2) save each part of model's checkpoint when BEST validation score is updated
             """
             if ((step + 1) % self.cfg.val_check == 0) or ((step + 1) == len(loader_train)):
-                g_valid_loss, d_valid_loss, g_score_list, d_score_list = self.valid_fn(
+                g_valid_loss, d_valid_loss = self.valid_fn(
                     loader_valid,
                     model,
                     val_criterion,
                     val_metric_list
                 )
                 valid_loss = g_valid_loss + d_valid_loss
-                print(f'[Validation Check: {step}/{len(loader_train)}] Total Train Loss: {np.round(losses.avg, 4)}')
-                print(
-                    f'[Validation Check: {step}/{len(loader_train)}] Generator Train Loss: {np.round(g_losses.avg, 4)}')
-                print(
-                    f'[Validation Check: {step}/{len(loader_train)}] Discriminator Train Loss: {np.round(d_losses.avg, 4)}')
-
-                print(f'[Validation Check: {step}/{len(loader_train)}] Total Valid Loss: {np.round(valid_loss, 4)}')
-                print(
-                    f'[Validation Check: {step}/{len(loader_train)}] Generator Valid Loss: {np.round(g_valid_loss, 4)}')
-                print(
-                    f'[Validation Check: {step}/{len(loader_train)}] Discriminator Valid Loss: {np.round(d_valid_loss, 4)}')
-
-                for i, metric_name in enumerate(self.metric_list):
-                    print(f'[{step}/{len(loader_train)}] Generator Valid {metric_name}: {g_score_list[i]}')
-                    print(f'[{step}/{len(loader_train)}] Discriminator Valid {metric_name}: {d_score_list[i]}')
-                    wandb.log({
-                        f'<Validation Check Step> Generator Valid {metric_name}': g_score_list[i],
-                        f'<Validation Check Step> Discriminator Valid {metric_name}': d_score_list[i]
-                    })
-
                 wandb.log({
                     '<Val Check Step> Total Train Loss': losses.avg,
                     '<Val Check Step> Generator Train Loss': g_losses.avg,
@@ -866,33 +822,15 @@ class RTDTuner(PreTrainTuner):
                 '<Per Step> lr': lr,
             })
 
-            """ 1) validate for each size of batch*N Steps
-            2) save each part of model's checkpoint when BEST validation score is updated
-            """
+            # validate for each size of batch*N Steps
             if ((step + 1) % self.cfg.val_check == 0) or ((step + 1) == len(loader_train)):
-                g_valid_loss, d_valid_loss, g_score_list, d_score_list = self.valid_fn(
+                g_valid_loss, d_valid_loss = self.valid_fn(
                     loader_valid,
                     model,
                     val_criterion,
                     val_metric_list
                 )
                 valid_loss = g_valid_loss + d_valid_loss
-                print(f'[Validation Check: {step}/{len(loader_train)}] Total Train Loss: {np.round(avg_loss, 4)}')
-                print(f'[Validation Check: {step}/{len(loader_train)}] Generator Train Loss: {np.round(g_losses.avg, 4)}')
-                print(f'[Validation Check: {step}/{len(loader_train)}] Discriminator Train Loss: {np.round(d_losses.avg, 4)}')
-
-                print(f'[Validation Check: {step}/{len(loader_train)}] Total Valid Loss: {np.round(valid_loss, 4)}')
-                print(f'[Validation Check: {step}/{len(loader_train)}] Generator Valid Loss: {np.round(g_valid_loss, 4)}')
-                print(f'[Validation Check: {step}/{len(loader_train)}] Discriminator Valid Loss: {np.round(d_valid_loss, 4)}')
-
-                for i, metric_name in enumerate(self.metric_list):
-                    print(f'[{step}/{len(loader_train)}] Generator Valid {metric_name}: {g_score_list[i]}')
-                    print(f'[{step}/{len(loader_train)}] Discriminator Valid {metric_name}: {d_score_list[i]}')
-                    wandb.log({
-                        f'<Validation Check Step> Generator Valid {metric_name}': g_score_list[i],
-                        f'<Validation Check Step> Discriminator Valid {metric_name}': d_score_list[i]
-                    })
-
                 wandb.log({
                     '<Val Check Step> Total Train Loss': avg_loss,
                     '<Val Check Step> Generator Train Loss': g_losses.avg,
@@ -930,7 +868,7 @@ class RTDTuner(PreTrainTuner):
         model: nn.Module,
         val_criterion: nn.Module,
         val_metric_list: List[Callable]
-    ) -> Tuple[Any, Any, List[Any], List[Any]]:
+    ) -> Tuple[float, float]:
         """ method for pure Embedding Sharing, Gradient-Disentangled Embedding Sharing ELECTRA validation loop
         """
         valid_g_losses, valid_d_losses = AverageMeter(), AverageMeter()
@@ -981,12 +919,11 @@ class RTDTuner(PreTrainTuner):
                     g_valid_metrics[self.metric_list[i]].update(g_scores, batch_size)
                     d_valid_metrics[self.metric_list[i]].update(d_scores, batch_size)
                     wandb.log({
-                        f'<Val Step> Generator Valid {self.metric_list[i]}': g_scores,
-                        f'<Val Step> Discriminator Valid {self.metric_list[i]}': d_scores,
+                        f'<Val Step> Generator Valid {self.metric_list[i]}': g_valid_metrics[self.metric_list[i]].avg,
+                        f'<Val Step> Discriminator Valid {self.metric_list[i]}': d_valid_metrics[self.metric_list[i]].avg,
                     })
-        g_avg_scores = [g_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
-        d_avg_scores = [d_valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
-        return valid_g_losses.avg, valid_d_losses.avg, g_avg_scores, d_avg_scores
+
+        return valid_g_losses.avg, valid_d_losses.avg
 
 
 class DistillKnowledgeTuner(PreTrainTuner):
@@ -1152,10 +1089,8 @@ class DistillKnowledgeTuner(PreTrainTuner):
                 '<Per Step> Gradient Norm': grad_norm,
                 '<Per Step> lr': lr,
             })
-            """
-            1) validate for each size of batch*N Steps
-            2) save each part of model's checkpoint when BEST validation score is updated
-            """
+
+            # validate for each size of batch*N Steps
             if ((step + 1) % self.cfg.val_check == 0) or ((step + 1) == len(loader_train)):
                 d_valid_loss, s_valid_loss, c_valid_loss = self.valid_fn(
                     loader_valid,
@@ -1238,8 +1173,9 @@ class DistillKnowledgeTuner(PreTrainTuner):
                         )
                     valid_metrics[self.metric_list[i]].update(scores, batch_size)
                     wandb.log({
-                        f'<Val Step> Student Valid {self.metric_list[i]}': scores,
+                        f'<Val Step> Student Valid {self.metric_list[i]}': valid_metrics[self.metric_list[i]].avg,
                     })
+
         return valid_d_losses.avg, valid_s_losses.avg, valid_c_losses.avg
 
 
