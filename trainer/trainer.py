@@ -959,9 +959,15 @@ class DistillKnowledgeTuner(PreTrainTuner):
 
         model.to(self.cfg.device)
 
-        criterion = {loss_fn: getattr(loss, f'{loss_fn}') for loss_fn in self.cfg.losses_fn}
-        val_criterion = {val_loss_fn: getattr(loss, f'{val_loss_fn}') for val_loss_fn in self.cfg.val_losses_fn}
-        val_metric_list = [getattr(metric, f'{metrics}') for metrics in self.metric_list]
+        criterion = {
+            loss_fn: getattr(loss, f'{loss_fn}')(self.cfg.reduction) for loss_fn in self.cfg.losses_fn
+        }
+        val_criterion = {
+            val_loss_fn: getattr(loss, f'{val_loss_fn}')(self.cfg.reduction) for val_loss_fn in self.cfg.val_losses_fn
+        }
+        val_metric_list = [
+            getattr(metric, f'{metrics}') for metrics in self.metric_list
+        ]
 
         optimizer = getattr(transformers, self.cfg.optimizer)(
             params=model.parameters(),
@@ -1042,7 +1048,7 @@ class DistillKnowledgeTuner(PreTrainTuner):
                     labels,
                     padding_mask
                 )
-                d_loss = criterion["KLDivLoss"](soft_pred, soft_target)  # nn.KLDIVLoss
+                d_loss = criterion["KLDivLoss"](soft_pred.log(), soft_target)  # nn.KLDIVLoss
                 s_loss = criterion["CrossEntropyLoss"](s_logit.view(-1, self.cfg.vocab_size), labels.view(-1))  # nn.CrossEntropyLoss
                 c_loss = criterion["CosineEmbeddingLoss"](s_hidden_state, t_hidden_state)  # nn.CosineEmbeddingLoss
                 loss = d_loss + s_loss + c_loss  # linear combination loss
@@ -1144,7 +1150,7 @@ class DistillKnowledgeTuner(PreTrainTuner):
                     labels,
                     padding_mask
                 )
-                d_loss = val_criterion["KLDivLoss"](soft_pred, soft_target)  # nn.KLDIVLoss
+                d_loss = val_criterion["KLDivLoss"](soft_pred.log(), soft_target)  # nn.KLDIVLoss
                 s_loss = val_criterion["CrossEntropyLoss"](s_logit.view(-1, self.cfg.vocab_size), labels.view(-1))  # nn.CrossEntropyLoss
                 c_loss = val_criterion["CosineEmbeddingLoss"](s_hidden_state, t_hidden_state)  # nn.CosineEmbeddingLoss
 
