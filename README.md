@@ -72,7 +72,7 @@ Experiment Application
 
 #### 🤖 Attention
 
-- **[Transformer] Attention Is All You Need (Complete, [Review](https://qcqced123.github.io/nlp/transformer))**
+- **[Transformer] Attention Is All You Need (Complete, [Paper Review](https://qcqced123.github.io/nlp/transformer))**
 - **[BERT] BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding (Complete)**
 - [Longformer] Longformer: The Long-Document Transformer (Continue)
 - [Reformer] Reformer: The Efficient Transformer (Continue)
@@ -81,10 +81,10 @@ Experiment Application
 - **[SpanBERT] SpanBERT: Improving Pre-training by Representing and Predicting Spans (Complete)**
 - **[DistilBERT] DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter (Complete)**
 - [Sentence-BERT] Sentence Embeddings using Siamese BERT-Networks (Continue)
-- **[DeBERTa] DeBERTa: Decoding-Enhanced BERT with Disentangled-Attention (Complete, [Review](https://qcqced123.github.io/nlp/deberta))**
+- **[DeBERTa] DeBERTa: Decoding-Enhanced BERT with Disentangled-Attention (Complete, [Paper Review](https://qcqced123.github.io/nlp/deberta))**
 - **[DeBERTa-V3] Improving DeBERTa using ELECTRA-Style Pre-Training with Gradient-Disentangled Embedding Sharing (Complete)**
 - [GPT2] Language Models are Unsupervised Multitask Learners (Continue)
-- **[ViT] An Image Is Worth 16x16 Words: Transformers For Image Recognition At Scale (Complete, [Review](https://qcqced123.github.io/cv/vit))**
+- **[ViT] An Image Is Worth 16x16 Words: Transformers For Image Recognition At Scale (Complete, [Paper Review](https://qcqced123.github.io/cv/vit))**
 - [SwinTransformer] Swin Transformer: Hierarchical Vision Transformer using Shifted Windows (Continue)
 - [CLIP] Learning Transferable Visual Models From Natural Language Supervision (Continue)
 - [BLIP] BLIP: Bootstrapping Language-Image Pre-training for Unified Vision-Language Understanding and Generation (Continue)

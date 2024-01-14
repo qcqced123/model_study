@@ -1,4 +1,3 @@
-import gc
 import wandb
 import torch
 import torch.nn as nn
@@ -14,7 +13,7 @@ from torch import Tensor
 from typing import Tuple, Any, Union, List, Callable, Dict
 
 import dataset_class.dataclass as dataset_class
-from experiment.tuner import mlm, clm, sbo, rtd
+from experiment.tuner import mlm, clm, sbo
 from experiment.losses import loss
 from experiment.metrics import metric
 from model import model as task
@@ -946,10 +945,14 @@ class DistillKnowledgeTuner(PreTrainTuner):
 
         # load checkpoint when you set 'resume' to True
         if self.cfg.is_teacher_resume:  # load teacher's pretrained weight: backbone & mlm head
-            tmp_teacher = model.teacher + model.mlm_head
-            tmp_teacher.load_state_dict(
-                torch.load(self.cfg.checkpoint_dir + self.cfg.teacher_state_dict),
-                strict=True
+            pretrained_weight = torch.load(self.cfg.checkpoint_dir + self.cfg.teacher_state_dict)
+            model.model.teacher.load_state_dict(
+                pretrained_weight,
+                strict=False
+            )
+            model.model.mlm_head.load_state_dict(
+                pretrained_weight,
+                strict=False
             )
         if self.cfg.is_student_resume:  # load student's checkpoint
             model.student.load_state_dict(
@@ -1036,21 +1039,24 @@ class DistillKnowledgeTuner(PreTrainTuner):
             padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
             batch_size = inputs.size(0)  # same as ES, GDES
 
+            mask = padding_mask.unsqueeze(-1).expand_as(self.cfg.dim_model)
             with torch.no_grad():
                 t_hidden_state, soft_target = model.teacher_fw(
                     inputs,
-                    padding_mask
+                    padding_mask,
+                    mask
                 )  # teacher model's pred => hard logit
 
             with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
-                s_hidden_state, s_logit, soft_pred = model.student_fw(
+                s_hidden_state, s_logit, soft_pred, c_labels = model.student_fw(
                     inputs,
                     labels,
-                    padding_mask
+                    padding_mask,
+                    mask
                 )
                 d_loss = criterion["KLDivLoss"](soft_pred.log(), soft_target)  # nn.KLDIVLoss
                 s_loss = criterion["CrossEntropyLoss"](s_logit.view(-1, self.cfg.vocab_size), labels.view(-1))  # nn.CrossEntropyLoss
-                c_loss = criterion["CosineEmbeddingLoss"](s_hidden_state, t_hidden_state)  # nn.CosineEmbeddingLoss
+                c_loss = criterion["CosineEmbeddingLoss"](s_hidden_state, t_hidden_state, c_labels)  # nn.CosineEmbeddingLoss
                 loss = d_loss + s_loss + c_loss  # linear combination loss
 
             if self.cfg.n_gradient_accumulation_steps > 1:
@@ -1137,22 +1143,26 @@ class DistillKnowledgeTuner(PreTrainTuner):
                 padding_mask = batch['padding_mask'].to(self.cfg.device)
                 batch_size = inputs.size(0)
 
+                mask = padding_mask.unsqueeze(-1).expand_as(self.cfg.dim_model)
                 # 1) Teacher model valid pred
                 t_hidden_state, soft_target = model.teacher_fw(
-                    inputs,
-                    padding_mask,
+                    inputs=inputs,
+                    padding_mask=padding_mask,
+                    mask=mask,
                     is_valid=True
                 )
 
                 # 2) Student model valid pred
-                s_hidden_state, s_logit, soft_pred = model.student_fw(
-                    inputs,
-                    labels,
-                    padding_mask
+                s_hidden_state, s_logit, soft_pred, c_labels = model.student_fw(
+                    inputs=inputs,
+                    labels=labels,
+                    padding_mask=padding_mask,
+                    mask=mask,
+                    is_valid=True
                 )
                 d_loss = val_criterion["KLDivLoss"](soft_pred.log(), soft_target)  # nn.KLDIVLoss
                 s_loss = val_criterion["CrossEntropyLoss"](s_logit.view(-1, self.cfg.vocab_size), labels.view(-1))  # nn.CrossEntropyLoss
-                c_loss = val_criterion["CosineEmbeddingLoss"](s_hidden_state, t_hidden_state)  # nn.CosineEmbeddingLoss
+                c_loss = val_criterion["CosineEmbeddingLoss"](s_hidden_state, t_hidden_state, c_labels)  # nn.CosineEmbeddingLoss
 
                 valid_d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
                 valid_s_losses.update(s_loss.detach().cpu().numpy(), batch_size)

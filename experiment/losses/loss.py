@@ -176,9 +176,13 @@ class CosineEmbeddingLoss(nn.Module):
         self.reduction = reduction
         self.margin = margin
 
-    def forward(self, y_pred: Tensor, y_true: Tensor) -> Tensor:
+    def forward(self, y_pred: Tensor, y_true: Tensor, label: Tensor) -> Tensor:
         criterion = nn.CosineEmbeddingLoss(margin=self.margin, reduction=self.reduction)
-        return criterion(y_pred, y_true)
+        return criterion(
+            y_pred,
+            y_true,
+            label
+        )
 
 
 # Contrastive Loss for NLP Semantic Search

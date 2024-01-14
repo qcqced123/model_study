@@ -23,7 +23,8 @@ class DistilBERT(nn.Module, AbstractModel):
     hard targets & hard predictions are meaning that logit are passed through softmax function without temperature T
     hard targets are same as just simple labels from MLM Collator returns for calculating cross entropy loss
 
-    cosine similarity loss is calculated by cosine similarity between student & teacher logit
+    cosine similarity loss is calculated by cosine similarity between student & teacher
+    in official repo, they mask padding tokens for calculating cosine similarity, target for this task is 1
     cosine similarity is calculated by nn.CosineSimilarity() function, values are range to [-1, 1]
 
     you can select any other backbone model architecture for Teacher & Student Model for knowledge distillation
@@ -40,6 +41,7 @@ class DistilBERT(nn.Module, AbstractModel):
 
     References:
         https://arxiv.org/pdf/1910.01108.pdf
+        https://github.com/huggingface/transformers/blob/main/examples/research_projects/distillation/distiller.py
     """
     def __init__(self, cfg: CFG, model_func: Callable) -> None:
         super(DistilBERT, self).__init__()

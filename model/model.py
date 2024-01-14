@@ -7,7 +7,7 @@ from experiment.tuner.mlm import MLMHead
 from experiment.tuner.sbo import SBOHead
 from configuration import CFG
 from model.abstract_task import AbstractTask
-from model_utils import freeze, get_freeze_parameters
+from .model_utils import freeze, get_freeze_parameters
 from experiment.models.attention.electra import ELECTRA
 from experiment.models.attention.spanbert import SpanBERT
 from experiment.models.attention.distilbert import DistilBERT
@@ -191,6 +191,10 @@ class DistillationKnowledge(nn.Module, AbstractTask):
             (nn.CrossEntropyLoss(reduction='mean')), same as pure MLM Loss
         3) cosine similarity loss, calculated by student & teacher logit similarity
             (nn.CosineEmbeddingLoss(reduction='mean')), similar as contrastive loss
+
+    References:
+        https://arxiv.org/pdf/1910.01108.pdf
+        https://github.com/huggingface/transformers/blob/main/examples/research_projects/distillation/distiller.py
     """
     def __init__(self, cfg: CFG) -> None:
         super(DistillationKnowledge, self).__init__()
@@ -221,6 +225,7 @@ class DistillationKnowledge(nn.Module, AbstractTask):
         self,
         inputs: Tensor,
         padding_mask: Tensor,
+        mask: Tensor,
         attention_mask: Tensor = None,
         is_valid: bool = False
     ) -> Tuple[Tensor, Tensor]:
@@ -232,6 +237,7 @@ class DistillationKnowledge(nn.Module, AbstractTask):
             padding_mask,
             attention_mask
         )
+        last_hidden_state = torch.masked_select(last_hidden_state, mask)
         last_hidden_state = last_hidden_state.view(-1, self.cfg.dim_model)  # flatten last_hidden_state
         soft_target = F.softmax(
             t_logit.view(-1, self.cfg.vocab_size) / temperature,  # flatten softmax distribution
@@ -243,9 +249,10 @@ class DistillationKnowledge(nn.Module, AbstractTask):
         self,
         inputs: Tensor,
         padding_mask: Tensor,
+        mask: Tensor,
         attention_mask: Tensor = None,
         is_valid: bool = False
-    ) -> Tuple[Tensor, Tensor, Tensor]:
+    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """ student forward pass to make soft prediction, hard prediction for student loss """
         temperature = 1.0 if is_valid else self.cfg.temperature
         last_hidden_state, s_logit = self.model.teacher_fw(
@@ -253,10 +260,12 @@ class DistillationKnowledge(nn.Module, AbstractTask):
             padding_mask,
             attention_mask
         )
+        last_hidden_state = torch.masked_select(last_hidden_state, mask)
+        c_labels = last_hidden_state.new(last_hidden_state.size(0)).fill_(1)
         last_hidden_state = last_hidden_state.view(-1, self.cfg.dim_model)  # flatten last_hidden_state
         soft_pred = F.softmax(
             s_logit.view(-1, self.cfg.vocab_size) / temperature,  # flatten softmax distribution
             dim=-1
         )
-        return last_hidden_state, s_logit, soft_pred
+        return last_hidden_state, s_logit, soft_pred, c_labels
 
