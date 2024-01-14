@@ -963,10 +963,10 @@ class DistillKnowledgeTuner(PreTrainTuner):
         model.to(self.cfg.device)
 
         criterion = {
-            loss_fn: getattr(loss, f'{loss_fn}')(self.cfg.reduction) for loss_fn in self.cfg.losses_fn
+            loss_fn: getattr(loss, f'{loss_fn}')() for loss_fn in self.cfg.losses_fn
         }
         val_criterion = {
-            val_loss_fn: getattr(loss, f'{val_loss_fn}')(self.cfg.reduction) for val_loss_fn in self.cfg.val_losses_fn
+            val_loss_fn: getattr(loss, f'{val_loss_fn}')() for val_loss_fn in self.cfg.val_losses_fn
         }
         val_metric_list = [
             getattr(metric, f'{metrics}') for metrics in self.metric_list

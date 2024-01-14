@@ -110,7 +110,7 @@ class KLDivLoss(nn.Module):
     Args:
         reduction: str, reduction method of losses
     """
-    def __init__(self, reduction: str = 'mean') -> None:
+    def __init__(self, reduction: str = 'batchmean') -> None:
         super(KLDivLoss, self).__init__()
         self.reduction = reduction
 
