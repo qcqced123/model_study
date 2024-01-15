@@ -3,21 +3,21 @@ import torch
 import torch.nn as nn
 import numpy as np
 import transformers
-from numpy import ndarray
 
+import dataset_class.dataclass as dataset_class
+
+from numpy import ndarray
 from torch.utils.data import DataLoader
 from torch.optim.swa_utils import AveragedModel
-
 from tqdm.auto import tqdm
 from torch import Tensor
 from typing import Tuple, Any, Union, List, Callable, Dict
 
-import dataset_class.dataclass as dataset_class
-from experiment.tuner import mlm, clm, sbo
+from configuration import CFG
+from model import model as task
 from experiment.losses import loss
 from experiment.metrics import metric
-from model import model as task
-from configuration import CFG
+from experiment.tuner import mlm, clm, sbo
 from dataset_class.preprocessing import load_pkl
 from trainer.trainer_utils import get_optimizer_grouped_parameters, get_scheduler
 from trainer.trainer_utils import AverageMeter, AWP, get_dataloader, get_swa_scheduler
