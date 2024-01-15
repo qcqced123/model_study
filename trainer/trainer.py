@@ -1039,7 +1039,7 @@ class DistillKnowledgeTuner(PreTrainTuner):
             padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
             batch_size = inputs.size(0)  # same as ES, GDES
 
-            mask = padding_mask.unsqueeze(-1).expand_as(self.cfg.dim_model)
+            mask = padding_mask.unsqueeze(-1).expand(-1, -1, self.cfg.dim_model)
             with torch.no_grad():
                 t_hidden_state, soft_target = model.teacher_fw(
                     inputs,
@@ -1143,7 +1143,7 @@ class DistillKnowledgeTuner(PreTrainTuner):
                 padding_mask = batch['padding_mask'].to(self.cfg.device)
                 batch_size = inputs.size(0)
 
-                mask = padding_mask.unsqueeze(-1).expand_as(self.cfg.dim_model)
+                mask = padding_mask.unsqueeze(-1).expand(-1, -1, self.cfg.dim_model)
                 # 1) Teacher model valid pred
                 t_hidden_state, soft_target = model.teacher_fw(
                     inputs=inputs,
