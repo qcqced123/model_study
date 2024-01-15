@@ -9,12 +9,12 @@ from huggingface_hub import notebook_login
 
 warnings.filterwarnings('ignore')
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-os.environ["LRU_CACHE_CAPACITY"] = "1"
+os.environ["LRU_CACHE_CAPACITY"] = "1024"
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "garbage_collection_threshold:0.80, max_split_size_mb:128"
 
 check_library(True)
 all_type_seed(CFG, True)
-# notebook_login()  # login to huggingface hub
+notebook_login()  # login to huggingface hub
 
 
 def main(config_path: str, cfg: CFG) -> None:
@@ -23,4 +23,4 @@ def main(config_path: str, cfg: CFG) -> None:
 
 
 if __name__ == '__main__':
-    main('config/pretrain/distilbert.json', CFG)
+    main('config/pretrain/bert.json', CFG)

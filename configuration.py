@@ -152,4 +152,7 @@ class CFG:
     teacher_load_pretrained = False
     student_load_pretrained = False
     temperature = 5
+    alpha_distillation = 0.5
+    alpha_student = 0.5
+    alpha_cosine = 0.5
 
