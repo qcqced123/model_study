@@ -14,7 +14,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "garbage_collection_threshold:0.80, max_
 
 check_library(True)
 all_type_seed(CFG, True)
-notebook_login()  # login to huggingface hub
+# notebook_login()  # login to huggingface hub
 
 
 def main(config_path: str, cfg: CFG) -> None:
@@ -23,4 +23,4 @@ def main(config_path: str, cfg: CFG) -> None:
 
 
 if __name__ == '__main__':
-    main('config/pretrain/bert.json', CFG)
+    main('config/pretrain/distilbert.json', CFG)

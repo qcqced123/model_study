@@ -20,9 +20,9 @@
         "is_mf_embedding": false,
         "mlm_masking": "WholeWordMasking",
         "mlm_probability": 0.15,
-        "is_teacher_resume": true,
+        "is_teacher_resume": false,
         "is_student_resume": false,
-        "teacher_load_pretrained": true,
+        "teacher_load_pretrained": false,
         "student_load_pretrained": false,
         "temperature": 5.0
     },

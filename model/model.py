@@ -3,11 +3,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 from typing import List, Dict, Tuple
+
+from configuration import CFG
+from .model_utils import freeze
+from model.abstract_task import AbstractTask
 from experiment.tuner.mlm import MLMHead
 from experiment.tuner.sbo import SBOHead
-from configuration import CFG
-from model.abstract_task import AbstractTask
-from .model_utils import freeze, get_freeze_parameters
 from experiment.models.attention.electra import ELECTRA
 from experiment.models.attention.spanbert import SpanBERT
 from experiment.models.attention.distilbert import DistilBERT
@@ -260,7 +261,7 @@ class DistillationKnowledge(nn.Module, AbstractTask):
             padding_mask,
             attention_mask
         )
-        last_hidden_state = torch.masked_select(last_hidden_state, mask)
+        last_hidden_state = torch.masked_select(last_hidden_state, mask)  # check tensor size
         c_labels = last_hidden_state.new(last_hidden_state.size(0)).fill_(1)
         last_hidden_state = last_hidden_state.view(-1, self.cfg.dim_model)  # flatten last_hidden_state
         soft_pred = F.softmax(
