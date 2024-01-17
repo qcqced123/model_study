@@ -19,6 +19,6 @@ class MLMDataset(Dataset):
     def __getitem__(self, item: int) -> Dict[str, Tensor]:
         batch_inputs = {}
         for k, v in self.inputs.items():
-            batch_inputs[k] = torch.as_tensor(v[item])  # reduce memory usage by defending copying tensor
+            batch_inputs[k] = torch.as_tensor(v[item], dtype=torch.long)  # reduce memory usage by defending copying tensor
         return batch_inputs
 
