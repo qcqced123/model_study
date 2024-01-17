@@ -52,10 +52,13 @@ class MaskedLanguageModel(nn.Module, AbstractTask):
 class SpanBoundaryObjective(nn.Module, AbstractTask):
     """ Custom Model for SBO Task, which is used for pre-training Auto-Encoding Model such as SpanBERT
     Original SpanBERT has two tasks, MLM & SBO, so we need to create instance of MLMHead & SBOHead
+
     Notes:
         L_span = L_MLM + L_SBO
+
     Args:
         cfg: configuration.CFG
+
     References:
         https://arxiv.org/pdf/1907.10529.pdf
     """
@@ -153,6 +156,7 @@ class ReplacedTokenDetection(nn.Module, AbstractTask):
             inputs: Tensor,
             labels: Tensor,
             padding_mask: Tensor,
+            mask_labels: Tensor = None,
             attention_mask: Tensor = None
     ) -> Tuple[Tensor, Tensor, Tensor]:
         """ forward pass for generator model
@@ -161,6 +165,7 @@ class ReplacedTokenDetection(nn.Module, AbstractTask):
             inputs,
             labels,
             padding_mask,
+            mask_labels,
             attention_mask
         )
         return g_logit, d_inputs, d_labels

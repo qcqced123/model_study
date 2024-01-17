@@ -5,6 +5,7 @@ from torch import Tensor
 from typing import Tuple, Callable
 from einops.layers.torch import Rearrange
 from experiment.tuner.mlm import MLMHead
+from experiment.tuner.sbo import SBOHead
 from experiment.tuner.rtd import get_discriminator_input, RTDHead
 from configuration import CFG
 
@@ -43,6 +44,12 @@ class ELECTRA(nn.Module, AbstractModel):
         self.cfg = cfg
         self.generator = model_func(cfg.generator_num_layers)  # init generator
         self.mlm_head = MLMHead(self.cfg)
+        if self.cfg.rtd_masking == 'SpanBoundaryObjective':
+            self.mlm_head = SBOHead(
+                cfg=self.cfg,
+                is_concatenate=self.cfg.is_concatenate,
+                max_span_length=self.cfg.max_span_length
+            )
 
         self.discriminator = model_func(cfg.discriminator_num_layers)  # init generator
         self.rtd_head = RTDHead(self.cfg)
@@ -72,7 +79,7 @@ class ELECTRA(nn.Module, AbstractModel):
 
     def share_embedding(self) -> None:
         """ init sharing options """
-        def discriminator_hook(module, *inputs):
+        def discriminator_hook(module: nn.Module, *inputs):
             if self.share_embed_method == 'instance':  # Instance Sharing
                 self.discriminator.embeddings = self.generator.embeddings
 
@@ -112,6 +119,7 @@ class ELECTRA(nn.Module, AbstractModel):
             inputs: Tensor,
             labels: Tensor,
             padding_mask: Tensor,
+            mask_labels: Tensor = None,
             attention_mask: Tensor = None
     ) -> Tuple[Tensor, Tensor, Tensor]:
         """ forward pass for generator model
@@ -119,6 +127,7 @@ class ELECTRA(nn.Module, AbstractModel):
             inputs: generator inputs
             labels: labels for generator outputs, using to make discriminator inputs, labels
             padding_mask: padding mask for inputs
+            mask_labels: labels for Span Boundary Objective
             attention_mask: attention mask for inputs
         """
         assert inputs.ndim == 2, f'Expected (batch, sequence) got {inputs.shape}'
@@ -127,9 +136,15 @@ class ELECTRA(nn.Module, AbstractModel):
             padding_mask,
             attention_mask
         )
-        g_logit = self.mlm_head(
-            g_last_hidden_states
-        )
+        if self.cfg.rtd_masking == 'MaskedLanguageModeling':
+            g_logit = self.mlm_head(
+                g_last_hidden_states
+            )
+        else:
+            g_logit = self.mlm_head(
+                g_last_hidden_states,
+                mask_labels
+            )
         pred = g_logit.clone().detach()
         d_inputs, d_labels = get_discriminator_input(
             inputs,

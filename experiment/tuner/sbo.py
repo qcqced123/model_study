@@ -33,7 +33,7 @@ def random_non_negative_integer(max_value: int) -> int:
 
 class SpanCollator(WholeWordMaskingCollator):
     """ Custom Collator for Span Boundary Objective Task, which is used for span masking algorithm
-    Span Masking is simailar to Whole Word Masking, but it has some differences:
+    Span Masking is similar to Whole Word Masking, but it has some differences:
         1) Span Masking does not use 10% of selected token left & 10% of selected token replaced other vocab token
             - just replace all selected token to [MASK] token
     Algorithm:

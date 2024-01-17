@@ -357,7 +357,7 @@ class SBOTuner(PreTrainTuner):
             swa_model: nn.Module = None,
             swa_start: int = None,
             swa_scheduler=None
-    ) -> tuple[Any, Union[float, Any]]:
+    ) -> Tuple[Any, Union[float, Any]]:
         """ function for train loop with validation for each batch*N Steps
         SpanBERT has two loss, one is MLM loss, the other is SBO loss
         """
@@ -627,13 +627,19 @@ class RTDTuner(PreTrainTuner):
             inputs = batch['input_ids'].to(self.cfg.device)
             labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
             padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
+
+            mask_labels = None
+            if self.cfg.rtd_masking == 'SpanBoundaryObjective':
+                mask_labels = batch['mask_labels'].to(self.cfg.device)
+
             batch_size = inputs.size(0)  # same as ES, GDES
 
             with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
                 g_logit, d_inputs, d_labels = model.generator_fw(
                     inputs,
                     labels,
-                    padding_mask
+                    padding_mask,
+                    mask_labels
                 )
                 d_logit = model.discriminator_fw(
                     d_inputs,
@@ -756,6 +762,11 @@ class RTDTuner(PreTrainTuner):
             inputs = batch['input_ids'].to(self.cfg.device)
             labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
             padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
+
+            mask_labels = None
+            if self.cfg.rtd_masking == 'SpanBoundaryObjective':
+                mask_labels = batch['mask_labels'].to(self.cfg.device)
+
             batch_size = inputs.size(0)
 
             # Tune for Generator
@@ -763,7 +774,8 @@ class RTDTuner(PreTrainTuner):
                 g_logit, d_inputs, d_labels = model.generator_fw(
                     inputs,
                     labels,
-                    padding_mask
+                    padding_mask,
+                    mask_labels
                 )
                 g_loss = criterion(g_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
             if self.cfg.n_gradient_accumulation_steps > 1:
@@ -879,13 +891,19 @@ class RTDTuner(PreTrainTuner):
                 inputs = batch['input_ids'].to(self.cfg.device)
                 labels = batch['labels'].to(self.cfg.device)
                 padding_mask = batch['padding_mask'].to(self.cfg.device)
+
+                mask_labels = None
+                if self.cfg.rtd_masking == 'SpanBoundaryObjective':
+                    mask_labels = batch['mask_labels'].to(self.cfg.device)
+
                 batch_size = inputs.size(0)
 
                 # Generator validation part
                 g_logit, d_inputs, d_labels = model.generator_fw(
                     inputs,
                     labels,
-                    padding_mask
+                    padding_mask,
+                    mask_labels
                 )
                 g_loss = val_criterion(g_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
 

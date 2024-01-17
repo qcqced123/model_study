@@ -20,7 +20,7 @@
         "is_mf_embedding": false,
         "mlm_masking": "WholeWordMasking",
         "mlm_probability": 0.15,
-        "rtd_masking": "SpanBoundaryObjective",
+        "rtd_masking": "MaskedLanguageModel",
         "generator": "DeBERTa",
         "discriminator": "DeBERTa",
         "share_embed_method": "GDES",
