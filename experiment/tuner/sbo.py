@@ -228,7 +228,14 @@ class SBOHead(nn.Module):
     @staticmethod
     def find_consecutive_groups(mask_labels: Tensor, target_value: int = 1) -> List[List[Dict]]:
         """ Get the start and end positions of consecutive groups in tensor for the target value
-        This method is used for SBO Objective Function
+        This method is used for SBO Objective Function, this version is not best performance to make span groups
+        ASAP, we will convert current logic into using torch.searchsorted(Tensor, value, right=False)
+
+        Example:
+            test = torch.tensor([1,2, 128000, 128000, 128000, 128000, 128000, 128000, 128000, 5, 6, 7])
+            torch.searchsorted(test, 128000), torch.searchsorted(test, 128000, right=True)
+            (tensor(2), tensor(12))
+
         Args:
             mask_labels: masking tensor for span
             target_value: target value for finding consecutive groups
