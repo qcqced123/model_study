@@ -70,3 +70,47 @@ class LSTMCell(nn.Module):
         return c_t, h_t, y_t
 
 
+class LSTM(nn.Module):
+    """
+    Model class for GRU(Gated recurrent Unit), Stacked GRU Cells
+    Args:
+        input_size: input dimension of each timestamp inputs`
+        hidden_size: hidden dimension of each timestamp hidden states
+        output_dim: output dimension of each timestamp outputs
+        num_layers: number of recurrent layers
+        dropout: dropout rate, default 0.1s
+    Notes:
+        num_layers same as nums of stacked GRU cells
+    """
+    def __init__(
+            self,
+            input_size: int,
+            hidden_size: int,
+            output_dim: int,
+            num_layers: int,
+            dropout: float = 0.1
+    ) -> None:
+        super(LSTM, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.output_dim = output_dim
+        self.num_layers = num_layers
+        self.dropout = dropout
+        self.layers = nn.ModuleList(
+            [LSTMCell(input_size, hidden_size, hidden_size, dropout) for _ in range(num_layers)]
+        )  # num_layers same as nums of stacked GRU cells
+        self.W_y = nn.Linear(hidden_size, output_dim)
+
+    def forward(self, inputs: Tensor) -> Tuple[Tensor, Tensor]:
+        """ Forward pass for GRU with stacked GRU cells """
+        x = inputs
+        for layer in self.layers:
+            h_t = torch.zeros(x.size(0), self.hidden_size).to(x.device)
+            c_t = h_t.clone().detach()
+            intermediate_h = []
+            for t in range(inputs.size(1)):
+                c_t, h_t = layer(x[:, t, :], c_t, h_t)  # [batch_size, hidden_size]
+                intermediate_h.append(h_t.unsqueeze(1))  # [batch_size, 1, hidden_size]
+            x = torch.cat(intermediate_h, dim=1)  # making new inputs next layer of RNN
+        y = self.W_y(x)
+        return x, y

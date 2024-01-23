@@ -36,15 +36,12 @@ class GRUCell(nn.Module):
         self.W_xz = nn.Linear(input_size, hidden_size)
         self.W_xg = nn.Linear(input_size, hidden_size)
 
-        # output Weight Matrix, bias for output
-        self.W_y = nn.Linear(hidden_size, output_dim)
-
         self.Layernorm_r = nn.LayerNorm(hidden_size)
         self.Layernorm_z = nn.LayerNorm(hidden_size)
         self.Layernorm_g = nn.LayerNorm(hidden_size)
         self.dropout = nn.Dropout(p=dropout)
 
-    def forward(self, inputs: Tensor, hidden_states: Tensor) -> Tuple[Tensor, Tensor]:
+    def forward(self, inputs: Tensor, hidden_states: Tensor) -> Tensor:
         """
         Forward pass for LSTM cell with additional Layernorm, Dropout
         Args:
@@ -56,8 +53,7 @@ class GRUCell(nn.Module):
         g_t = torch.tanh(self.Layernorm_g(self.W_hg(torch.matmul(r_t, hidden_states)) + self.W_xg(inputs)))
 
         h_t = torch.matmul((1 - z_t), g_t) + torch.matmul(hidden_states, z_t)
-        y_t = self.W_y(h_t)
-        return h_t, y_t
+        return h_t
 
 
 class GRU(nn.Module):
@@ -72,7 +68,14 @@ class GRU(nn.Module):
     Notes:
         num_layers same as nums of stacked GRU cells
     """
-    def __init__(self, input_size: int, hidden_size: int, output_dim: int, num_layers: int, dropout: float = 0.1) -> None:
+    def __init__(
+            self,
+            input_size: int,
+            hidden_size: int,
+            output_dim: int,
+            num_layers: int,
+            dropout: float = 0.1
+    ) -> None:
         super(GRU, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -82,7 +85,18 @@ class GRU(nn.Module):
         self.layers = nn.ModuleList(
             [GRUCell(input_size, hidden_size, hidden_size, dropout) for _ in range(num_layers)]
         )  # num_layers same as nums of stacked GRU cells
+        self.W_y = nn.Linear(hidden_size, output_dim)
 
-    def forward(self) -> Tensor:
+    def forward(self, inputs: Tensor) -> Tuple[Tensor, Tensor]:
         """ Forward pass for GRU with stacked GRU cells """
-        pass
+        x = inputs
+        for layer in self.layers:
+            h_t = torch.zeros(x.size(0), self.hidden_size).to(
+                x.device)  # initialize hidden states with zeros for each layer of RNN in time step 0
+            intermediate_h = []
+            for t in range(inputs.size(1)):
+                h_t = layer(x[:, t, :], h_t)  # [batch_size, hidden_size]
+                intermediate_h.append(h_t.unsqueeze(1))  # [batch_size, 1, hidden_size]
+            x = torch.cat(intermediate_h, dim=1)  # making new inputs next layer of RNN
+        y = self.W_y(x)
+        return x, y
