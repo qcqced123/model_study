@@ -136,11 +136,11 @@ class ELECTRA(nn.Module, AbstractModel):
             padding_mask,
             attention_mask
         )
-        if self.cfg.rtd_masking == 'MaskedLanguageModeling':
+        if self.cfg.rtd_masking == 'MaskedLanguageModel':
             g_logit = self.mlm_head(
                 g_last_hidden_states
             )
-        else:
+        elif self.cfg.rtd_masking == 'SpanBoundaryObjective':
             g_logit = self.mlm_head(
                 g_last_hidden_states,
                 mask_labels

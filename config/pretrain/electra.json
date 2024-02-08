@@ -26,7 +26,7 @@
         "share_embed_method": "GDES",
         "is_generator_resume": false,
         "is_discriminator_resume": false,
-        "generator_load_pretrained": false,
+        "generator_load_pretrained" : false,
         "discriminator_load_pretrained": false,
         "discriminator_lambda": 50,
         "masking_budget": 0.15,
@@ -36,7 +36,7 @@
     },
 
     "model_size": {
-        "generator_num_layers": 12,
+        "generator_num_layers": 6,
         "discriminator_num_layers": 12,
         "max_seq": 512,
         "num_emd": 2,
@@ -58,7 +58,7 @@
         "split_ratio": 0.2,
         "epochs": 20,
         "batch_size": 20,
-        "val_batch_size": 16,
+        "val_batch_size": 32,
         "val_check": 999999
     },
 
