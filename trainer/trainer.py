@@ -39,8 +39,8 @@ class PreTrainTuner:
 
     def make_batch(self) -> Tuple[DataLoader, DataLoader, int]:
         """ Function for making batch instance """
-        train = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_train')
-        valid = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_valid')
+        train = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/max_256_train')
+        valid = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/max_256_valid')
 
         # 1) Custom Datasets
         train_dataset = getattr(dataset_class, self.cfg.dataset)(train)
@@ -762,7 +762,6 @@ class RTDTuner(PreTrainTuner):
             inputs = batch['input_ids'].to(self.cfg.device)
             labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
             padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
-
             mask_labels = None
             if self.cfg.rtd_masking == 'SpanBoundaryObjective':
                 mask_labels = batch['mask_labels'].to(self.cfg.device)
@@ -853,8 +852,7 @@ class RTDTuner(PreTrainTuner):
 
                 # save checkpoint of generator
                 if g_val_score_max >= g_valid_loss:
-                    print(
-                        f'[Update] Generator Valid Score : ({g_val_score_max:.4f} => {g_valid_loss:.4f}) Save Parameter')
+                    print(f'[Update] Generator Valid Score : ({g_val_score_max:.4f} => {g_valid_loss:.4f}) Save Parameter')
                     print(f'Generator Best Score: {g_valid_loss}')
                     torch.save(
                         model.model.generator.state_dict(),
