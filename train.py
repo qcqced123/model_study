@@ -21,7 +21,7 @@ torch.cuda.empty_cache()
 def main(train_type: str, model_config: str, cfg: CFG) -> None:
     config_path = f'config/{train_type}/{model_config}.json'
     sync_config(OmegaConf.load(config_path))  # load json config
-    getattr(train_loop, cfg.loop)(cfg)  # init object
+    getattr(train_loop, cfg.loop)(cfg, train_type, model_config)  # init object
 
 
 if __name__ == '__main__':
@@ -30,4 +30,4 @@ if __name__ == '__main__':
     parser.add_argument("model_config", type=str, help="Model config Selection")
     args = parser.parse_args()
 
-    main(args.train_type, args.train_type, CFG)
+    main(args.train_type, args.model_config, CFG)

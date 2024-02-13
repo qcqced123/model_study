@@ -23,7 +23,7 @@
         "rtd_masking": "MaskedLanguageModel",
         "generator": "BERT",
         "discriminator": "BERT",
-        "share_embed_method": "GDES",
+        "share_embed_method": "ES",
         "is_generator_resume": false,
         "is_discriminator_resume": false,
         "generator_load_pretrained" : false,
@@ -57,7 +57,7 @@
         "language": "20231101.en",
         "split_ratio": 0.2,
         "epochs": 20,
-        "batch_size": 20,
+        "batch_size": 22,
         "val_batch_size": 32,
         "val_check": 999999
     },

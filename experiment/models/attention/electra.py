@@ -15,8 +15,8 @@ class ELECTRA(nn.Module, AbstractModel):
     Init Scale of ELECTRA Hyper-Parameters, Embedding Layer, Encoder Blocks of Generator, Discriminator
     You can select any other backbone model architecture for Generator & Discriminator, in original paper, BERT is used
 
-    if you want to use pure ELECTRA, you should set share_embedding = es
-    elif you want to use ELECTRA with GDES, you should set share_embedding = gdes
+    if you want to use pure ELECTRA, you should set share_embedding = ES
+    elif you want to use ELECTRA with GDES, you should set share_embedding = GDES
     GDES is new approach of embedding sharing method from DeBERTa-V3 paper
 
     Args:

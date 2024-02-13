@@ -14,13 +14,14 @@ g = torch.Generator()
 g.manual_seed(CFG.seed)
 
 
-def train_loop(cfg: CFG) -> None:
+def train_loop(cfg: CFG, train_type: str, model_config: str) -> None:
     """ Base Trainer Loop Function """
+    sharing_method = cfg.share_embed_method if train_type == 'pretrain' and (model_config in ['electra', 'deberta_v3']) else ''
     wandb.init(
         project=cfg.name,
         name=f'[{cfg.arch_name}]' + cfg.module_name,
         config=class2dict(cfg),
-        group=f'{cfg.module_name}/layers_{cfg.num_layers}/{cfg.rtd_masking}/{cfg.mlm_masking}/max_length_{cfg.max_seq}/',
+        group=f'{sharing_method}/{cfg.module_name}/layers_{cfg.num_layers}/{cfg.rtd_masking}/{cfg.mlm_masking}/max_length_{cfg.max_seq}/',
         job_type='train',
         entity="qcqced"
     )
