@@ -40,8 +40,8 @@ class PreTrainTuner:
     def make_batch(self) -> Tuple[DataLoader, DataLoader, int]:
         """ Function for making batch instance
         """
-        train = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_train')
-        valid = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_valid')
+        train = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/min_384_train')
+        valid = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/min_384_valid')
 
         # 1) Custom Datasets
         train_dataset = getattr(dataset_class, self.cfg.dataset)(train)
@@ -648,8 +648,8 @@ class RTDTuner(PreTrainTuner):
                     padding_mask
                 )
                 g_loss = criterion(g_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
-                d_loss = criterion(d_logit.view(-1, 2), d_labels)
-                loss = g_loss + self.cfg.discriminator_lambda*d_loss  # discriminator's loss can't backward to generator
+                d_loss = criterion(d_logit.view(-1, 2), d_labels) * self.cfg.discriminator_lambda
+                loss = g_loss + d_loss  # discriminator's loss can't backward to generator
 
             if self.cfg.n_gradient_accumulation_steps > 1:
                 loss = loss / self.cfg.n_gradient_accumulation_steps

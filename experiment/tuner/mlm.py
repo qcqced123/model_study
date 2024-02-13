@@ -102,10 +102,8 @@ class SubWordMaskingCollator(PretrainingMaskingCollator):
     def forward(self, batched: List[Dict[str, Tensor]]) -> Dict:
         """ Masking for MLM with sub-word tokenizing """
         input_ids = [torch.as_tensor(x["input_ids"]) for x in batched]
-        token_type_ids = [torch.as_tensor(x["token_type_ids"]) for x in batched]
-        attention_mask = [torch.as_tensor(x["attention_mask"]) for x in batched]
-
         padding_mask = [self.get_padding_mask(x) for x in input_ids]
+
         input_ids = pad_sequence(input_ids, batch_first=True, padding_value=0)
         input_ids, labels = self.get_mask_tokens(
             input_ids, self.cfg.mlm_probability
@@ -115,8 +113,6 @@ class SubWordMaskingCollator(PretrainingMaskingCollator):
             "input_ids": input_ids,
             "labels": labels,
             "padding_mask": padding_mask,
-            "token_type_ids": token_type_ids,
-            "attention_mask": attention_mask
         }
 
 
@@ -264,10 +260,8 @@ class WholeWordMaskingCollator(PretrainingMaskingCollator):
     def forward(self, batched: List[Dict[str, Tensor]]) -> Dict:
         """ Masking for MLM with whole-word tokenizing """
         input_ids = [x["input_ids"] for x in batched]
-        token_type_ids = [torch.as_tensor(x["token_type_ids"]) for x in batched]
-        attention_mask = [torch.as_tensor(x["attention_mask"]) for x in batched]
-
         padding_mask = [self.get_padding_mask(x) for x in input_ids]
+
         padding_mask = pad_sequence(padding_mask, batch_first=True, padding_value=True)
         input_ids = pad_sequence(input_ids, batch_first=True, padding_value=0)
 
@@ -289,8 +283,6 @@ class WholeWordMaskingCollator(PretrainingMaskingCollator):
             "input_ids": inputs,
             "labels": labels,
             "padding_mask": padding_mask,
-            "token_type_ids": token_type_ids,
-            "attention_mask": attention_mask
         }
 
 
