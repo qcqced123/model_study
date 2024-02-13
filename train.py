@@ -1,5 +1,6 @@
 import os
 import torch
+import argparse
 import warnings
 from omegaconf import OmegaConf
 from configuration import CFG
@@ -17,10 +18,16 @@ notebook_login()  # login to huggingface hub
 torch.cuda.empty_cache()
 
 
-def main(config_path: str, cfg: CFG) -> None:
+def main(train_type: str, model_config: str, cfg: CFG) -> None:
+    config_path = f'config/{train_type}/{model_config}'
     sync_config(OmegaConf.load(config_path))  # load json config
     getattr(train_loop, cfg.loop)(cfg)  # init object
 
 
 if __name__ == '__main__':
-    main('config/pretrain/deberta_v3.json', CFG)
+    parser = argparse.ArgumentParser(description="Train Script")
+    parser.add_argument("train_type", type=str, help="Train Type Selection")
+    parser.add_argument("model_config", type=str, help="Model config Selection")
+    args = parser.parse_args()
+
+    main(args.train_type, args.train_type, CFG)
