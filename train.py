@@ -19,7 +19,7 @@ torch.cuda.empty_cache()
 
 
 def main(train_type: str, model_config: str, cfg: CFG) -> None:
-    config_path = f'config/{train_type}/{model_config}'
+    config_path = f'config/{train_type}/{model_config}.json'
     sync_config(OmegaConf.load(config_path))  # load json config
     getattr(train_loop, cfg.loop)(cfg)  # init object
 
