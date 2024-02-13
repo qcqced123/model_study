@@ -38,9 +38,10 @@ class PreTrainTuner:
         self.metric_list = self.cfg.metrics
 
     def make_batch(self) -> Tuple[DataLoader, DataLoader, int]:
-        """ Function for making batch instance """
-        train = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_train')
-        valid = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_valid')
+        """ Function for making batch instance
+        """
+        train = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/max_512_train')
+        valid = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/max_512_valid')
 
         # 1) Custom Datasets
         train_dataset = getattr(dataset_class, self.cfg.dataset)(train)
@@ -92,6 +93,7 @@ class PreTrainTuner:
         The design is inspired by the Builder Pattern
         """
         model = getattr(task, self.cfg.task)(self.cfg)
+
         # load checkpoint when you set 'resume' to True
         if self.cfg.resume:
             model.load_state_dict(

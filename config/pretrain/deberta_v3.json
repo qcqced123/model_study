@@ -36,8 +36,8 @@
     },
 
     "model_size": {
-        "generator_num_layers": 3,
-        "discriminator_num_layers": 6,
+        "generator_num_layers": 6,
+        "discriminator_num_layers": 12,
         "max_seq": 512,
         "num_emd": 2,
         "num_attention_heads": 12,
@@ -57,7 +57,7 @@
         "language": "20231101.en",
         "split_ratio": 0.2,
         "epochs": 20,
-        "batch_size": 24,
+        "batch_size": 20,
         "val_batch_size": 32,
         "val_check": 999999
     },
