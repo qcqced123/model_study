@@ -14,7 +14,6 @@ python train.py pretrain bert
 python train.py fine_tune superglue
 ```
 
-
 ### 🗂️ Application Structure
 
 This Project implement with Pytorch. The overview structure is as follows.

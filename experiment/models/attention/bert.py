@@ -215,7 +215,7 @@ class BERTEncoder(nn.Module, AbstractModel):
         self.layer_norm = nn.LayerNorm(dim_model, eps=layer_norm_eps)  # for final-Encoder output
         self.gradient_checkpointing = gradient_checkpointing
 
-    def forward(self, inputs: Tensor, abs_pos_emb: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> tuple[Tensor, Tensor]:
+    def forward(self, inputs: Tensor, abs_pos_emb: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
         """
         Args:
             inputs: embedding from input sequence
@@ -298,12 +298,12 @@ class BERT(nn.Module, AbstractModel):
     References:
         https://arxiv.org/pdf/1810.04805.pdf
     """
-    def __init__(self, cfg: CFG, num_layers: int = 12) -> None:
+    def __init__(self, cfg: CFG) -> None:
         super(BERT, self).__init__()
         self.cfg = cfg
         self.vocab_size = cfg.vocab_size
         self.max_seq = cfg.max_seq
-        self.num_layers = num_layers
+        self.num_layers = cfg.num_layers
         self.num_attention_heads = cfg.num_attention_heads
         self.dim_model = cfg.dim_model
         self.dim_ffn = cfg.dim_ffn
