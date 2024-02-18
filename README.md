@@ -1,5 +1,15 @@
 # 🔬 ML/DL Experiment Application
 
+### 🖥️ Usage
+
+```bash
+# python train.py [Task Type] [Model Name]
+
+python train.py pretrain bert
+python train.py fine_tune superglue
+```
+
+
 ### 🗂️ Application Structure
 
 This Project implement with Pytorch. The overview structure is as follows.
