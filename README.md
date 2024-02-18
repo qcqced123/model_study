@@ -5,7 +5,7 @@
 - **1) select the task type**
 - **2) select the model type in config file**
 - **3) set your own hyperparameters in config file**
-- **4) run the train.py**
+- **4) run the train.py in your terminal**
 
 ```bash
 # python train.py [Task Type] [Model Name]
