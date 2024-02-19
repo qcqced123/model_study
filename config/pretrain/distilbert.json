@@ -3,7 +3,7 @@
         "train": true,
         "test": false,
         "checkpoint_dir": "./saved/",
-        "teacher_state_dict": "best_WholeWordMasking_512_BERT_state_dict.pth",
+        "teacher_state_dict": "WholeWordMasking_512_BERT_state_dict.pth",
         "student_state_dict": "SWM_512_DeBERTa_state_dict.pth",
         "name": "DistillationKnowledge",
         "trainer": "DistillKnowledgeTuner",
@@ -26,13 +26,13 @@
         "student_load_pretrained": false,
         "temperature": 2,
         "alpha_distillation": 5,
-        "alpha_student": 2,
-        "alpha_cosine": 1
+        "alpha_student": 1,
+        "alpha_cosine": 4
     },
 
     "model_size": {
-        "teacher_num_layers": 12,
-        "student_num_layers": 4,
+        "teacher_num_layers": 6,
+        "student_num_layers": 3,
         "max_seq": 512,
         "num_emd": 2,
         "num_attention_heads": 12,
@@ -52,7 +52,7 @@
         "language": "20231101.en",
         "split_ratio": 0.2,
         "epochs": 20,
-        "batch_size": 10,
+        "batch_size": 11,
         "val_batch_size": 32,
         "val_check": 999999
     },

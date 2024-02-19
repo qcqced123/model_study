@@ -1204,7 +1204,7 @@ class DistillKnowledgeTuner(PreTrainTuner):
                     mask=mask
                 )
                 d_loss = criterion["KLDivLoss"](soft_pred.log(), soft_target) * self.cfg.alpha_distillation  # nn.KLDIVLoss
-                s_loss = criterion["CrossEntropyLoss"](s_logit.view(-1, self.cfg.vocab_size), labels.view(-1)) * self.cfg.alpha_student # nn.CrossEntropyLoss
+                s_loss = criterion["CrossEntropyLoss"](s_logit.view(-1, self.cfg.vocab_size), labels.view(-1)) * self.cfg.alpha_student  # nn.CrossEntropyLoss
                 c_loss = criterion["CosineEmbeddingLoss"](s_hidden_state, t_hidden_state, c_labels) * self.cfg.alpha_cosine  # nn.CosineEmbeddingLoss
                 loss = d_loss + s_loss + c_loss  # linear combination loss
 

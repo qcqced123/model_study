@@ -285,7 +285,7 @@ class DistillationKnowledge(nn.Module, AbstractTask):
         last_hidden_state = torch.masked_select(last_hidden_state, mask)
         last_hidden_state = last_hidden_state.view(-1, self.cfg.dim_model)  # flatten last_hidden_state
         soft_target = F.softmax(
-            t_logit.view(-1, self.cfg.vocab_size) / temperature,  # flatten softmax distribution
+            t_logit.view(-1, self.cfg.vocab_size) / temperature**2,  # flatten softmax distribution
             dim=-1
         )  # [bs* seq, vocab_size]
         return last_hidden_state, soft_target
@@ -309,7 +309,7 @@ class DistillationKnowledge(nn.Module, AbstractTask):
         last_hidden_state = last_hidden_state.view(-1, self.cfg.dim_model)  # flatten last_hidden_state
         c_labels = last_hidden_state.new(last_hidden_state.size(0)).fill_(1)
         soft_pred = F.softmax(
-            s_logit.view(-1, self.cfg.vocab_size) / temperature,  # flatten softmax distribution
+            s_logit.view(-1, self.cfg.vocab_size) / temperature**2,  # flatten softmax distribution
             dim=-1
         )
         return last_hidden_state, s_logit, soft_pred, c_labels
