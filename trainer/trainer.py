@@ -24,7 +24,7 @@ from trainer.trainer_utils import AverageMeter, AWP, get_dataloader, get_swa_sch
 
 
 class PreTrainTuner:
-    """ Trainer class for Pre-Train Pipeline, such as MLM, CLM
+    """ Trainer class for Pre-Train Pipeline, such as MLM
     So, if you want set options, go to cfg.json file or configuration.py
     Args:
         cfg: configuration module, configuration.py
@@ -332,6 +332,138 @@ class PreTrainTuner:
                     valid_metrics[self.metric_list[i]].update(scores, batch_size)
         avg_scores = [valid_metrics[self.metric_list[i]].avg for i in range(len(self.metric_list))]
         return valid_losses.avg, avg_scores
+
+
+class CLMTuner(PreTrainTuner):
+    """ Trainer class for Casual Language Model Task, such as transformer decoder, GPT2, GPTNeo, T5 ...
+    """
+    def __init__(self, cfg: CFG, generator: torch.Generator) -> None:
+        super(CLMTuner, self).__init__(cfg, generator)
+
+    def train_val_fn(
+        self,
+        loader_train,
+        model: nn.Module,
+        criterion: nn.Module,
+        optimizer,
+        scheduler,
+        loader_valid,
+        val_criterion: nn.Module,
+        val_metric_list: List[Callable],
+        val_score_max: float,
+        val_score_max_2: float,
+        epoch: int,
+        awp: nn.Module = None,
+        swa_model: nn.Module = None,
+        swa_start: int = None,
+        swa_scheduler=None
+    ) -> Tuple[Any, Union[float, ndarray, ndarray]]:
+        """ function for train loop with validation for each batch*N Steps """
+        scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
+        losses = AverageMeter()
+        model.train()
+        for step, batch in enumerate(tqdm(loader_train)):
+            optimizer.zero_grad()
+            inputs = batch['input_ids'].to(self.cfg.device)
+            labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
+            attention_mask = batch['attention_mask'].to(self.cfg.device)  # attention mask to GPU
+            batch_size = inputs.size(0)
+
+            with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
+                logit = model(inputs, attention_mask)
+                loss = criterion(logit.view(-1, self.cfg.vocab_size), labels.view(-1))  # cross entropy loss
+
+            if self.cfg.n_gradient_accumulation_steps > 1:
+                loss = loss / self.cfg.n_gradient_accumulation_steps
+
+            scaler.scale(loss).backward()
+            losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
+
+            if self.cfg.awp and epoch >= self.cfg.nth_awp_start_epoch:
+                adv_loss = awp.attack_backward(inputs, attention_mask, labels)
+                scaler.scale(adv_loss).backward()
+                awp._restore()
+
+            if self.cfg.clipping_grad and (step + 1) % self.cfg.n_gradient_accumulation_steps == 0 or self.cfg.n_gradient_accumulation_steps == 1:
+                scaler.unscale_(optimizer)
+                grad_norm = torch.nn.utils.clip_grad_norm(
+                    model.parameters(),
+                    self.cfg.max_grad_norm * self.cfg.n_gradient_accumulation_steps
+                )
+                # Stochastic Weight Averaging
+                if self.cfg.swa and epoch >= int(swa_start):
+                    swa_model.update_parameters(model)
+                    swa_scheduler.step()
+
+                scaler.step(optimizer)
+                scaler.update()
+                scheduler.step()
+
+            # logging train loss, gradient norm, lr to wandb
+            lr = scheduler.get_lr()[0]
+            grad_norm = grad_norm.detach().cpu().numpy()
+
+            wandb.log({
+                '<Per Step> Train Loss': losses.avg,
+                '<Per Step> Gradient Norm': grad_norm,
+                '<Per Step> lr': lr,
+            })
+
+            # validate for each size of batch*N Steps
+            if ((step + 1) % self.cfg.val_check == 0) or ((step + 1) == len(loader_train)):
+                valid_loss = self.valid_fn(loader_valid, model, val_criterion, val_metric_list)
+                wandb.log({
+                    '<Val Check Step> Train Loss': losses.avg,
+                    '<Val Check Step> Valid Loss': valid_loss,
+                })
+
+                if val_score_max >= valid_loss:
+                    print(f'[Update] Valid Score : ({val_score_max:.4f} => {valid_loss:.4f}) Save Parameter')
+                    print(f'Best Score: {valid_loss}')
+                    torch.save(
+                        model.state_dict(),
+                        f'{self.cfg.checkpoint_dir}{self.cfg.mlm_masking}_{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
+                    )
+                    val_score_max = valid_loss
+        return losses.avg * self.cfg.n_gradient_accumulation_steps, val_score_max
+
+    def valid_fn(
+            self,
+            loader_valid,
+            model: nn.Module,
+            val_criterion: nn.Module,
+            val_metric_list: List[Callable]
+    ) -> Tuple[np.ndarray, List]:
+        """ function for validation loop
+        """
+        valid_losses = AverageMeter()
+        valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
+        model.eval()
+        with torch.no_grad():
+            for step, batch in enumerate(tqdm(loader_valid)):
+                inputs = batch['input_ids'].to(self.cfg.device)
+                labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
+                attention_mask = batch['attention_mask'].to(self.cfg.device)  # padding mask to GPU
+                batch_size = inputs.size(0)
+
+                logit = model(inputs, attention_mask)
+                flat_logit, flat_labels = logit.view(-1, self.cfg.vocab_size), labels.view(-1)
+
+                loss = val_criterion(flat_logit, flat_labels)
+                valid_losses.update(loss.detach().cpu().numpy(), batch_size)
+
+                wandb.log({
+                    '<Val Step> Valid Loss': valid_losses.avg
+                })
+
+                for i, metric_fn in enumerate(val_metric_list):
+                    scores = metric_fn(flat_labels.detach().cpu().numpy(), flat_logit.detach().cpu().numpy())
+                    valid_metrics[self.metric_list[i]].update(scores, batch_size)
+                    wandb.log({
+                        f'<Val Step> Valid {self.metric_list[i]}': valid_metrics[self.metric_list[i]].avg
+                    })
+
+        return valid_losses.avg
 
 
 class SBOTuner(PreTrainTuner):

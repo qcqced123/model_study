@@ -7,6 +7,7 @@ from typing import List, Dict, Tuple
 from configuration import CFG
 from .model_utils import freeze
 from model.abstract_task import AbstractTask
+from experiment.tuner.clm import CLMHead
 from experiment.tuner.mlm import MLMHead
 from experiment.tuner.sbo import SBOHead
 from experiment.models.attention.electra import ELECTRA
@@ -46,6 +47,44 @@ class MaskedLanguageModel(nn.Module, AbstractTask):
     def forward(self, inputs: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> List[Tensor]:
         last_hidden_states, _ = self.feature(inputs, padding_mask)
         logit = self.mlm_head(last_hidden_states)
+        return logit
+
+
+class CasualLanguageModel(nn.Module, AbstractTask):
+    """ Custom Model for CLM Task, which is used for pre-training Auto-Regressive Model (AR),
+    like as GPT, T5 ...
+
+    Args:
+        cfg: configuration.CFG
+
+    References:
+        https://huggingface.co/docs/transformers/main/tasks/language_modeling
+        https://github.com/huggingface/transformers/blob/main/src/transformers/data/data_collator.py#L748
+    """
+    def __init__(self, cfg: CFG) -> None:
+        super(CasualLanguageModel, self).__init__()
+        self.cfg = cfg
+        self.model = self.select_model(cfg.num_layers)
+        self.lm_head = CLMHead(cfg)
+
+        self._init_weights(self.model)
+        self._init_weights(self.lm_head)
+
+        if self.cfg.load_pretrained:
+            self.model.load_state_dict(
+                torch.load(cfg.checkpoint_dir + cfg.state_dict),
+                strict=True
+            )
+        if self.cfg.gradient_checkpoint:
+            self.model.gradient_checkpointing_enable()
+
+    def feature(self, inputs: Tensor, attention_mask: Tensor) -> Tensor:
+        outputs = self.model(inputs, attention_mask)
+        return outputs
+
+    def forward(self, inputs: Tensor, attention_mask: Tensor) -> List[Tensor]:
+        last_hidden_states, _ = self.feature(inputs, attention_mask)
+        logit = self.lm_head(last_hidden_states)
         return logit
 
 

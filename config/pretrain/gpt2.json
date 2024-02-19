@@ -3,18 +3,18 @@
         "train": true,
         "test": false,
         "checkpoint_dir": "./saved/",
-        "state_dict": "WholeWordMasking_512_BERT_state_dict.pth",
+        "state_dict": "",
         "load_pretrained": false,
         "resume": false,
-        "name": "MaskedLanguageModel",
+        "name": "CasualLanguageModel",
         "trainer": "PreTrainTuner",
         "loop": "train_loop",
         "dataset": "MLMDataset",
         "arch_name": "attention",
-        "model_name": "bert",
-        "module_name": "BERT",
-        "tokenizer_name": "bert-base-uncased",
-        "task": "MaskedLanguageModel"
+        "model_name": "gpt2",
+        "module_name": "GPT2",
+        "tokenizer_name": "openai-community/gpt2",
+        "task": "CasualLanguageModel"
     },
 
     "pretrain_options": {
@@ -51,7 +51,7 @@
     "optimizer_options": {
         "optimizer": "AdamW",
         "llrd": false,
-        "lr": 2e-4,
+        "lr": 2.5e-4,
         "weight_decay": 1e-2,
         "adam_epsilon": 1e-6,
         "use_bertadam": false,
