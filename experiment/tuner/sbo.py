@@ -110,7 +110,7 @@ class SpanCollator(WholeWordMaskingCollator):
                     break
                 if span_token_index in covered_indexes: # If it encounters an index that is already masked, it ends, and starts the next iteration
                     break
-                else:  # 스팬 길이가 처음 선택 되었던 시작 토큰 인덱스가 해당되는 리스트 길이를 넘는 경우, 이후 선택되는 토큰은 wwm 위배 가능성
+                else:
                     covered_indexes.add(span_token_index)
                     masked_lms.append(span_token_index)
                     span_length -= 1

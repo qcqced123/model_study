@@ -298,12 +298,12 @@ class BERT(nn.Module, AbstractModel):
     References:
         https://arxiv.org/pdf/1810.04805.pdf
     """
-    def __init__(self, cfg: CFG) -> None:
+    def __init__(self, cfg: CFG, num_layers: int = 12) -> None:
         super(BERT, self).__init__()
         self.cfg = cfg
         self.vocab_size = cfg.vocab_size
         self.max_seq = cfg.max_seq
-        self.num_layers = cfg.num_layers
+        self.num_layers = num_layers
         self.num_attention_heads = cfg.num_attention_heads
         self.dim_model = cfg.dim_model
         self.dim_ffn = cfg.dim_ffn
