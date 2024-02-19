@@ -34,7 +34,6 @@ def scaled_dot_product_attention(
     """
     attention_matrix = torch.matmul(q, k.transpose(-1, -2)) / dot_scale
     if attention_mask is not None:
-        attention_mask = attention_mask.unsqueeze(1)
         attention_matrix = attention_matrix.masked_fill(attention_mask == 1, float('-inf'))
     attention_dist = attention_dropout(
         F.softmax(attention_matrix, dim=-1)
@@ -261,7 +260,7 @@ class Embedding(nn.Module):
             self.layer_norm1(self.word_embedding(inputs))
         )
         abs_pos_emb = self.hidden_dropout(
-            self.layer_norm2(self.abs_pos_emb(torch.arange(inputs.shape[1], device="cuda").repeat(inputs.shape[0]).view(inputs.shape[0], -1)))
+            self.layer_norm2(self.abs_pos_emb(torch.arange(inputs.shape[1], device=self.cfg.device).repeat(inputs.shape[0]).view(inputs.shape[0], -1)))
         )
         return word_embeddings, abs_pos_emb
 
@@ -282,12 +281,12 @@ class GPT2(nn.Module, AbstractModel):
         https://d4mucfpksywv.cloudfront.net/better-language-models/language_models_are_unsupervised_multitask_learners.pdf
         https://arxiv.org/abs/2005.14165
     """
-    def __init__(self, cfg: CFG):
+    def __init__(self, cfg: CFG, num_layers: int = 12):
         super(GPT2, self).__init__()
         self.cfg = cfg
         self.vocab_size = cfg.vocab_size
         self.max_seq = cfg.max_seq
-        self.num_layers = cfg.num_layers
+        self.num_layers = num_layers
         self.num_attention_heads = cfg.num_attention_heads
         self.dim_model = cfg.dim_model
         self.dim_ffn = cfg.dim_ffn

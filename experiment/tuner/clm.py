@@ -23,7 +23,7 @@ class CLMCollator(WholeWordMaskingCollator):
             torch.ones(inputs.shape[0], inputs.shape[-1], inputs.shape[-1], dtype=torch.bool),
             diagonal=1
         )  # [batch, seq_len, seq_len]
-        pad_mask = pad_mask.unsqueeze(1).expand(-1, pad_mask[1], -1)  # [batch, seq_len, seq_len]
+        pad_mask = pad_mask.unsqueeze(1).expand(-1, pad_mask.shape[1], -1)  # [batch, seq_len, seq_len]
         attention_mask = lm_mask | pad_mask
         return attention_mask
 
