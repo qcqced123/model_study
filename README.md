@@ -120,7 +120,7 @@ Experiment Application
 - [Sentence-BERT] Sentence Embeddings using Siamese BERT-Networks (Continue)
 - **[DeBERTa] DeBERTa: Decoding-Enhanced BERT with Disentangled-Attention (Complete, [Paper Review](https://qcqced123.github.io/nlp/deberta))**
 - **[DeBERTa-V3] Improving DeBERTa using ELECTRA-Style Pre-Training with Gradient-Disentangled Embedding Sharing (Complete)**
-- [GPT2] Language Models are Unsupervised Multitask Learners (Continue)
+- **[GPT2] Language Models are Unsupervised Multitask Learners (Complete)**
 - **[ViT] An Image Is Worth 16x16 Words: Transformers For Image Recognition At Scale (Complete, [Paper Review](https://qcqced123.github.io/cv/vit))**
 - [SwinTransformer] Swin Transformer: Hierarchical Vision Transformer using Shifted Windows (Continue)
 - [CLIP] Learning Transferable Visual Models From Natural Language Supervision (Continue)
