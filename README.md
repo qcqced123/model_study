@@ -11,8 +11,26 @@
 # python train.py [Task Type] [Model Name]
 
 python train.py pretrain bert
+python train,py pretrain gpt2
 python train.py fine_tune superglue
 ```
+
+### 🖍️ Training Example
+Currently, only MLM Task is perfectly implemented. 
+
+RTD and SBO Tasks are implemented, but the pipeline is not optimized. we check out the casue of bottleneck now, and then we will optimize the pipeline. 
+
+Distillation Knowledge Task is not perfectly implemented. Task is currently experiencing an issue where NaNs are occurring due to training loss(Only CosineEmbeddingLoss, otherwise are normal) after a certain number of forward step. we are currently check out the cause of this problem. Maybe abnormal text dataset, mixed precision trainiing method are the cause of this problem.
+
+CLM Task is not perfectly implemented. Current version can only train the model by MLE, validate by accuracy. ASAP, we will add other components such as perplexity, BLEU, sliding winodw, etc.
+
+```bash
+
+
+- 1) Masked Language Model (MLM): https://wandb.ai/qcqced/MaskedLanguageModel?workspace=user-qcqced
+- 2) Causal Language Model (CLM) (not perfectily completed): https://wandb.ai/qcqced/CasualLanguageModel?workspace=user-qcqced
+- 3) Replaced Token Detection (RTD, need to optimize pipeline): https://wandb.ai/qcqced/ReplacedTokenDetection?workspace=user-qcqced
+- 4) Span Boundary Objective (SBO, need to optimize pipeline): https://wandb.ai/qcqced/SpanBoundaryObjective?workspace=user-qcqced
 
 ### 🗂️ Application Structure
 
