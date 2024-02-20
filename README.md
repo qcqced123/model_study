@@ -28,7 +28,7 @@ Currently, MLM Task is well perfectly implemented.
 RTD and SBO Tasks are implemented, but the pipeline is not optimized. we check out the casue of bottleneck now, and then we will optimize the pipeline. Maybe the cause of bottleneck is the data preprocessing, batching, beacause of our poor system power, especially CPU.
 
 
-Distillation Knowledge Task is not perfectly implemented. Task is currently experiencing an issue where NaNs are occurring due to training loss(Only CosineEmbeddingLoss, otherwise are normal) after a certain number of forward step. we are currently check out the cause of this problem. Maybe abnormal text dataset, mixed precision trainiing method are the cause of this problem.
+Distillation Knowledge Task is not perfectly implemented. Task is currently experiencing an issue where NaNs are occurring due to training loss(Only CosineEmbeddingLoss, otherwise are normal) after a certain number of forward step. we are currently check out ther reason of this problem. Maybe abnormal text dataset, mixed precision trainiing method are the cause of this problem.
 
 CLM Task is not perfectly implemented. Current version can only train the model by MLE, validate by accuracy. ASAP, we will add other components such as perplexity, BLEU, sliding winodw, etc.
 
