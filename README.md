@@ -48,10 +48,7 @@ CLM Task is not perfectly implemented. Current version can only train the model 
 
 This Project implement with Pytorch. The overview structure is as follows.
 
-<p markdown="1" align="center">
-![Application Structure](/assets/images/app_structure.png){: .align-center}{: width="60%", height="50%"}{: .image-caption}
-__*[Application Structure](https://paperswithcode.com/method/layer-normalization)*__
-</p>
+![Application Structure](./assets/images/app_structure.png){: .align-center}{: width="60%", height="50%"}{: .image-caption}
 
 
 ```plaintext
