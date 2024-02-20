@@ -31,9 +31,6 @@ Distillation Knowledge Task is not perfectly implemented. Task is currently expe
 
 CLM Task is not perfectly implemented. Current version can only train the model by MLE, validate by accuracy. ASAP, we will add other components such as perplexity, BLEU, sliding winodw, etc.
 
-```bash
-
-
 - 1) Masked Language Model (MLM): https://wandb.ai/qcqced/MaskedLanguageModel?workspace=user-qcqced
 - 2) Causal Language Model (CLM) (not perfectily completed): https://wandb.ai/qcqced/CasualLanguageModel?workspace=user-qcqced
 - 3) Replaced Token Detection (RTD, need to optimize pipeline): https://wandb.ai/qcqced/ReplacedTokenDetection?workspace=user-qcqced
@@ -43,7 +40,7 @@ CLM Task is not perfectly implemented. Current version can only train the model 
 
 This Project implement with Pytorch. The overview structure is as follows.
 
-```
+```plaintext
 Experiment Application
 │
 ├── config
