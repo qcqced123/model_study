@@ -46,11 +46,9 @@ CLM Task is not perfectly implemented. Current version can only train the model 
 
 ### 🗂️ Application Structure
 
+![Application Structure](./assets/images/app_structure.png)
+
 This Project implement with Pytorch. The overview structure is as follows.
-
-![Application Structure](./assets/images/app_structure.png){: .align-center}{: width="60%", height="50%"}{: .image-caption}
-
-
 ```plaintext
 Experiment Application
 │
