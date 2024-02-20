@@ -58,6 +58,7 @@ Experiment Application
 │       │    ├──distilbert.json
 │       │    ├──electra.json
 │       │    ├──spanbert.json
+│       │    ├──gpt2.json
 │       │    ├──deberta.json
 │       │    └──deberta_v3.json
 │       └── fine_tune
