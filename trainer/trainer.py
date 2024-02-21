@@ -1092,7 +1092,6 @@ class DistillKnowledgeTuner(PreTrainTuner):
         The design is inspired by the Builder Pattern
         """
         model = getattr(task, self.cfg.task)(self.cfg)
-
         # load checkpoint when you set 'resume' to True
         if self.cfg.is_teacher_resume:  # load teacher's pretrained weight: backbone & mlm head
             pretrained_weight = torch.load(self.cfg.checkpoint_dir + self.cfg.teacher_state_dict)
@@ -1111,7 +1110,6 @@ class DistillKnowledgeTuner(PreTrainTuner):
             )
 
         model.to(self.cfg.device)
-
         criterion = {
             loss_fn: getattr(loss, f'{loss_fn}')() for loss_fn in self.cfg.losses_fn
         }
@@ -1185,11 +1183,11 @@ class DistillKnowledgeTuner(PreTrainTuner):
         for step, batch in enumerate(tqdm(loader_train)):
             optimizer.zero_grad()
             inputs = batch['input_ids'].to(self.cfg.device)
-            labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
-            padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
-            batch_size = inputs.size(0)  # same as ES, GDES
+            labels = batch['labels'].to(self.cfg.device)
+            padding_mask = batch['padding_mask'].to(self.cfg.device)
+            batch_size = inputs.size(0)
 
-            mask = padding_mask.unsqueeze(-1).expand(-1, -1, self.cfg.dim_model)
+            mask = padding_mask.unsqueeze(-1).expand(-1, -1, self.cfg.dim_model)  # for hidden states dim
             with torch.no_grad():
                 t_hidden_state, soft_target = model.teacher_fw(
                     inputs=inputs,

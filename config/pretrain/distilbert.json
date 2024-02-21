@@ -27,7 +27,7 @@
         "temperature": 2,
         "alpha_distillation": 5,
         "alpha_student": 1,
-        "alpha_cosine": 4
+        "alpha_cosine": 1
     },
 
     "model_size": {
