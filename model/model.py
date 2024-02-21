@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from typing import List, Dict, Tuple
+from typing import List, Tuple
 
 from configuration import CFG
 from .model_utils import freeze
@@ -54,7 +54,8 @@ class CasualLanguageModel(nn.Module, AbstractTask):
     """ Custom Model for CLM Task, which is used for pre-training Auto-Regressive Model (AR),
     like as GPT, T5 ...
 
-    Notes: L = L_CLM (pure language modeling)
+    Notes:
+        L = L_CLM (pure language modeling)
 
     Args:
         cfg: configuration.CFG

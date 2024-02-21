@@ -221,7 +221,7 @@ class GPTDecoder(nn.Module):
         for layer in self.layer:
             if self.gradient_checkpointing and self.cfg.train:
                 x = self._gradient_checkpointing_func(
-                    layer.__call__,  # same as __forward__ call, torch reference recommend to use __call__ instead of forward
+                    layer.__call__,
                     x,
                     attention_mask
                 )

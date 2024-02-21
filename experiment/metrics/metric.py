@@ -85,3 +85,14 @@ def cosine_similarity(a: Tensor, b: Tensor, eps=1e-8) -> np.ndarray:
     return output
 
 
+def ppl(loss: np.ndarray):
+    """ for calculating metric named 'Perplexity',
+    which is used by validating language modeling task such as rnn, gpt
+
+    Args:
+        loss: mean scalar of batch's cross entropy
+
+    Maths:
+        PPL(x) = exp(CE)
+    """
+    return np.exp(loss)

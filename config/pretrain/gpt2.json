@@ -18,9 +18,7 @@
     },
 
     "pretrain_options": {
-        "is_mf_embedding": false,
-        "mlm_masking": "WholeWordMasking",
-        "mlm_probability": 0.15
+        "window_size": 1024
     },
 
     "model_size": {
@@ -80,7 +78,7 @@
     },
 
     "metrics_options": {
-        "metrics": ["accuracy"]
+        "metrics": ["ppl", "accuracy"]
     },
 
     "common_settings": {

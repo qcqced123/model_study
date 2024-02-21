@@ -457,7 +457,7 @@ class CLMTuner(PreTrainTuner):
                 })
 
                 for i, metric_fn in enumerate(val_metric_list):
-                    scores = metric_fn(flat_labels.detach().cpu().numpy(), flat_logit.detach().cpu().numpy())
+                    scores = metric_fn(valid_losses.avg) if not i else metric_fn(flat_labels.detach().cpu().numpy(), flat_logit.detach().cpu().numpy())
                     valid_metrics[self.metric_list[i]].update(scores, batch_size)
                     wandb.log({
                         f'<Val Step> Valid {self.metric_list[i]}': valid_metrics[self.metric_list[i]].avg
