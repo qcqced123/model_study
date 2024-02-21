@@ -410,3 +410,4 @@ $RECYCLE.BIN/
 *.pkl
 *.pth
 !/embedding_share_test.ipynb
+.idea/.name
