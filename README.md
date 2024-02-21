@@ -41,7 +41,11 @@ CLM Task is not perfectly implemented. Current version can only train the model 
     https://wandb.ai/qcqced/ReplacedTokenDetection?workspace=user-qcqced  
     
 - **4) Span Boundary Objective (SBO, need to optimize pipeline)**  
-    https://wandb.ai/qcqced/SpanBoundaryObjective?workspace=user-qcqced  
+    https://wandb.ai/qcqced/SpanBoundaryObjective?workspace=user-qcqced
+
+- **5) Distillation Knowledge**  
+    https://wandb.ai/qcqced/DistillationKnowledge?workspace=user-qcqced
+
 
 ### 🗂️ Application Structure
 

@@ -18,7 +18,7 @@
     },
 
     "pretrain_options": {
-        "window_size": 1024
+        "window_size": 512
     },
 
     "model_size": {
