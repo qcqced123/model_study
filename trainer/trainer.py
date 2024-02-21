@@ -455,7 +455,6 @@ class CLMTuner(PreTrainTuner):
                 wandb.log({
                     '<Val Step> Valid Loss': valid_losses.avg
                 })
-
                 for i, metric_fn in enumerate(val_metric_list):
                     scores = metric_fn(valid_losses.avg) if not i else metric_fn(flat_labels.detach().cpu().numpy(), flat_logit.detach().cpu().numpy())
                     valid_metrics[self.metric_list[i]].update(scores, batch_size)
@@ -1302,7 +1301,6 @@ class DistillKnowledgeTuner(PreTrainTuner):
                 # 2) Student model valid pred
                 s_hidden_state, s_logit, soft_pred, c_labels = model.student_fw(
                     inputs=inputs,
-                    labels=labels,
                     padding_mask=padding_mask,
                     mask=mask,
                     is_valid=True

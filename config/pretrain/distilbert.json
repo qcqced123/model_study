@@ -4,7 +4,7 @@
         "test": false,
         "checkpoint_dir": "./saved/",
         "teacher_state_dict": "WholeWordMasking_512_BERT_state_dict.pth",
-        "student_state_dict": "SWM_512_DeBERTa_state_dict.pth",
+        "student_state_dict": "",
         "name": "DistillationKnowledge",
         "trainer": "DistillKnowledgeTuner",
         "loop": "train_loop",
@@ -27,7 +27,7 @@
         "temperature": 2,
         "alpha_distillation": 5,
         "alpha_student": 1,
-        "alpha_cosine": 1
+        "alpha_cosine": 4
     },
 
     "model_size": {
@@ -54,7 +54,7 @@
         "epochs": 20,
         "batch_size": 11,
         "val_batch_size": 32,
-        "val_check": 999999
+        "val_check": 100
     },
 
     "optimizer_options": {
@@ -79,7 +79,7 @@
         "gradient_checkpoint": true,
         "clipping_grad": true,
         "n_gradient_accumulation_steps": 1,
-        "max_grad_norm": 1
+        "max_grad_norm": 5
     },
 
     "loss_options": {
