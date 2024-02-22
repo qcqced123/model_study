@@ -1198,8 +1198,8 @@ class DistillKnowledgeTuner(PreTrainTuner):
             # logging train loss, gradient norm, lr to wandb
             lr = scheduler.get_lr()[0]
             grad_norm = grad_norm.detach().cpu().numpy()
-
             avg_loss = d_losses.avg + s_losses.avg + c_losses.avg
+
             wandb.log({
                 '<Per Step> Total Train Loss': avg_loss,
                 '<Per Step> Distillation Train Loss': d_losses.avg,
@@ -1211,6 +1211,7 @@ class DistillKnowledgeTuner(PreTrainTuner):
 
             # validate for each size of batch*N Steps
             if ((step + 1) % self.cfg.val_check == 0) or ((step + 1) == len(loader_train)):
+                torch.cuda.empty_cache()
                 d_valid_loss, s_valid_loss, c_valid_loss = self.valid_fn(
                     loader_valid,
                     model,
