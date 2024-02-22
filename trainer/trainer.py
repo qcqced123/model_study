@@ -206,11 +206,6 @@ class PreTrainTuner:
             # validate for each size of batch*N Steps
             if ((step + 1) % self.cfg.val_check == 0) or ((step + 1) == len(loader_train)):
                 valid_loss = self.valid_fn(loader_valid, model, val_criterion, val_metric_list)
-                wandb.log({
-                    '<Val Check Step> Train Loss': losses.avg,
-                    '<Val Check Step> Valid Loss': valid_loss,
-                })
-
                 if val_score_max >= valid_loss:
                     print(f'[Update] Valid Score : ({val_score_max:.4f} => {valid_loss:.4f}) Save Parameter')
                     print(f'Best Score: {valid_loss}')
@@ -412,11 +407,6 @@ class CLMTuner(PreTrainTuner):
             # validate for each size of batch*N Steps
             if ((step + 1) % self.cfg.val_check == 0) or ((step + 1) == len(loader_train)):
                 valid_loss = self.valid_fn(loader_valid, model, val_criterion, val_metric_list)
-                wandb.log({
-                    '<Val Check Step> Train Loss': losses.avg,
-                    '<Val Check Step> Valid Loss': valid_loss,
-                })
-
                 if val_score_max >= valid_loss:
                     print(f'[Update] Valid Score : ({val_score_max:.4f} => {valid_loss:.4f}) Save Parameter')
                     print(f'Best Score: {valid_loss}')
@@ -564,15 +554,6 @@ class SBOTuner(PreTrainTuner):
                     val_criterion,
                     val_metric_list
                 )
-                wandb.log({
-                    '<Val Check Step> Total Train Loss': losses.avg,
-                    '<Val Check Step> MLM Train Loss': mlm_losses.avg,
-                    '<Val Check Step> SBO Train Loss': sbo_losses.avg,
-                    '<Val Check Step> Total Valid Loss': valid_loss,
-                    '<Val Check Step> MLM Valid Loss': mlm_valid_loss,
-                    '<Val Check Step> SBO Valid Loss': sbo_valid_loss,
-                })
-
                 if val_score_max >= valid_loss:
                     print(f'[Update] Valid Score : ({val_score_max:.4f} => {valid_loss:.4f}) Save Parameter')
                     print(f'Best Score: {valid_loss}')
@@ -833,16 +814,6 @@ class RTDTuner(PreTrainTuner):
                     val_criterion,
                     val_metric_list
                 )
-                valid_loss = g_valid_loss + d_valid_loss
-                wandb.log({
-                    '<Val Check Step> Total Train Loss': losses.avg,
-                    '<Val Check Step> Generator Train Loss': g_losses.avg,
-                    '<Val Check Step> Discriminator Train Loss': d_losses.avg,
-                    '<Val Check Step> Total Valid Loss': valid_loss,
-                    '<Val Check Step> Generator Valid Loss': g_valid_loss,
-                    '<Val Check Step> Discriminator Valid Loss': d_valid_loss,
-                })
-
                 # save checkpoint of generator
                 if g_val_score_max >= g_valid_loss:
                     print(f'[Update] Generator Valid Score : ({g_val_score_max:.4f} => {g_valid_loss:.4f}) Save Parameter')
@@ -974,16 +945,6 @@ class RTDTuner(PreTrainTuner):
                     val_criterion,
                     val_metric_list
                 )
-                valid_loss = g_valid_loss + d_valid_loss
-                wandb.log({
-                    '<Val Check Step> Total Train Loss': avg_loss,
-                    '<Val Check Step> Generator Train Loss': g_losses.avg,
-                    '<Val Check Step> Discriminator Train Loss': d_losses.avg,
-                    '<Val Check Step> Total Valid Loss': valid_loss,
-                    '<Val Check Step> Generator Valid Loss': g_valid_loss,
-                    '<Val Check Step> Discriminator Valid Loss': d_valid_loss,
-                })
-
                 # save checkpoint of generator
                 if g_val_score_max >= g_valid_loss:
                     print(f'[Update] Generator Valid Score : ({g_val_score_max:.4f} => {g_valid_loss:.4f}) Save Parameter')
@@ -1258,7 +1219,6 @@ class DistillKnowledgeTuner(PreTrainTuner):
                     val_metric_list
                 )
                 valid_loss = d_valid_loss + s_valid_loss + c_valid_loss
-
                 # save checkpoint of ONLY student, not including mlm head
                 if val_score_max >= valid_loss:
                     print(f'[Update] Total Valid Score : ({val_score_max:.4f} => {valid_loss:.4f}) Save Parameter')
