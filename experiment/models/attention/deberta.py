@@ -447,9 +447,6 @@ class DeBERTa(nn.Module, AbstractModel):
         hidden_dropout_prob: dropout rate for embedding, hidden layer
         attention_probs_dropout_prob: dropout rate for attention
 
-    Notes:
-        MLM Task is not implemented yet, will be implemented ASAP, but you can get token encode output (embedding)
-
     References:
         https://arxiv.org/abs/2006.03654
         https://arxiv.org/abs/2111.09543
