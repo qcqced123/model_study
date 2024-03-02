@@ -58,6 +58,8 @@ Experiment Application
 ├── config
 │	├── pretrain
 │       │    ├──bert.json
+│       │    ├──roformer.json  # rotary position embedding
+│       │    ├──linear_transformer.json  # linear attention
 │       │    ├──distilbert.json
 │       │    ├──electra.json
 │       │    ├──spanbert.json
@@ -76,6 +78,8 @@ Experiment Application
 │	│	├── abstract_model.py
 │	│	├── attention
 │	│	│    ├── bert.py
+│	│	│    ├── roformer.py
+│	│	│    ├── linear_transformer.py
 │	│	│    ├── distilbert.py
 │	│	│    ├── transformer.py
 │	│	│    ├── vit.py  # vision transformer
@@ -126,6 +130,7 @@ Experiment Application
 - [Longformer] Longformer: The Long-Document Transformer (Continue)
 - [Reformer] Reformer: The Efficient Transformer (Continue)
 - [Roformer] RoFormer: Enhanced Transformer with Rotary Position Embedding (Continue)
+- [Linear Transformer] Transformers are RNNs: Fast Autoregressive Transformers with Linear Attention (Continue)
 - **[ELECTRA] Pre-training Text Encoders as Discriminators Rather Than Generators (Complete)**
 - **[SpanBERT] SpanBERT: Improving Pre-training by Representing and Predicting Spans (Complete)**
 - **[DistilBERT] DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter (Complete)**
