@@ -7,36 +7,56 @@ from typing import Tuple, List
 from einops.layers.torch import Rearrange
 from configuration import CFG
 
+""" py module for linear transformer, especially for Encoder Model
+"""
 
-def scaled_dot_product_attention(
+
+def kernel_fn(x: Tensor, kernel_name: str) -> Tensor:
+    """ Select kernel function for attention head
+    This is temporary function, we will implement more kernel function in future
+    """
+    hidden_state = None
+    if kernel_name == 'elu':
+        hidden_state = F.elu(x) + 1
+    return hidden_state
+
+
+def linear_attention(
     q: Tensor,
     k: Tensor,
     v: Tensor,
-    dot_scale: Tensor,
-    attention_dropout: nn.Dropout,
     padding_mask: Tensor = None,
-    attention_mask: Tensor = None
+    attention_mask: Tensor = None,
+    dim_head: int = 64,
+    kernel: str = 'elu',
+    eps: float = 1e-8
 ) -> Tensor:
-    """ Scaled Dot-Product attention with Masking for padding mask
+    """ DocString will be updated ASAP
+    Linear attention with Masking for padding mask
+
     Args:
         q: query matrix, shape (batch_size, seq_len, dim_head)
         k: key matrix, shape (batch_size, seq_len, dim_head)
         v: value matrix, shape (batch_size, seq_len, dim_head)
-        dot_scale: scale factor for Q•K^T result
         attention_dropout: dropout for attention matrix, default rate is 0.1 from official paper
         padding_mask: mask for attention matrix for MLM, you must check whether or not padding token is 1
         attention_mask: mask for attention matrix for CLM
+        dim_head: default 64 (int), dimension of each attention head
+        kernel: default elu (str), which is used in original paper
+        eps: default 1e-8 (float), for numerical stability
     Math:
-        A = softmax(q•k^t/sqrt(D_h)), SA(z) = Av
+
+    Reference:
+
     """
-    attention_matrix = torch.matmul(q, k.transpose(-1, -2)) / dot_scale
-    if padding_mask is not None:
-        padding_mask = padding_mask.unsqueeze(1)
-        attention_matrix = attention_matrix.masked_fill(padding_mask == 1, float('-inf'))
-    attention_dist = attention_dropout(
-        F.softmax(attention_matrix, dim=-1)
-    )
-    attention_matrix = torch.matmul(attention_dist, v)
+    projected_q, projected_k = kernel_fn(q, kernel), kernel_fn(k, kernel)
+
+    kv = torch.matmul(projected_k.permute(0, 2, 1), v)
+    qkv = torch.matmul(projected_q, kv)
+
+    # normalizer
+    z = 1 / torch.clamp(torch.matmul(projected_q, projected_k.sum(dim=1).unsqueeze(1).expand(-1, dim_head, -1)), min=eps)
+    attention_matrix = qkv * z
     return attention_matrix
 
 
@@ -65,7 +85,7 @@ class AttentionHead(nn.Module):
 
     def forward(self, x: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
         q, k, v = self.fc_q(x), self.fc_k(x), self.fc_v(x)
-        attention_matrix = scaled_dot_product_attention(
+        attention_matrix = linear_attention(
             q,
             k,
             v,

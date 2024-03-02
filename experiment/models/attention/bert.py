@@ -33,6 +33,7 @@ def scaled_dot_product_attention(
     if padding_mask is not None:
         padding_mask = padding_mask.unsqueeze(1)
         attention_matrix = attention_matrix.masked_fill(padding_mask == 1, float('-inf'))
+
     attention_dist = attention_dropout(
         F.softmax(attention_matrix, dim=-1)
     )

@@ -59,7 +59,7 @@ class AttentionHead(nn.Module):
         self.dim_head = dim_head  # 1024 / 16 = 64
         self.dot_scale = torch.sqrt(torch.tensor(self.dim_head))
         self.attention_dropout = nn.Dropout(p=attention_dropout_prob)
-        self.fc_q = nn.Linear(self.dim_model, self.dim_head)
+        self.fc_q = nn.Linear(self.dim_model, self.dim_head)  # linear projection
         self.fc_k = nn.Linear(self.dim_model, self.dim_head)
         self.fc_v = nn.Linear(self.dim_model, self.dim_head)
 
