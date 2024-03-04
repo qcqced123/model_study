@@ -25,6 +25,7 @@ def linear_attention(
     q: Tensor,
     k: Tensor,
     v: Tensor,
+    attention_dropout: nn.Dropout,
     padding_mask: Tensor = None,
     attention_mask: Tensor = None,
     dim_head: int = 64,
@@ -38,12 +39,13 @@ def linear_attention(
         q: query matrix, shape (batch_size, seq_len, dim_head)
         k: key matrix, shape (batch_size, seq_len, dim_head)
         v: value matrix, shape (batch_size, seq_len, dim_head)
-        attention_dropout: dropout for attention matrix, default rate is 0.1 from official paper
+        attention_dropout: default rate is 0.1, dropout for attention matrix
         padding_mask: mask for attention matrix for MLM, you must check whether or not padding token is 1
         attention_mask: mask for attention matrix for CLM
         dim_head: default 64 (int), dimension of each attention head
         kernel: default elu (str), which is used in original paper
         eps: default 1e-8 (float), for numerical stability
+
     Math:
 
     Reference:
@@ -54,9 +56,19 @@ def linear_attention(
     kv = torch.matmul(projected_k.permute(0, 2, 1), v)
     qkv = torch.matmul(projected_q, kv)
 
-    # normalizer
+    # applying padding mask, calculating normalizer
+    if padding_mask is not None:  # padding mask => batch, seqs
+        padding_mask = padding_mask.unsqueeze(1)
+        projected_k = projected_k.masked_fill(padding_mask == 1, 0)
+
     z = 1 / torch.clamp(torch.matmul(projected_q, projected_k.sum(dim=1).unsqueeze(1).expand(-1, dim_head, -1)), min=eps)
     attention_matrix = qkv * z
+
+    # attention dropout
+    if attention_dropout is not None:
+        attention_matrix = attention_dropout(
+            attention_matrix
+        )
     return attention_matrix
 
 
