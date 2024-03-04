@@ -102,6 +102,7 @@ class CFG:
     num_attention_heads = 12
     dim_model = 768
     dim_ffn = 3072
+    kernel = 'elu'
     hidden_act = 'gelu'
     layer_norm_eps = 1e-7
     attention_probs_dropout_prob = 0.1

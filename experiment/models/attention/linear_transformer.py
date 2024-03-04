@@ -25,12 +25,12 @@ def linear_attention(
     q: Tensor,
     k: Tensor,
     v: Tensor,
-    attention_dropout: nn.Dropout,
-    padding_mask: Tensor = None,
-    attention_mask: Tensor = None,
     dim_head: int = 64,
     kernel: str = 'elu',
-    eps: float = 1e-8
+    eps: float = 1e-8,
+    attention_dropout: nn.Dropout = None,
+    padding_mask: Tensor = None,
+    attention_mask: Tensor = None,
 ) -> Tensor:
     """ DocString will be updated ASAP
     Linear attention with Masking for padding mask
@@ -39,30 +39,32 @@ def linear_attention(
         q: query matrix, shape (batch_size, seq_len, dim_head)
         k: key matrix, shape (batch_size, seq_len, dim_head)
         v: value matrix, shape (batch_size, seq_len, dim_head)
-        attention_dropout: default rate is 0.1, dropout for attention matrix
-        padding_mask: mask for attention matrix for MLM, you must check whether or not padding token is 1
-        attention_mask: mask for attention matrix for CLM
         dim_head: default 64 (int), dimension of each attention head
         kernel: default elu (str), which is used in original paper
         eps: default 1e-8 (float), for numerical stability
+        attention_dropout: default rate is 0.1, dropout for attention matrix
+        padding_mask: mask for attention matrix for MLM, you must check whether or not padding token is 1
+        attention_mask: mask for attention matrix for CLM
 
     Math:
+        A = normalize(Φ(Q).mm(Φ(K).t())).mm(V)
 
     Reference:
-
+        https://arxiv.org/abs/2006.16236
+        https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
     """
     projected_q, projected_k = kernel_fn(q, kernel), kernel_fn(k, kernel)
 
-    kv = torch.matmul(projected_k.permute(0, 2, 1), v)
+    kv = torch.matmul(projected_k.permute(0, 2, 1).contiguous(), v)
     qkv = torch.matmul(projected_q, kv)
 
     # applying padding mask, calculating normalizer
-    if padding_mask is not None:  # padding mask => batch, seqs
-        padding_mask = padding_mask.unsqueeze(1)
-        projected_k = projected_k.masked_fill(padding_mask == 1, 0)
+    if padding_mask is not None:  # padding mask => batch, seq
+        projected_k[padding_mask == 1] = 0
 
-    z = 1 / torch.clamp(torch.matmul(projected_q, projected_k.sum(dim=1).unsqueeze(1).expand(-1, dim_head, -1)), min=eps)
-    attention_matrix = qkv * z
+    normalizer = projected_k.sum(dim=1).unsqueeze(1).expand(-1, dim_head, -1).permute(0, 2, 1).contiguous()
+    z = 1 / torch.clamp(torch.matmul(projected_q, normalizer), min=eps)
+    attention_matrix = torch.mul(qkv, z)
 
     # attention dropout
     if attention_dropout is not None:
@@ -73,23 +75,36 @@ def linear_attention(
 
 
 class AttentionHead(nn.Module):
-    """ In this class, we implement workflow of single attention head in BERT
+    """ In this class, we implement workflow of single attention head in Linear Transformer
     This class has same role as Module "BertAttention" in official Repo (bert.py)
+
     Args:
         dim_model: dimension of model's latent vector space, default 1024 from official paper
         dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
+        kernel: kernel function for attention head, default 'elu' from official paper
         attention_dropout_prob: dropout rate for attention matrix, default 0.1 from official paper
+
     Math:
-        A = softmax(attention Matrix/sqrt(3*D_h)), SA(z) = Av
+        A = normalize(Φ(Q).mm(Φ(K).t())).mm(V)
+
     Reference:
         https://arxiv.org/abs/1706.03762
         https://arxiv.org/pdf/1810.04805.pdf
+        https://arxiv.org/abs/2006.16236
+        https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
     """
-    def __init__(self, dim_model: int = 1024, dim_head: int = 64, attention_dropout_prob: float = 0.1) -> None:
+    def __init__(
+            self,
+            dim_model: int = 1024,
+            dim_head: int = 64,
+            kernel: str = 'elu',
+            attention_dropout_prob: float = 0.1
+    ) -> None:
         super(AttentionHead, self).__init__()
         self.dim_model = dim_model
         self.dim_head = dim_head  # 1024 / 16 = 64
-        self.dot_scale = torch.sqrt(torch.tensor(self.dim_head))
+        self.kernel = kernel
+        self.eps = 1e-8
         self.attention_dropout = nn.Dropout(p=attention_dropout_prob)
         self.fc_q = nn.Linear(self.dim_model, self.dim_head)
         self.fc_k = nn.Linear(self.dim_model, self.dim_head)
@@ -101,7 +116,9 @@ class AttentionHead(nn.Module):
             q,
             k,
             v,
-            self.dot_scale,
+            self.dim_head,
+            self.kernel,
+            self.eps,
             self.attention_dropout,
             padding_mask,
             attention_mask
@@ -110,28 +127,42 @@ class AttentionHead(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    """ In this class, we implement workflow of Multi-Head Self-attention for BERT
+    """ In this class, we implement workflow of Multi-Head Self-attention for Linear Transformers
     This class has same role as Module "BertAttention" in official Repo (bert.py)
     In official repo, they use post-layer norm, but we use pre-layer norm which is more stable & efficient for training
+
     Args:
         dim_model: dimension of model's latent vector space, default 1024 from official paper
         num_attention_heads: number of heads in MHSA, default 16 from official paper for Transformer
         dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
+        kernel: kernel function for attention head, default 'elu' from official paper
         attention_dropout_prob: dropout rate, default 0.1
+
     Math:
         A = softmax(attention Matrix/sqrt(3*D_h)), SA(z) = Av
+
     Reference:
         https://arxiv.org/abs/1706.03762
         https://arxiv.org/pdf/1810.04805.pdf
+        https://arxiv.org/abs/2006.16236
+        https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
     """
-    def __init__(self, dim_model: int = 1024, num_attention_heads: int = 16, dim_head: int = 64, attention_dropout_prob: float = 0.1) -> None:
+    def __init__(
+            self,
+            dim_model: int = 1024,
+            num_attention_heads: int = 16,
+            dim_head: int = 64,
+            kernel: str = 'elu',
+            attention_dropout_prob: float = 0.1
+    ) -> None:
         super(MultiHeadAttention, self).__init__()
         self.dim_model = dim_model
         self.num_attention_heads = num_attention_heads
         self.dim_head = dim_head
+        self.kernel = kernel
         self.attention_dropout_prob = attention_dropout_prob
         self.attention_heads = nn.ModuleList(
-            [AttentionHead(self.dim_model, self.dim_head, self.attention_dropout_prob) for _ in range(self.num_attention_heads)]
+            [AttentionHead(self.dim_model, self.dim_head, self.kernel, self.attention_dropout_prob) for _ in range(self.num_attention_heads)]
         )
         self.fc_concat = nn.Linear(self.dim_model, self.dim_model)
 
@@ -145,12 +176,14 @@ class MultiHeadAttention(nn.Module):
 
 
 class FeedForward(nn.Module):
-    """ Class for Feed-Forward Network module in Transformer Encoder Block, this module for BERT
+    """ Class for Feed-Forward Network module in Transformer Encoder Block, this module for Linear Transformer
     Same role as Module "BertIntermediate" in official Repo (bert.py)
+
     Args:
         dim_model: dimension of model's latent vector space, default 1024
         dim_ffn: dimension of FFN's hidden layer, default 4096 from official paper
         hidden_dropout_prob: dropout rate, default 0.1
+
     Math:
         FeedForward(x) = FeedForward(LN(x))+x
     """
@@ -168,26 +201,33 @@ class FeedForward(nn.Module):
         return self.ffn(x)
 
 
-class RoFormerEncoderLayer(nn.Module):
-    """ Class for encoder model module in BERT
+class LinearTransformerEncoderLayer(nn.Module):
+    """ Class for encoder model module in Linear Transformer
     In this class, we stack each encoder_model module (Multi-Head attention, Residual-Connection, LayerNorm, FFN)
     This class has same role as Module "BertEncoder" in official Repo (bert.py)
-    In official repo, they use post-layer norm, but we use pre-layer norm which is more stable & efficient for training
+
+    References:
+        https://arxiv.org/abs/1706.03762
+        https://arxiv.org/pdf/1810.04805.pdf
+        https://arxiv.org/abs/2006.16236
+        https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
     """
     def __init__(
             self,
             dim_model: int = 1024,
             num_attention_heads: int = 16,
             dim_ffn: int = 4096,
+            kernel: str = 'elu',
             layer_norm_eps: float = 0.02,
             attention_dropout_prob: float = 0.1,
             hidden_dropout_prob: float = 0.1
     ) -> None:
-        super(RoFormerEncoderLayer, self).__init__()
+        super(LinearTransformerEncoderLayer, self).__init__()
         self.self_attention = MultiHeadAttention(
             dim_model,
             num_attention_heads,
             int(dim_model / num_attention_heads),
+            kernel,
             attention_dropout_prob,
         )
         self.layer_norm1 = nn.LayerNorm(dim_model, eps=layer_norm_eps)
@@ -211,11 +251,14 @@ class RoFormerEncoderLayer(nn.Module):
         return fx
 
 
-class RoFormerEncoder(nn.Module, AbstractModel):
-    """ In this class, 1) encode input sequence, 2) make absolute position embedding,
-    3) matrix sum with word embedding, absolute position embedding
-    4) stack num_layers BERTEncoderLayer
+class LinearTransformerEncoder(nn.Module, AbstractModel):
+    """ In this class,
+        1) encode input sequence,
+        2) make absolute position embedding,
+        3) matrix sum with word embedding, absolute position embedding
+        4) stack num_layers BERTEncoderLayer
     Output have ONLY result of pure self-attention
+
     Args:
         max_seq: maximum sequence length, named "max_position_embedding" in official repo, default 512, in official paper, this value is called 'k'
         num_layers: number of EncoderLayer, default 6 for base model
@@ -228,12 +271,13 @@ class RoFormerEncoder(nn.Module, AbstractModel):
             dim_model: int = 768,
             num_attention_heads: int = 12,
             dim_ffn: int = 3072,
+            kernel: str = 'elu',
             layer_norm_eps: float = 0.02,
             attention_dropout_prob: float = 0.1,
             hidden_dropout_prob: float = 0.1,
             gradient_checkpointing: bool = False
     ) -> None:
-        super(RoFormerEncoder, self).__init__()
+        super(LinearTransformerEncoder, self).__init__()
         self.cfg = cfg
         self.max_seq = max_seq
         self.num_layers = num_layers
@@ -242,7 +286,7 @@ class RoFormerEncoder(nn.Module, AbstractModel):
         self.dim_ffn = dim_ffn
         self.hidden_dropout = nn.Dropout(p=hidden_dropout_prob)  # dropout is not learnable
         self.layer = nn.ModuleList(
-            [RoFormerEncoderLayer(dim_model, num_attention_heads, dim_ffn, layer_norm_eps, attention_dropout_prob, hidden_dropout_prob) for _ in range(self.num_layers)]
+            [LinearTransformerEncoderLayer(dim_model, num_attention_heads, dim_ffn, kernel, layer_norm_eps, attention_dropout_prob, hidden_dropout_prob) for _ in range(self.num_layers)]
         )
         self.layer_norm = nn.LayerNorm(dim_model, eps=layer_norm_eps)  # for final-Encoder output
         self.gradient_checkpointing = gradient_checkpointing
@@ -294,7 +338,7 @@ class Embedding(nn.Module):
         self.cfg = cfg
         self.max_seq = cfg.max_seq
         self.word_embedding = nn.Embedding(len(cfg.tokenizer), cfg.dim_model)
-        self.rotary_pos_encoding = nn.Embedding(cfg.max_seq, cfg.dim_model)  # Absolute Position Embedding for EMD Layer
+        self.abs_pos_emb = nn.Embedding(cfg.max_seq, cfg.dim_model)  # Absolute Position Embedding for EMD Layer
         self.layer_norm1 = nn.LayerNorm(cfg.dim_model, eps=cfg.layer_norm_eps)  # for word embedding
         self.hidden_dropout = nn.Dropout(p=cfg.hidden_dropout_prob)
 
@@ -312,17 +356,19 @@ class Embedding(nn.Module):
             word_embeddings = self.hidden_dropout(
                 self.layer_norm1(self.word_embedding(inputs))
             )
-        rotary_pos_encoding = self.rotary_pos_encoding(
+        rotary_pos_encoding = self.abs_pos_emb(
             torch.arange(inputs.shape[1], device="cuda").repeat(inputs.shape[0]).view(inputs.shape[0], -1)
         )
         return word_embeddings, rotary_pos_encoding
 
 
-class RoFormer(nn.Module, AbstractModel):
+class LinearTransformer(nn.Module, AbstractModel):
     """
-    Main class for RoFormer, having all of sub-blocks & modules such as Disentangled Self-attention, Encoder
-    Init Scale of RoFormer Hyper-Parameters, Embedding Layer, Encoder Blocks
+    Main class for LinearTransformer, having all of sub-blocks & modules such as Disentangled Self-attention, Encoder
+    Init Scale of LinearTransformer Hyper-Parameters, Embedding Layer, Encoder Blocks
     And then make 3-types of Embedding Layer, Word Embedding, Absolute Position Embedding, Relative Position Embedding
+
+    This module has only Encoder Block, not Decoder Block
 
     Args:
         cfg: configuration.CFG
@@ -339,23 +385,21 @@ class RoFormer(nn.Module, AbstractModel):
         dim_model: dimension of model
         num_attention_heads: number of heads in multi-head attention
         dim_ffn: dimension of feed-forward network, same as intermediate size in official repo
+        kernel: kernel function for attention head
         hidden_dropout_prob: dropout rate for embedding, hidden layer
         attention_probs_dropout_prob: dropout rate for attention
 
-    Concepts:
-        Multiple rotary embedding to context vector (Query, Key)
-
     Maths:
-        fq(xm,m) = (Wq*xm)e**imθ
-        fk(xn, n) = (Wk*xn)e**inθ
+        A = normalize(Φ(Q).mm(Φ(K).t())).mm(V)  (Linear Attention, otherwise are same as original Transformer, BERT)
 
     References:
-        https://arxiv.org/pdf/2104.09864.pdf
+        https://arxiv.org/abs/1706.03762
         https://arxiv.org/pdf/1810.04805.pdf
+        https://arxiv.org/abs/2006.16236
+        https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
     """
-
     def __init__(self, cfg: CFG, num_layers: int = 12) -> None:
-        super(RoFormer, self).__init__()
+        super(LinearTransformer, self).__init__()
         self.cfg = cfg
         self.vocab_size = cfg.vocab_size
         self.max_seq = cfg.max_seq
@@ -363,6 +407,7 @@ class RoFormer(nn.Module, AbstractModel):
         self.num_attention_heads = cfg.num_attention_heads
         self.dim_model = cfg.dim_model
         self.dim_ffn = cfg.dim_ffn
+        self.kernel = cfg.kernel
         self.layer_norm_eps = cfg.layer_norm_eps
         self.hidden_dropout_prob = cfg.hidden_dropout_prob
         self.attention_dropout_prob = cfg.attention_probs_dropout_prob
@@ -372,13 +417,14 @@ class RoFormer(nn.Module, AbstractModel):
         self.embeddings = Embedding(cfg)
 
         # Init Encoder Blocks & Modules
-        self.encoder = RoFormerEncoder(
+        self.encoder = LinearTransformerEncoder(
             self.cfg,
             self.max_seq,
             self.num_layers,
             self.dim_model,
             self.num_attention_heads,
             self.dim_ffn,
+            self.kernel,
             self.layer_norm_eps,
             self.attention_dropout_prob,
             self.hidden_dropout_prob,
@@ -393,10 +439,10 @@ class RoFormer(nn.Module, AbstractModel):
             attention_mask: attention mask for CLM, default None
         """
         assert inputs.ndim == 2, f'Expected (batch, sequence) got {inputs.shape}'
-        word_embeddings, rotary_pos_encoding = self.embeddings(inputs)
+        word_embeddings, abs_pos_emb = self.embeddings(inputs)
         last_hidden_state, hidden_states = self.encoder(
             word_embeddings,
-            rotary_pos_encoding,
+            abs_pos_emb,
             padding_mask,
             attention_mask
         )
