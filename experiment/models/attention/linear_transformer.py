@@ -7,9 +7,6 @@ from typing import Tuple, List
 from einops.layers.torch import Rearrange
 from configuration import CFG
 
-""" py module for linear transformer, especially for Encoder Model
-"""
-
 
 def kernel_fn(x: Tensor, kernel_name: str) -> Tensor:
     """ Select kernel function for attention head
@@ -57,10 +54,10 @@ def linear_attention(
     if padding_mask is not None:  # applying padding mask, calculating normalizer
         projected_q[padding_mask == 1], projected_k[padding_mask == 1], v[padding_mask == 1] = 0, 0, 0
 
-    kv = torch.matmul(projected_k.permute(0, 2, 1).contiguous(), v)
+    kv = torch.matmul(v, projected_k.permute(0, 2, 1).contiguous())
     qkv = torch.matmul(projected_q, kv)
 
-    normalizer = projected_k.clone().detach().sum(dim=1).unsqueeze(1).expand(-1, dim_head, -1).permute(0, 2, 1).contiguous()
+    normalizer = projected_k.sum(dim=1).unsqueeze(1).expand(-1, dim_head, -1).permute(0, 2, 1).contiguous()
     z = 1 / torch.clamp(torch.matmul(projected_q, normalizer), min=eps)
     attention_matrix = torch.mul(qkv, z)
 
@@ -69,6 +66,7 @@ def linear_attention(
         attention_matrix = attention_dropout(
             attention_matrix
         )
+
     return attention_matrix
 
 
