@@ -27,7 +27,7 @@ def linear_attention(
     v: Tensor,
     dim_head: int = 64,
     kernel: str = 'elu',
-    eps: float = 1e-8,
+    eps: float = 1e-6,
     attention_dropout: nn.Dropout = None,
     padding_mask: Tensor = None,
     attention_mask: Tensor = None,
@@ -54,15 +54,13 @@ def linear_attention(
         https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
     """
     projected_q, projected_k = kernel_fn(q, kernel), kernel_fn(k, kernel)
+    if padding_mask is not None:  # applying padding mask, calculating normalizer
+        projected_q[padding_mask == 1], projected_k[padding_mask == 1], v[padding_mask == 1] = 0, 0, 0
 
     kv = torch.matmul(projected_k.permute(0, 2, 1).contiguous(), v)
     qkv = torch.matmul(projected_q, kv)
 
-    # applying padding mask, calculating normalizer
-    if padding_mask is not None:  # padding mask => batch, seq
-        projected_k[padding_mask == 1] = 0
-
-    normalizer = projected_k.sum(dim=1).unsqueeze(1).expand(-1, dim_head, -1).permute(0, 2, 1).contiguous()
+    normalizer = projected_k.clone().detach().sum(dim=1).unsqueeze(1).expand(-1, dim_head, -1).permute(0, 2, 1).contiguous()
     z = 1 / torch.clamp(torch.matmul(projected_q, normalizer), min=eps)
     attention_matrix = torch.mul(qkv, z)
 
@@ -104,7 +102,7 @@ class AttentionHead(nn.Module):
         self.dim_model = dim_model
         self.dim_head = dim_head  # 1024 / 16 = 64
         self.kernel = kernel
-        self.eps = 1e-8
+        self.eps = 1e-6
         self.attention_dropout = nn.Dropout(p=attention_dropout_prob)
         self.fc_q = nn.Linear(self.dim_model, self.dim_head)
         self.fc_k = nn.Linear(self.dim_model, self.dim_head)
