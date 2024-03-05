@@ -57,7 +57,7 @@
         "language": "20231101.en",
         "split_ratio": 0.2,
         "epochs": 20,
-        "batch_size": 20,
+        "batch_size": 16,
         "val_batch_size": 32,
         "val_check": 999999
     },
