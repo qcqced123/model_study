@@ -12,6 +12,7 @@
 
 python train.py pretrain bert
 python train,py pretrain gpt2
+python train.py pretrain roformer
 python train.py fine_tune superglue
 ```
 
@@ -20,7 +21,6 @@ python train.py fine_tune superglue
 - RAM: 32GB
 - GPU: RTX 3090 24GB
 - OS: Ubuntu 22.04 LTS
-
 
 ### 🖍️ Training Example
 Currently, MLM, Distillation Knowledge Task is well perfectly implemented.
@@ -46,6 +46,17 @@ CLM Task is not perfectly implemented. Current version can only train the model 
 - **5) Distillation Knowledge**  
     https://wandb.ai/qcqced/DistillationKnowledge?workspace=user-qcqced
 
+### 📆 Future Developing Schedule
+
+1) Convert current multi-head attention mechanism (for-loop & concatenate) to Parallel Multi-Head Attention Mechanism (Matrix Multiplication with num_heads)
+
+2) Optimize the pipeline of RTD and SBO Task
+
+3) Add Pipeline for famous benchmark Dataset (SFT): SuperGLUE, SQAD, ...  
+
+4) Add other Fine-Tune Task, which is my interest: Sentiment Analysis, QA, Text based Recsys, Text Similarity, Text Generation, etc.  
+
+5) Optimize all the pipeline for numberical stability in mixed precision and max speed in Tensor Core
 
 ### 🗂️ Application Structure
 
@@ -129,7 +140,7 @@ Experiment Application
 - **[BERT] BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding (Complete)**
 - [Longformer] Longformer: The Long-Document Transformer (Continue)
 - [Reformer] Reformer: The Efficient Transformer (Continue)
-- [Roformer] RoFormer: Enhanced Transformer with Rotary Position Embedding (Continue)
+- [Roformer] RoFormer: Enhanced Transformer with Rotary Position Embedding (Continue)  
 - [Linear Transformer] Transformers are RNNs: Fast Autoregressive Transformers with Linear Attention (Continue)
 - **[ELECTRA] Pre-training Text Encoders as Discriminators Rather Than Generators (Complete)**
 - **[SpanBERT] SpanBERT: Improving Pre-training by Representing and Predicting Spans (Complete)**
