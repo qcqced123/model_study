@@ -22,15 +22,14 @@ def linear_attention(
     q: Tensor,
     k: Tensor,
     v: Tensor,
-    dim_head: int = 64,
     kernel: str = 'elu',
     eps: float = 1e-6,
     attention_dropout: nn.Dropout = None,
     padding_mask: Tensor = None,
     attention_mask: Tensor = None,
 ) -> Tensor:
-    """ DocString will be updated ASAP
-    Linear attention with Masking for padding mask
+    """ Linear attention with masking for padding token
+    This function is designed for parallel computation with head dimension, not using loop & concatenate method
 
     Args:
         q: query matrix, shape (batch_size, seq_len, dim_head)
@@ -46,17 +45,28 @@ def linear_attention(
     Math:
         A = normalize(Φ(Q).mm(Φ(K).t())).mm(V)
 
+    Einsum:
+        b: batch_size
+        s: sequence length of query
+        h: number of heads
+        q: dimension size of each query's heads
+        k: dimension size of each key's heads
+        v: dimension size of each value's heads
+
     Reference:
         https://arxiv.org/abs/2006.16236
         https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
+
     """
+    BS, SEQ_LEN, NUM_HEADS, DIM_HEADS = q.shape
     projected_q, projected_k = kernel_fn(q, kernel), kernel_fn(k, kernel)
     if padding_mask is not None:  # applying padding mask, calculating normalizer
         projected_q[padding_mask == 1], projected_k[padding_mask == 1], v[padding_mask == 1] = 0, 0, 0
 
-    kv = torch.matmul(v.permute(0, 2, 1).contiguous(), projected_k)
+    kv = torch.matmul(v.permute(0, 2, 3, 1).contiguous(), projected_k.permute(0, 2, 1, 3).contiguous())
     z = 1 / torch.clamp(torch.mul(projected_q, projected_k.sum(dim=1).unsqueeze(1)).sum(dim=-1), min=eps)
-    attention_matrix = torch.einsum("bsq,bvk,bs->bsv", projected_q, kv, z)
+    attention_matrix = torch.einsum("bshq,bhvk,bsh->bshv", projected_q, kv, z).reshape(-1, SEQ_LEN,
+                                                                                       NUM_HEADS * DIM_HEADS)
 
     # attention dropout
     if attention_dropout is not None:
@@ -64,58 +74,6 @@ def linear_attention(
             attention_matrix
         )
     return attention_matrix
-
-
-class AttentionHead(nn.Module):
-    """ In this class, we implement workflow of single attention head in Linear Transformer
-    This class has same role as Module "BertAttention" in official Repo (bert.py)
-
-    Args:
-        dim_model: dimension of model's latent vector space, default 1024 from official paper
-        dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
-        kernel: kernel function for attention head, default 'elu' from official paper
-        attention_dropout_prob: dropout rate for attention matrix, default 0.1 from official paper
-
-    Math:
-        A = normalize(Φ(Q).mm(Φ(K).t())).mm(V)
-
-    Reference:
-        https://arxiv.org/abs/1706.03762
-        https://arxiv.org/pdf/1810.04805.pdf
-        https://arxiv.org/abs/2006.16236
-        https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
-    """
-    def __init__(
-            self,
-            dim_model: int = 1024,
-            dim_head: int = 64,
-            kernel: str = 'elu',
-            attention_dropout_prob: float = 0.1
-    ) -> None:
-        super(AttentionHead, self).__init__()
-        self.dim_model = dim_model
-        self.dim_head = dim_head  # 1024 / 16 = 64
-        self.kernel = kernel
-        self.eps = 1e-6
-        self.attention_dropout = nn.Dropout(p=attention_dropout_prob)
-        self.fc_q = nn.Linear(self.dim_model, self.dim_head)
-        self.fc_k = nn.Linear(self.dim_model, self.dim_head)
-        self.fc_v = nn.Linear(self.dim_model, self.dim_head)
-
-    def forward(self, x: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
-        q, k, v = self.fc_q(x), self.fc_k(x), self.fc_v(x)
-        attention_matrix = linear_attention(
-            q,
-            k,
-            v,
-            self.dim_head,
-            self.kernel,
-            self.eps,
-            self.attention_dropout,
-            padding_mask,
-            attention_mask
-        )
-        return attention_matrix
 
 
 class MultiHeadAttention(nn.Module):
@@ -139,33 +97,49 @@ class MultiHeadAttention(nn.Module):
         https://arxiv.org/abs/2006.16236
         https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
     """
+
     def __init__(
-            self,
-            dim_model: int = 1024,
-            num_attention_heads: int = 16,
-            dim_head: int = 64,
-            kernel: str = 'elu',
-            attention_dropout_prob: float = 0.1
+        self,
+        dim_model: int = 1024,
+        num_attention_heads: int = 16,
+        dim_head: int = 64,
+        kernel: str = 'elu',
+        attention_dropout_prob: float = 0.1
     ) -> None:
         super(MultiHeadAttention, self).__init__()
         self.dim_model = dim_model
         self.num_attention_heads = num_attention_heads
         self.dim_head = dim_head
-        self.kernel = kernel
-        self.attention_dropout_prob = attention_dropout_prob
-        self.attention_heads = nn.ModuleList(
-            [AttentionHead(self.dim_model, self.dim_head, self.kernel, self.attention_dropout_prob) for _ in range(self.num_attention_heads)]
-        )
+        self.fc_q = nn.Linear(self.dim_model, self.dim_model)
+        self.fc_k = nn.Linear(self.dim_model, self.dim_model)
+        self.fc_v = nn.Linear(self.dim_model, self.dim_model)
         self.fc_concat = nn.Linear(self.dim_model, self.dim_model)
+        self.attention = linear_attention
+        self.attention_dropout = nn.Dropout(p=attention_dropout_prob)
+        self.kernel = kernel
+        self.eps = 1e-6
 
     def forward(self, x: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
-        """ x is already passed nn.Layernorm """
+        """ x is already passed nn.Layernorm, already multiplied with rotary position encoding """
         assert x.ndim == 3, f'Expected (batch, seq, hidden) got {x.shape}'
-        attention_output = self.fc_concat(
-            torch.cat([head(x, padding_mask, attention_mask) for head in self.attention_heads], dim=-1)
-        )
-        return attention_output
 
+        # size: bs, seq, nums head, dim head, linear projection
+        q = self.fc_q(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+        k = self.fc_k(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+        v = self.fc_v(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+
+        attention_matrix = self.attention(
+            q,
+            k,
+            v,
+            self.kernel,
+            self.eps,
+            self.attention_dropout,
+            padding_mask,
+            attention_mask
+        )
+        attention_output = self.fc_concat(attention_matrix)
+        return attention_output
 
 class FeedForward(nn.Module):
     """ Class for Feed-Forward Network module in Transformer Encoder Block, this module for Linear Transformer
