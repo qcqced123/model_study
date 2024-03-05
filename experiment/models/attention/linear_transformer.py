@@ -65,8 +65,7 @@ def linear_attention(
 
     kv = torch.matmul(v.permute(0, 2, 3, 1).contiguous(), projected_k.permute(0, 2, 1, 3).contiguous())
     z = 1 / torch.clamp(torch.mul(projected_q, projected_k.sum(dim=1).unsqueeze(1)).sum(dim=-1), min=eps)
-    attention_matrix = torch.einsum("bshq,bhvk,bsh->bshv", projected_q, kv, z).reshape(-1, SEQ_LEN,
-                                                                                       NUM_HEADS * DIM_HEADS)
+    attention_matrix = torch.einsum("bshq,bhvk,bsh->bshv", projected_q, kv, z).reshape(-1, SEQ_LEN, NUM_HEADS * DIM_HEADS)
 
     # attention dropout
     if attention_dropout is not None:
