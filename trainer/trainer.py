@@ -158,11 +158,12 @@ class PreTrainTuner:
         losses = AverageMeter()
         model.train()
         for step, batch in enumerate(tqdm(loader_train)):
-            optimizer.zero_grad()
-            inputs = batch['input_ids'].to(self.cfg.device)
-            labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
-            padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
+            optimizer.zero_grad(set_to_none=True)
+            inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
+            labels = batch['labels'].to(self.cfg.device, non_blocking=True)  # Two target values to GPU
+            padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)  # padding mask to GPU
             batch_size = inputs.size(0)
+
             with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
                 logit = model(inputs, padding_mask)
                 loss = criterion(logit.view(-1, self.cfg.vocab_size), labels.view(-1))
@@ -224,10 +225,10 @@ class PreTrainTuner:
         losses = AverageMeter()
         model.train()
         for step, batch in enumerate(tqdm(loader_train)):
-            optimizer.zero_grad()
-            inputs = batch['input_ids'].to(self.cfg.device)
-            labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
-            padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
+            optimizer.zero_grad(set_to_none=True)
+            inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
+            labels = batch['labels'].to(self.cfg.device, non_blocking=True)  # Two target values to GPU
+            padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)  # padding mask to GPU
             batch_size = inputs.size(0)
             with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
                 logit = model(inputs, padding_mask)
@@ -275,9 +276,9 @@ class PreTrainTuner:
         model.eval()
         with torch.no_grad():
             for step, batch in enumerate(tqdm(loader_valid)):
-                inputs = batch['input_ids'].to(self.cfg.device)
-                labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
-                padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
+                inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
+                labels = batch['labels'].to(self.cfg.device, non_blocking=True)  # Two target values to GPU
+                padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)  # padding mask to GPU
                 batch_size = inputs.size(0)
 
                 logit = model(inputs, padding_mask)
@@ -312,9 +313,9 @@ class PreTrainTuner:
         valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
         with torch.no_grad():
             for step, batch in enumerate(tqdm(loader_valid)):
-                inputs = batch['input_ids'].to(self.cfg.device)
-                labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
-                padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
+                inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
+                labels = batch['labels'].to(self.cfg.device, non_blocking=True)  # Two target values to GPU
+                padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)  # padding mask to GPU
                 batch_size = inputs.size(0)
 
                 logit = swa_model(inputs, padding_mask)
@@ -358,10 +359,10 @@ class CLMTuner(PreTrainTuner):
         losses = AverageMeter()
         model.train()
         for step, batch in enumerate(tqdm(loader_train)):
-            optimizer.zero_grad()
-            inputs = batch['input_ids'].to(self.cfg.device)
-            labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
-            attention_mask = batch['attention_mask'].to(self.cfg.device)  # attention mask to GPU
+            optimizer.zero_grad(set_to_none=True)
+            inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
+            labels = batch['labels'].to(self.cfg.device, non_blocking=True)  # Two target values to GPU
+            attention_mask = batch['attention_mask'].to(self.cfg.device, non_blocking=True)  # attention mask to GPU
             batch_size = inputs.size(0)
 
             with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
@@ -431,9 +432,9 @@ class CLMTuner(PreTrainTuner):
         model.eval()
         with torch.no_grad():
             for step, batch in enumerate(tqdm(loader_valid)):
-                inputs = batch['input_ids'].to(self.cfg.device)
-                labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
-                attention_mask = batch['attention_mask'].to(self.cfg.device)  # padding mask to GPU
+                inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
+                labels = batch['labels'].to(self.cfg.device, non_blocking=True)  # Two target values to GPU
+                attention_mask = batch['attention_mask'].to(self.cfg.device, non_blocking=True)  # padding mask to GPU
                 batch_size = inputs.size(0)
 
                 logit = model(inputs, attention_mask)
@@ -488,11 +489,11 @@ class SBOTuner(PreTrainTuner):
         losses, mlm_losses, sbo_losses = AverageMeter(), AverageMeter(), AverageMeter()
         model.train()
         for step, batch in enumerate(tqdm(loader_train)):
-            optimizer.zero_grad()
-            inputs = batch['input_ids'].to(self.cfg.device)
-            labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
-            padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
-            mask_labels = batch['mask_labels'].to(self.cfg.device)  # mask labels to GPU
+            optimizer.zero_grad(set_to_none=True)
+            inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
+            labels = batch['labels'].to(self.cfg.device, non_blocking=True)  # Two target values to GPU
+            padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)  # padding mask to GPU
+            mask_labels = batch['mask_labels'].to(self.cfg.device, non_blocking=True)  # mask labels to GPU
 
             batch_size = inputs.size(0)
             with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
@@ -578,9 +579,9 @@ class SBOTuner(PreTrainTuner):
         model.eval()
         with torch.no_grad():
             for step, batch in enumerate(tqdm(loader_valid)):
-                inputs = batch['input_ids'].to(self.cfg.device)
-                labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
-                padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
+                inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
+                labels = batch['labels'].to(self.cfg.device, non_blocking=True)  # Two target values to GPU
+                padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)  # padding mask to GPU
                 mask_labels = batch['mask_labels'].to(self.cfg.device)  # mask labels to GPU
                 batch_size = inputs.size(0)
 
@@ -737,14 +738,14 @@ class RTDTuner(PreTrainTuner):
         losses, g_losses, d_losses = AverageMeter(), AverageMeter(), AverageMeter()
         model.train()
         for step, batch in enumerate(tqdm(loader_train)):
-            optimizer.zero_grad()
-            inputs = batch['input_ids'].to(self.cfg.device)
-            labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
-            padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
+            optimizer.zero_grad(set_to_none=True)
+            inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
+            labels = batch['labels'].to(self.cfg.device, non_blocking=True)  # Two target values to GPU
+            padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)  # padding mask to GPU
 
             mask_labels = None
             if self.cfg.rtd_masking == 'SpanBoundaryObjective':
-                mask_labels = batch['mask_labels'].to(self.cfg.device)
+                mask_labels = batch['mask_labels'].to(self.cfg.device, non_blocking=True)
 
             batch_size = inputs.size(0)  # same as ES, GDES
 
@@ -862,13 +863,13 @@ class RTDTuner(PreTrainTuner):
         g_losses, d_losses = AverageMeter(), AverageMeter()
         model.train()
         for step, batch in enumerate(tqdm(loader_train)):
-            optimizer.zero_grad()
-            inputs = batch['input_ids'].to(self.cfg.device)
-            labels = batch['labels'].to(self.cfg.device)  # Two target values to GPU
-            padding_mask = batch['padding_mask'].to(self.cfg.device)  # padding mask to GPU
+            optimizer.zero_grad(set_to_none=True)
+            inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
+            labels = batch['labels'].to(self.cfg.device, non_blocking=True)  # Two target values to GPU
+            padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)  # padding mask to GPU
             mask_labels = None
             if self.cfg.rtd_masking == 'SpanBoundaryObjective':
-                mask_labels = batch['mask_labels'].to(self.cfg.device)
+                mask_labels = batch['mask_labels'].to(self.cfg.device, non_blocking=True)
 
             batch_size = inputs.size(0)
 
@@ -980,13 +981,13 @@ class RTDTuner(PreTrainTuner):
         model.eval()
         with torch.no_grad():
             for step, batch in enumerate(tqdm(loader_valid)):
-                inputs = batch['input_ids'].to(self.cfg.device)
-                labels = batch['labels'].to(self.cfg.device)
-                padding_mask = batch['padding_mask'].to(self.cfg.device)
+                inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
+                labels = batch['labels'].to(self.cfg.device, non_blocking=True)
+                padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)
 
                 mask_labels = None
                 if self.cfg.rtd_masking == 'SpanBoundaryObjective':
-                    mask_labels = batch['mask_labels'].to(self.cfg.device)
+                    mask_labels = batch['mask_labels'].to(self.cfg.device, non_blocking=True)
 
                 batch_size = inputs.size(0)
 
@@ -1141,10 +1142,10 @@ class DistillKnowledgeTuner(PreTrainTuner):
         d_losses, s_losses, c_losses = AverageMeter(), AverageMeter(), AverageMeter()
         model.train()
         for step, batch in enumerate(tqdm(loader_train)):
-            optimizer.zero_grad()
-            inputs = batch['input_ids'].to(self.cfg.device)
-            labels = batch['labels'].to(self.cfg.device)
-            padding_mask = batch['padding_mask'].to(self.cfg.device)
+            optimizer.zero_grad(set_to_none=True)
+            inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
+            labels = batch['labels'].to(self.cfg.device, non_blocking=True)
+            padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)
             batch_size = inputs.size(0)
 
             mask = padding_mask.unsqueeze(-1).expand(-1, -1, self.cfg.dim_model)  # for hidden states dim
@@ -1244,9 +1245,9 @@ class DistillKnowledgeTuner(PreTrainTuner):
         model.eval()
         with torch.no_grad():
             for step, batch in enumerate(tqdm(loader_valid)):
-                inputs = batch['input_ids'].to(self.cfg.device)
-                labels = batch['labels'].to(self.cfg.device)
-                padding_mask = batch['padding_mask'].to(self.cfg.device)
+                inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
+                labels = batch['labels'].to(self.cfg.device, non_blocking=True)
+                padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)
                 batch_size = inputs.size(0)
 
                 mask = padding_mask.unsqueeze(-1).expand(-1, -1, self.cfg.dim_model)

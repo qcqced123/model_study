@@ -54,19 +54,15 @@ def linear_attention(
     if padding_mask is not None:  # applying padding mask, calculating normalizer
         projected_q[padding_mask == 1], projected_k[padding_mask == 1], v[padding_mask == 1] = 0, 0, 0
 
-    kv = torch.matmul(v, projected_k.permute(0, 2, 1).contiguous())
-    qkv = torch.matmul(projected_q, kv)
-
-    normalizer = projected_k.sum(dim=1).unsqueeze(1).expand(-1, dim_head, -1).permute(0, 2, 1).contiguous()
-    z = 1 / torch.clamp(torch.matmul(projected_q, normalizer), min=eps)
-    attention_matrix = torch.mul(qkv, z)
+    kv = torch.matmul(v.permute(0, 2, 1).contiguous(), projected_k)
+    z = 1 / torch.clamp(torch.mul(projected_q, projected_k.sum(dim=1).unsqueeze(1)).sum(dim=-1), min=eps)
+    attention_matrix = torch.einsum("bsq,bvk,bs->bsv", projected_q, kv, z)
 
     # attention dropout
     if attention_dropout is not None:
         attention_matrix = attention_dropout(
             attention_matrix
         )
-
     return attention_matrix
 
 
