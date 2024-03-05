@@ -17,6 +17,7 @@ def scaled_dot_product_attention(
     attention_mask: Tensor = None,
 ) -> Tensor:
     """ Scaled Dot-Product attention with Masking for attention mask and padding mask
+
     Args:
         q: query matrix, shape (batch_size, seq_len, dim_head)
         k: key matrix, shape (batch_size, seq_len, dim_head)
@@ -24,71 +25,41 @@ def scaled_dot_product_attention(
         dot_scale: scale factor for Q•K^T result
         attention_dropout: dropout for attention matrix, default rate is 0.1 from official paper
         attention_mask: mask for attention matrix for CLM, this tensor is already combined with padding_mask
+
     Math:
         A = softmax(q•k^t/sqrt(D_h)), SA(z) = Av
+
     Reference:
         https://arxiv.org/abs/1706.03762
         https://s3-us-west-2.amazonaws.com/openai-assets/research-covers/language-unsupervised/language_understanding_paper.pdf
         https://d4mucfpksywv.cloudfront.net/better-language-models/language_models_are_unsupervised_multitask_learners.pdf
         https://arxiv.org/abs/2005.14165
     """
-    attention_matrix = torch.matmul(q, k.transpose(-1, -2)) / dot_scale
+    BS, SEQ_LEN, NUM_HEADS, DIM_HEADS = q.shape
+    attention_matrix = torch.matmul(q.permute(0, 2, 1, 3).contiguous(), k.permute(0, 2, 3, 1).contiguous()) / dot_scale
     if attention_mask is not None:
+        attention_mask = attention_mask.unsqueeze(1)  # for broacasting to attention matrix, shape: (BS, 1, SEQ_LEN, SEQ_LEN)
         attention_matrix = attention_matrix.masked_fill(attention_mask == 1, float('-inf'))
+
     attention_dist = attention_dropout(
         F.softmax(attention_matrix, dim=-1)
     )
-    attention_matrix = torch.matmul(attention_dist, v)
+    attention_matrix = torch.matmul(attention_dist, v.permute(0, 2, 1, 3).contiguous()).reshape(-1, SEQ_LEN, NUM_HEADS * DIM_HEADS)
     return attention_matrix
-
-
-class AttentionHead(nn.Module):
-    """ In this class, we implement workflow of single attention head in BERT
-    This class has same role as Module "BertAttention" in official Repo (bert.py)
-    Args:
-        dim_model: dimension of model's latent vector space, default 1024 from official paper
-        dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
-        attention_dropout_prob: dropout rate for attention matrix, default 0.1 from official paper
-    Math:
-        A = softmax(attention Matrix/sqrt(3*D_h)), SA(z) = Av
-    Reference:
-        https://arxiv.org/abs/1706.03762
-        https://s3-us-west-2.amazonaws.com/openai-assets/research-covers/language-unsupervised/language_understanding_paper.pdf
-        https://d4mucfpksywv.cloudfront.net/better-language-models/language_models_are_unsupervised_multitask_learners.pdf
-        https://arxiv.org/abs/2005.14165
-    """
-    def __init__(self, dim_model: int = 1024, dim_head: int = 64, attention_dropout_prob: float = 0.1) -> None:
-        super(AttentionHead, self).__init__()
-        self.dim_model = dim_model
-        self.dim_head = dim_head  # 1024 / 16 = 64
-        self.dot_scale = torch.sqrt(torch.tensor(self.dim_head))
-        self.attention_dropout = nn.Dropout(p=attention_dropout_prob)
-        self.fc_q = nn.Linear(self.dim_model, self.dim_head)
-        self.fc_k = nn.Linear(self.dim_model, self.dim_head)
-        self.fc_v = nn.Linear(self.dim_model, self.dim_head)
-
-    def forward(self, x: Tensor, attention_mask: Tensor = None) -> Tensor:
-        q, k, v = self.fc_q(x), self.fc_k(x), self.fc_v(x)
-        attention_matrix = scaled_dot_product_attention(
-            q,
-            k,
-            v,
-            self.dot_scale,
-            self.attention_dropout,
-            attention_mask
-        )
-        return attention_matrix
 
 
 class MultiHeadAttention(nn.Module):
     """ In this class, we implement workflow of Multi-Head Self-attention for GPT2
+
     Args:
         dim_model: dimension of model's latent vector space, default 1024 from official paper
         num_attention_heads: number of heads in MHSA, default 16 from official paper for Transformer
         dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
         attention_dropout_prob: dropout rate, default 0.1
+
     Math:
         A = softmax(attention Matrix/sqrt(3*D_h)), SA(z) = Av
+
     Reference:
         https://arxiv.org/abs/1706.03762
         https://s3-us-west-2.amazonaws.com/openai-assets/research-covers/language-unsupervised/language_understanding_paper.pdf
@@ -100,18 +71,32 @@ class MultiHeadAttention(nn.Module):
         self.dim_model = dim_model
         self.num_attention_heads = num_attention_heads
         self.dim_head = dim_head
-        self.attention_dropout_prob = attention_dropout_prob
-        self.attention_heads = nn.ModuleList(
-            [AttentionHead(self.dim_model, self.dim_head, self.attention_dropout_prob) for _ in range(self.num_attention_heads)]
-        )
+        self.fc_q = nn.Linear(self.dim_model, self.dim_model)
+        self.fc_k = nn.Linear(self.dim_model, self.dim_model)
+        self.fc_v = nn.Linear(self.dim_model, self.dim_model)
         self.fc_concat = nn.Linear(self.dim_model, self.dim_model)
+        self.attention = scaled_dot_product_attention
+        self.dot_scale = torch.sqrt(torch.tensor(self.dim_head)).to('cuda')
+        self.attention_dropout = nn.Dropout(p=attention_dropout_prob)
 
     def forward(self, x: Tensor, attention_mask: Tensor = None) -> Tensor:
         """ x is already passed nn.Layernorm """
         assert x.ndim == 3, f'Expected (batch, seq, hidden) got {x.shape}'
-        attention_output = self.fc_concat(
-            torch.cat([head(x, attention_mask) for head in self.attention_heads], dim=-1)
+
+        # size: bs, seq, nums head, dim head, linear projection
+        q = self.fc_q(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+        k = self.fc_k(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+        v = self.fc_v(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+
+        attention_matrix = self.attention(
+            q,
+            k,
+            v,
+            self.dot_scale,
+            self.attention_dropout,
+            attention_mask
         )
+        attention_output = self.fc_concat(attention_matrix)
         return attention_output
 
 
