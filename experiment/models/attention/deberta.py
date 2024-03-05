@@ -10,8 +10,10 @@ from configuration import CFG
 
 def build_relative_position(x_size: int) -> Tensor:
     """ Build Relative Position Matrix for Disentangled Self-attention in DeBERTa
+
     Args:
         x_size: sequence length of query matrix
+
     Reference:
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/da_utils.py#L29
         https://arxiv.org/abs/2006.03654
@@ -41,16 +43,19 @@ def disentangled_attention(
         attention_dropout: dropout for attention matrix, default rate is 0.1 from official paper
         padding_mask: mask for attention matrix for MLM
         attention_mask: mask for attention matrix for CLM
+
     Math:
         c2c = torch.matmul(q, k.transpose(-1, -2))  # A_c2c
         c2p = torch.gather(torch.matmul(q, kr.transpose(-1 z, -2)), dim=-1, index=c2p_pos)
         p2c = torch.gather(torch.matmul(qr, k.transpose(-1, -2)), dim=-2, index=c2p_pos)
         attention Matrix = c2c + c2p + p2c
         A = softmax(attention Matrix/sqrt(3*D_h)), SA(z) = Av
+
     Notes:
         dot_scale(range 1 ~ 3): scale factor for Q•K^T result, sqrt(3*dim_head) from official paper by microsoft,
         3 means that use full attention matrix(c2c, c2p, p2c), same as number of using what kind of matrix
         default 1, c2c is always used and c2p & p2c is optional
+
     References:
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/disentangled_attention.py
         https://arxiv.org/pdf/1803.02155.pdf
