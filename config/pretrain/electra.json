@@ -23,7 +23,7 @@
         "rtd_masking": "MaskedLanguageModel",
         "generator": "BERT",
         "discriminator": "BERT",
-        "share_embed_method": "GDES",
+        "share_embed_method": "ES",
         "is_generator_resume": false,
         "is_discriminator_resume": false,
         "generator_load_pretrained" : false,

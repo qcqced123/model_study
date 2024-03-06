@@ -140,6 +140,7 @@ class MultiHeadAttention(nn.Module):
         attention_output = self.fc_concat(attention_matrix)
         return attention_output
 
+
 class FeedForward(nn.Module):
     """ Class for Feed-Forward Network module in Transformer Encoder Block, this module for Linear Transformer
     Same role as Module "BertIntermediate" in official Repo (bert.py)
