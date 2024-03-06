@@ -106,8 +106,6 @@ class ELECTRA(nn.Module, AbstractModel):
         References:
              https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/apps/tasks/rtd_task.py#L132
         """
-        if hasattr(module, param_name):
-            delattr(module, param_name)
         module.register_buffer(param_name, value)
 
     def generator_fw(
