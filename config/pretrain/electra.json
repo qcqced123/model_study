@@ -23,7 +23,7 @@
         "rtd_masking": "MaskedLanguageModel",
         "generator": "BERT",
         "discriminator": "BERT",
-        "share_embed_method": "ES",
+        "share_embed_method": "GDES",
         "is_generator_resume": false,
         "is_discriminator_resume": false,
         "generator_load_pretrained" : false,
@@ -58,7 +58,7 @@
         "split_ratio": 0.2,
         "epochs": 20,
         "batch_size": 16,
-        "val_batch_size": 32,
+        "val_batch_size": 16,
         "val_check": 999999
     },
 
@@ -73,7 +73,7 @@
     },
 
     "scheduler_options": {
-        "scheduler": "constant_with_warmup",
+        "scheduler": "cosine_annealing",
         "batch_scheduler": true,
         "num_cycles": 2,
         "warmup_ratio": 0.0025

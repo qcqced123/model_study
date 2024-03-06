@@ -768,6 +768,7 @@ class RTDTuner(PreTrainTuner):
                 loss = loss / self.cfg.n_gradient_accumulation_steps
 
             scaler.scale(loss).backward()
+
             losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
             g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
             d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
@@ -867,13 +868,13 @@ class RTDTuner(PreTrainTuner):
             inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
             labels = batch['labels'].to(self.cfg.device, non_blocking=True)  # Two target values to GPU
             padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)  # padding mask to GPU
+
             mask_labels = None
             if self.cfg.rtd_masking == 'SpanBoundaryObjective':
                 mask_labels = batch['mask_labels'].to(self.cfg.device, non_blocking=True)
 
             batch_size = inputs.size(0)
-
-            # Tune for Generator
+            # Tune for Generator & Discriminator
             with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
                 g_logit, d_inputs, d_labels = model.generator_fw(
                     inputs,
@@ -881,40 +882,26 @@ class RTDTuner(PreTrainTuner):
                     padding_mask,
                     mask_labels
                 )
-                g_loss = criterion(g_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
-            if self.cfg.n_gradient_accumulation_steps > 1:
-                g_loss = g_loss / self.cfg.n_gradient_accumulation_steps
-
-            scaler.scale(g_loss).backward()
-            g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
-
-            if self.cfg.clipping_grad and (step + 1) % self.cfg.n_gradient_accumulation_steps == 0 or self.cfg.n_gradient_accumulation_steps == 1:
-                scaler.unscale_(optimizer)
-                g_grad_norm = torch.nn.utils.clip_grad_norm(
-                    model.parameters(),
-                    self.cfg.max_grad_norm * self.cfg.n_gradient_accumulation_steps
-                )
-                scaler.step(optimizer)
-                scaler.update()
-                scheduler.step()
-
-            # Tune for Discriminator
-            with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
                 d_logit = model.discriminator_fw(
                     d_inputs,
                     padding_mask
                 )
-                d_loss = criterion(d_logit.view(-1, 2), d_labels) * self.cfg.discriminator_lambda  # lambda is hyper-parameter, in original paper, lambda is 50
+                g_loss = criterion(g_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
+                d_loss = criterion(d_logit.view(-1, 2), d_labels) * self.cfg.discriminator_lambda
 
             if self.cfg.n_gradient_accumulation_steps > 1:
-                d_losses = d_losses / self.cfg.n_gradient_accumulation_steps
+                g_loss = g_loss / self.cfg.n_gradient_accumulation_steps
+                d_loss = d_loss / self.cfg.n_gradient_accumulation_steps
 
-            scaler.scale(d_loss).backward()
+            losses = g_loss + d_loss
+            scaler.scale(losses).backward()
+
+            g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
             d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
 
             if self.cfg.clipping_grad and (step + 1) % self.cfg.n_gradient_accumulation_steps == 0 or self.cfg.n_gradient_accumulation_steps == 1:
                 scaler.unscale_(optimizer)
-                d_grad_norm = torch.nn.utils.clip_grad_norm(
+                grad_norm = torch.nn.utils.clip_grad_norm(
                     model.parameters(),
                     self.cfg.max_grad_norm * self.cfg.n_gradient_accumulation_steps
                 )
@@ -924,16 +911,14 @@ class RTDTuner(PreTrainTuner):
 
             # logging train loss, gradient norm, lr to wandb
             lr = scheduler.get_lr()[0]
-            g_grad_norm = g_grad_norm.detach().cpu().numpy()
-            d_grad_norm = d_grad_norm.detach().cpu().numpy()
+            grad_norm = grad_norm.detach().cpu().numpy()
 
             avg_loss = g_losses.avg + d_losses.avg
             wandb.log({
                 '<Per Step> Total Train Loss': avg_loss,
                 '<Per Step> Generator Train Loss': g_losses.avg,
                 '<Per Step> Discriminator Train Loss': d_losses.avg,
-                '<Per Step> Generator Gradient Norm': g_grad_norm,
-                '<Per Step> Discriminator Gradient Norm': d_grad_norm,
+                '<Per Step> Total Gradient Norm': grad_norm,
                 '<Per Step> lr': lr,
             })
 
@@ -1009,7 +994,6 @@ class RTDTuner(PreTrainTuner):
 
                 valid_g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
                 valid_d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
-
                 valid_loss = valid_g_losses.avg + valid_d_losses.avg
                 wandb.log({
                     '<Val Step> Valid Loss': valid_loss,

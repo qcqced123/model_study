@@ -50,31 +50,28 @@ class ELECTRA(nn.Module, AbstractModel):
                 is_concatenate=self.cfg.is_concatenate,
                 max_span_length=self.cfg.max_span_length
             )
-
         self.discriminator = model_func(cfg.discriminator_num_layers)  # init generator
         self.rtd_head = RTDHead(self.cfg)
-
         self.share_embed_method = self.cfg.share_embed_method  # instance, es, gdes
         if self.share_embed_method == 'GDES':
             self.word_bias = nn.Parameter(
-                torch.zeros_like(self.discriminator.embeddings.word_embedding.weight)
+                torch.zeros_like(self.discriminator.embeddings.word_embedding.weight, device=self.cfg.device)
             )
             self.abs_pos_bias = nn.Parameter(
-                torch.zeros_like(self.discriminator.embeddings.abs_pos_emb.weight)
+                torch.zeros_like(self.discriminator.embeddings.abs_pos_emb.weight, device=self.cfg.device)
             )
-
             delattr(self.discriminator.embeddings.word_embedding, 'weight')
-            self.discriminator.embeddings.word_embedding.register_parameter('weight', self.word_bias)
+            self.discriminator.embeddings.word_embedding.register_parameter('_weight', self.word_bias)
 
             delattr(self.discriminator.embeddings.abs_pos_emb, 'weight')
-            self.discriminator.embeddings.abs_pos_emb.register_parameter('weight', self.abs_pos_bias)
+            self.discriminator.embeddings.abs_pos_emb.register_parameter('_weight', self.abs_pos_bias)
 
             if self.cfg.model_name == 'DeBERTa':
                 self.rel_pos_bias = nn.Parameter(
-                    torch.zeros_like(self.discriminator.embeddings.rel_pos_emb.weight)
+                    torch.zeros_like(self.discriminator.embeddings.rel_pos_emb.weight, device=self.cfg.device)
                 )
                 delattr(self.discriminator.embeddings.rel_pos_emb, 'weight')
-                self.discriminator.embeddings.rel_pos_emb.register_parameter('weight', self.rel_pos_emb)
+                self.discriminator.embeddings.rel_pos_emb.register_parameter('_weight', self.rel_pos_emb)
         self.share_embedding()
 
     def share_embedding(self) -> None:
@@ -92,16 +89,15 @@ class ELECTRA(nn.Module, AbstractModel):
             elif self.share_embed_method == 'GDES':  # GDES (Generator Discriminator Embedding Sharing)
                 g_w_emb = self.generator.embeddings.word_embedding
                 d_w_emb = self.discriminator.embeddings.word_embedding
-                self._set_param(d_w_emb, 'weight', g_w_emb.weight.detach() + d_w_emb.weight)
-
+                self._set_param(d_w_emb, 'weight', g_w_emb.weight.detach() + d_w_emb._weight)
                 g_p_emb = self.generator.embeddings.abs_pos_emb
                 d_p_emb = self.discriminator.embeddings.abs_pos_emb
-                self._set_param(d_p_emb, 'weight', g_p_emb.weight.detach() + d_p_emb.weight)
+                self._set_param(d_p_emb, 'weight', g_p_emb.weight.detach() + d_p_emb._weight)
 
                 if self.cfg.model_name == 'DeBERTa':
                     g_rp_emb = self.generator.embeddings.rel_pos_emb
                     d_rp_emb = self.discriminator.embeddings.rel_pos_emb
-                    self._set_param(d_rp_emb, 'weight', g_rp_emb.weight.detach() + d_rp_emb.weight)
+                    self._set_param(d_rp_emb, 'weight', g_rp_emb.weight.detach() + d_rp_emb._weight)
         self.discriminator.register_forward_pre_hook(discriminator_hook)
 
     @staticmethod
