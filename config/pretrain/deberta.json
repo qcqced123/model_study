@@ -25,7 +25,7 @@
 
     "model_size": {
         "max_seq": 512,
-        "num_layers": 12,
+        "num_layers": 6,
         "num_emd": 2,
         "num_attention_heads": 12,
         "dim_model": 768,

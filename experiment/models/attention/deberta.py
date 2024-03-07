@@ -64,100 +64,97 @@ def disentangled_attention(
         https://arxiv.org/abs/1901.02860
         https://arxiv.org/abs/1906.08237
     """
+    BS, NUM_HEADS, SEQ_LEN, DIM_HEADS = q.shape
+    _, REL_POS, _, _ = kr.shape
+
     scale_factor = 1
-    c2c = torch.matmul(q, k.transpose(-1, -2))  # A_c2c
-    c2p_att = torch.matmul(q, kr.transpose(-1, -2))
-    c2p_pos = build_relative_position(q.shape[1]) + kr.shape[1] / 2  # same as rel_pos in official repo
-    c2p_pos = torch.clamp(c2p_pos, 0, kr.shape[1] - 1).repeat(q.shape[0], 1, 1).long()
+    c2c = torch.matmul(q, k)  # A_c2c
+    c2p_att = torch.matmul(q, kr.permute(0, 2, 3, 1).contiguous())
+
+    c2p_pos = build_relative_position(SEQ_LEN) + REL_POS / 2  # same as rel_pos in official repo
+    c2p_pos = torch.clamp(c2p_pos, 0, REL_POS - 1).repeat(BS, NUM_HEADS, 1, 1).long()
     c2p = torch.gather(c2p_att, dim=-1, index=c2p_pos)
     if c2p is not None:
         scale_factor += 1
 
-    p2c_att = torch.matmul(qr, k.transpose(-1, -2))
+    p2c_att = torch.matmul(qr, k)
     p2c = torch.gather(p2c_att, dim=-2, index=c2p_pos)  # same as torch.gather(k•qr^t, dim=-1, index=c2p_pos)
-
     if p2c is not None:
         scale_factor += 1
 
-    dot_scale = torch.sqrt(torch.tensor(scale_factor * q.shape[2]))  # from official paper by microsoft
+    dot_scale = torch.sqrt(torch.tensor(scale_factor * DIM_HEADS))  # from official paper by microsoft
     attention_matrix = (c2c + c2p + p2c) / dot_scale  # attention Matrix = A_c2c + A_c2r + A_r2c
     if padding_mask is not None:
-        padding_mask = padding_mask.unsqueeze(1)
+        padding_mask = padding_mask.unsqueeze(1).unsqueeze(2)  # for broadcasting: shape (BS, 1, 1, SEQ_LEN)
         attention_matrix = attention_matrix.masked_fill(padding_mask == 1, float('-inf'))  # Padding Token Masking
+
     attention_dist = attention_dropout(
         F.softmax(attention_matrix, dim=-1)
     )
-    attention_matrix = torch.matmul(attention_dist, v)
+    attention_matrix = torch.matmul(attention_dist, v.permute(0, 2, 1, 3).contiguous()).reshape(-1, SEQ_LEN, NUM_HEADS * DIM_HEADS)
     return attention_matrix
-
-
-class AttentionHead(nn.Module):
-    """ In this class, we implement workflow of single attention head in DeBERTa-Large
-    This class has same role as Module "BertAttention" in official Repo (bert.py)
-    Args:
-        dim_model: dimension of model's latent vector space, default 1024 from official paper
-        dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
-        attention_dropout_prob: dropout rate for attention matrix, default 0.1 from official paper
-    Math:
-        attention Matrix = c2c + c2p + p2c
-        A = softmax(attention Matrix/sqrt(3*D_h)), SA(z) = Av
-    Reference:
-        https://arxiv.org/abs/1706.03762
-        https://arxiv.org/abs/2006.03654
-    """
-    def __init__(self, dim_model: int = 1024, dim_head: int = 64, attention_dropout_prob: float = 0.1) -> None:
-        super(AttentionHead, self).__init__()
-        self.dim_model = dim_model
-        self.dim_head = dim_head  # 1024 / 16 = 64
-        self.dot_scale = torch.sqrt(torch.tensor(self.dim_head))
-        self.attention_dropout = nn.Dropout(p=attention_dropout_prob)
-        self.fc_q = nn.Linear(self.dim_model, self.dim_head)
-        self.fc_k = nn.Linear(self.dim_model, self.dim_head)
-        self.fc_v = nn.Linear(self.dim_model, self.dim_head)
-        self.fc_qr = nn.Linear(self.dim_model, self.dim_head)  # projector for Relative Position Query matrix
-        self.fc_kr = nn.Linear(self.dim_model, self.dim_head)  # projector for Relative Position Key matrix
-
-    def forward(self, x: Tensor, pos_x: Tensor, padding_mask: Tensor, attention_mask: Tensor = None, emd: Tensor = None) -> Tensor:
-        q, k, v, qr, kr = self.fc_q(x), self.fc_k(x), self.fc_v(x), self.fc_qr(pos_x), self.fc_kr(pos_x)
-        if emd is not None:
-            q = self.fc_q(emd)
-        attention_matrix = disentangled_attention(q, k, v, qr, kr, self.attention_dropout, padding_mask, attention_mask)
-        return attention_matrix
 
 
 class MultiHeadAttention(nn.Module):
     """ In this class, we implement workflow of Multi-Head Self-attention for DeBERTa-Large
     This class has same role as Module "BertAttention" in official Repo (bert.py)
     In official repo, they use post-layer norm, but we use pre-layer norm which is more stable & efficient for training
+
     Args:
         dim_model: dimension of model's latent vector space, default 1024 from official paper
         num_attention_heads: number of heads in MHSA, default 16 from official paper for Transformer
         dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
         attention_dropout_prob: dropout rate, default 0.1
+
     Math:
         attention Matrix = c2c + c2p + p2c
         A = softmax(attention Matrix/sqrt(3*D_h)), SA(z) = Av
+
     Reference:
         https://arxiv.org/abs/1706.03762
         https://arxiv.org/abs/2006.03654
     """
-    def __init__(self, dim_model: int = 1024, num_attention_heads: int = 16, dim_head: int = 64, attention_dropout_prob: float = 0.1) -> None:
+
+    def __init__(self, dim_model: int = 1024, num_attention_heads: int = 12, dim_head: int = 64,
+                 attention_dropout_prob: float = 0.1) -> None:
         super(MultiHeadAttention, self).__init__()
         self.dim_model = dim_model
         self.num_attention_heads = num_attention_heads
         self.dim_head = dim_head
-        self.attention_dropout_prob = attention_dropout_prob
-        self.attention_heads = nn.ModuleList(
-            [AttentionHead(self.dim_model, self.dim_head, self.attention_dropout_prob) for _ in range(self.num_attention_heads)]
-        )
+        self.fc_q = nn.Linear(self.dim_model, self.dim_model)
+        self.fc_k = nn.Linear(self.dim_model, self.dim_model)
+        self.fc_v = nn.Linear(self.dim_model, self.dim_model)
+        self.fc_qr = nn.Linear(self.dim_model, self.dim_model)  # projector for Relative Position Query matrix
+        self.fc_kr = nn.Linear(self.dim_model, self.dim_model)  # projector for Relative Position Key matrix
         self.fc_concat = nn.Linear(self.dim_model, self.dim_model)
+        self.attention = disentangled_attention
+        self.attention_dropout = nn.Dropout(p=attention_dropout_prob)
 
-    def forward(self, x: Tensor, rel_pos_emb: Tensor, padding_mask: Tensor, attention_mask: Tensor = None, emd: Tensor = None) -> Tensor:
+    def forward(self, x: Tensor, rel_pos_emb: Tensor, padding_mask: Tensor, attention_mask: Tensor = None,
+                emd: Tensor = None) -> Tensor:
         """ x is already passed nn.Layernorm """
         assert x.ndim == 3, f'Expected (batch, seq, hidden) got {x.shape}'
-        attention_output = self.fc_concat(
-            torch.cat([head(x, rel_pos_emb, padding_mask, attention_mask, emd) for head in self.attention_heads], dim=-1)
+
+        # size: bs, seq, nums head, dim head, linear projection
+        q = self.fc_q(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 1, 3).contiguous()
+        k = self.fc_k(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 3, 1).contiguous()
+        v = self.fc_v(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+        qr = self.fc_qr(rel_pos_emb).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 1,3).contiguous()
+        kr = self.fc_kr(rel_pos_emb).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+        if emd is not None:
+            q = self.fc_q(emd).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 1, 3).contiguous()
+
+        attention_matrix = self.attention(
+            q,
+            k,
+            v,
+            qr,
+            kr,
+            self.attention_dropout,
+            padding_mask,
+            attention_mask
         )
+        attention_output = self.fc_concat(attention_matrix)
         return attention_output
 
 
