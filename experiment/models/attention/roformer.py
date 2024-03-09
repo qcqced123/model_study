@@ -168,7 +168,10 @@ class MultiHeadAttention(nn.Module):
 
     @staticmethod
     def apply_rotary_position_embeddings(word: Tensor, rotary_pos: Tensor) -> Tensor:
-        """ Very Un-Optimized way to apply rotary position encoding to word embedding """
+        """ Very Un-Optimized way to apply rotary position encoding to word embedding
+        Notes:
+             ASAP, we will implement more optimized way to apply rotary position encoding to word embedding
+        """
         BATCH_SIZE, SEQ_LEN, DIM_MODEL = word.shape
         result = torch.vstack([torch.bmm(rotary_pos, word[i].unsqueeze(-1)).squeeze(-1).view(SEQ_LEN, DIM_MODEL) for i in range(BATCH_SIZE)]).view(BATCH_SIZE, SEQ_LEN, DIM_MODEL)
         return result
@@ -377,6 +380,10 @@ class RoformerEncoder(nn.Module, AbstractModel):
 class Embedding(nn.Module):
     """ Class module for Roformer Embedding, word embedding & rotary positional encoding
     This module has option => whether or not to use ALBERT Style Factorized Embedding
+
+    Very Un-Optimized way to apply rotary position encoding to word embedding
+    Notes:
+         ASAP, we will implement more optimized way to apply rotary position encoding to word embedding
 
     This Module set & initialize 3 Embedding Layers:
         1) Word Embedding
