@@ -65,19 +65,19 @@ def disentangled_attention(
         https://arxiv.org/abs/1906.08237
     """
     BS, NUM_HEADS, SEQ_LEN, DIM_HEADS = q.shape
-    _, REL_POS, _, _ = kr.shape
+    _, MAX_REL_POS, _, _ = kr.shape
 
     scale_factor = 1
-    c2c = torch.matmul(q, k)  # A_c2c
+    c2c = torch.matmul(q, k)  # A_c2c, q: (BS, NUM_HEADS, SEQ_LEN, DIM_HEADS), k: (BS, NUM_HEADS, DIM_HEADS, SEQ_LEN)
     c2p_att = torch.matmul(q, kr.permute(0, 2, 3, 1).contiguous())
 
-    c2p_pos = build_relative_position(SEQ_LEN) + REL_POS / 2  # same as rel_pos in official repo
-    c2p_pos = torch.clamp(c2p_pos, 0, REL_POS - 1).repeat(BS, NUM_HEADS, 1, 1).long()
+    c2p_pos = build_relative_position(SEQ_LEN) + MAX_REL_POS / 2  # same as rel_pos in official repo
+    c2p_pos = torch.clamp(c2p_pos, 0, MAX_REL_POS - 1).repeat(BS, NUM_HEADS, 1, 1).long()
     c2p = torch.gather(c2p_att, dim=-1, index=c2p_pos)
     if c2p is not None:
         scale_factor += 1
 
-    p2c_att = torch.matmul(qr, k)
+    p2c_att = torch.matmul(qr, k)  # qr: (BS, NUM_HEADS, SEQ_LEN, DIM_HEADS), k: (BS, NUM_HEADS, DIM_HEADS, SEQ_LEN)
     p2c = torch.gather(p2c_att, dim=-2, index=c2p_pos)  # same as torch.gather(k•qr^t, dim=-1, index=c2p_pos)
     if p2c is not None:
         scale_factor += 1
@@ -91,7 +91,7 @@ def disentangled_attention(
     attention_dist = attention_dropout(
         F.softmax(attention_matrix, dim=-1)
     )
-    attention_matrix = torch.matmul(attention_dist, v.permute(0, 2, 1, 3).contiguous()).reshape(-1, SEQ_LEN, NUM_HEADS * DIM_HEADS)
+    attention_matrix = torch.matmul(attention_dist, v).permute(0, 2, 1, 3).reshape(-1, SEQ_LEN, NUM_HEADS*DIM_HEADS).contiguous()
     return attention_matrix
 
 
@@ -138,8 +138,8 @@ class MultiHeadAttention(nn.Module):
         # size: bs, seq, nums head, dim head, linear projection
         q = self.fc_q(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 1, 3).contiguous()
         k = self.fc_k(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 3, 1).contiguous()
-        v = self.fc_v(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
-        qr = self.fc_qr(rel_pos_emb).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 1,3).contiguous()
+        v = self.fc_v(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 1, 3).contiguous()
+        qr = self.fc_qr(rel_pos_emb).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 1, 3).contiguous()
         kr = self.fc_kr(rel_pos_emb).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
         if emd is not None:
             q = self.fc_q(emd).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 1, 3).contiguous()

@@ -61,17 +61,17 @@ def linear_attention(
     BS, SEQ_LEN, NUM_HEADS, DIM_HEADS = q.shape
     projected_q, projected_k = kernel_fn(q, kernel), kernel_fn(k, kernel)
     if padding_mask is not None:  # applying padding mask, calculating normalizer
-        projected_q[padding_mask == 1], projected_k[padding_mask == 1], v[padding_mask == 1] = 0, 0, 0
+        padding_mask = padding_mask.unsqueeze(2).unsqueeze(-1)
+        projected_q.masked_fill_(padding_mask == 1, 0)
+        projected_k.masked_fill_(padding_mask == 1, 0)
+        v.masked_fill_(padding_mask == 1, 0)
 
-    kv = torch.matmul(v.permute(0, 2, 3, 1).contiguous(), projected_k.permute(0, 2, 1, 3).contiguous())
-    z = 1 / torch.clamp(torch.mul(projected_q, projected_k.sum(dim=1).unsqueeze(1)).sum(dim=-1), min=eps)
-    attention_matrix = torch.einsum("bshq,bhvk,bsh->bshv", projected_q, kv, z).reshape(-1, SEQ_LEN, NUM_HEADS * DIM_HEADS)
-
-    # attention dropout
-    if attention_dropout is not None:
-        attention_matrix = attention_dropout(
-            attention_matrix
-        )
+    projected_k = projected_k.permute(0, 2, 1, 3).contiguous()
+    kv = torch.matmul(v.permute(0, 2, 3, 1).contiguous(), projected_k)
+    z = 1 / torch.clamp(torch.mul(projected_q.permute(0, 2, 1, 3).contiguous(), projected_k.sum(dim=2).unsqueeze(2)).sum(dim=-1), min=eps)  # breakdown by sequence length dimension
+    attention_matrix = attention_dropout(
+        torch.einsum("bshq,bhvk,bhs->bshv", projected_q, kv, z).reshape(-1, SEQ_LEN, NUM_HEADS*DIM_HEADS)
+    )
     return attention_matrix
 
 

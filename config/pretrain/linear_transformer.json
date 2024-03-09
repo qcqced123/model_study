@@ -60,7 +60,7 @@
     },
 
     "scheduler_options": {
-        "scheduler": "constant_with_warmup",
+        "scheduler": "cosine_annealing",
         "batch_scheduler": true,
         "num_cycles": 2,
         "warmup_ratio": 0.0025

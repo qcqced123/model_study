@@ -35,8 +35,8 @@ def scaled_dot_product_attention(
         https://arxiv.org/abs/1706.03762
         https://arxiv.org/pdf/1810.04805.pdf
     """
-    BS, SEQ_LEN, NUM_HEADS, DIM_HEADS = q.shape
-    attention_matrix = torch.matmul(q.permute(0, 2, 1, 3).contiguous(), k.permute(0, 2, 3, 1).contiguous()) / dot_scale
+    BS, NUM_HEADS, SEQ_LEN, DIM_HEADS = q.shape
+    attention_matrix = torch.matmul(q, k.permute(0, 2, 3, 1).contiguous()) / dot_scale
     if padding_mask is not None:
         padding_mask = padding_mask.unsqueeze(1).unsqueeze(2)  # for broadcasting: shape (BS, 1, 1, SEQ_LEN)
         attention_matrix = attention_matrix.masked_fill(padding_mask == 1, float('-inf'))
@@ -44,7 +44,7 @@ def scaled_dot_product_attention(
     attention_dist = attention_dropout(
         F.softmax(attention_matrix, dim=-1)
     )
-    attention_matrix = torch.matmul(attention_dist, v.permute(0, 2, 1, 3).contiguous()).reshape(-1, SEQ_LEN, NUM_HEADS * DIM_HEADS)
+    attention_matrix = torch.matmul(attention_dist, v).permute(0, 2, 1, 3).reshape(-1, SEQ_LEN, NUM_HEADS*DIM_HEADS).contiguous()
     return attention_matrix
 
 
@@ -84,9 +84,9 @@ class MultiHeadAttention(nn.Module):
         assert x.ndim == 3, f'Expected (batch, seq, hidden) got {x.shape}'
 
         # size: bs, seq, nums head, dim head, linear projection
-        q = self.fc_q(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+        q = self.fc_q(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 1, 3).contiguous()
         k = self.fc_k(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
-        v = self.fc_v(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+        v = self.fc_v(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 1, 3).contiguous()
 
         attention_matrix = self.attention(
             q,
