@@ -121,6 +121,7 @@ class MultiHeadAttention(nn.Module):
     def forward(self, x: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
         """ x is already passed nn.Layernorm, already multiplied with rotary position encoding """
         assert x.ndim == 3, f'Expected (batch, seq, hidden) got {x.shape}'
+        # multiple word embedding, rotary position encoding
 
         # size: bs, seq, nums head, dim head, linear projection
         q = self.fc_q(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
@@ -287,6 +288,25 @@ class RoformerEncoder(nn.Module, AbstractModel):
         return last_hidden_state, hidden_states
 
 
+class RoPE(nn.Module):
+    """ class for rotary positional encoding
+
+    Args:
+
+    Math:
+
+    References:
+
+
+    """
+    def __init__(self, dim_model: int = 768):
+        super().__init__()
+        self.dim_model = dim_model
+
+
+    def forward(self):
+
+
 class Embedding(nn.Module):
     """ Class module for Roformer Embedding, word embedding & rotary positional encoding
     This module has option => whether or not to use ALBERT Style Factorized Embedding
@@ -300,11 +320,13 @@ class Embedding(nn.Module):
     def __init__(self, cfg: CFG) -> None:
         super(Embedding, self).__init__()
         self.cfg = cfg
+        self.dim_model = self.cfg.dim_model
         self.max_seq = cfg.max_seq
         self.word_embedding = nn.Embedding(len(cfg.tokenizer), cfg.dim_model)
-        self.rotary_pos_encoding = nn.Embedding(cfg.max_seq, cfg.dim_model)  # Absolute Position Embedding for EMD Layer
         self.layer_norm1 = nn.LayerNorm(cfg.dim_model, eps=cfg.layer_norm_eps)  # for word embedding
         self.hidden_dropout = nn.Dropout(p=cfg.hidden_dropout_prob)
+        self.i_arr = torch.arange(1, int(self.cfg.dim_model / 2) + 1)  # for rotary position embedding
+        self.theta = 10000 ** (-2 * (self.i_arr - 1) / self.dim_model)  # for rotary position embedding
 
         # ALBERT Style Factorized Embedding
         if self.cfg.is_mf_embedding:
@@ -405,10 +427,10 @@ class Roformer(nn.Module, AbstractModel):
             attention_mask: attention mask for CLM, default None
         """
         assert inputs.ndim == 2, f'Expected (batch, sequence) got {inputs.shape}'
-        word_embeddings, abs_pos_emb = self.embeddings(inputs)
+        word_embeddings, rotary_pos_enc = self.embeddings(inputs)
         last_hidden_state, hidden_states = self.encoder(
             word_embeddings,
-            abs_pos_emb,
+            rotary_pos_enc,
             padding_mask,
             attention_mask
         )
