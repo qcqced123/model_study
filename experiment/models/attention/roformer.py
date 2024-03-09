@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from experiment.models.abstract_model import AbstractModel
 from torch import Tensor
-from typing import Tuple, List
+from typing import Tuple
 from einops.layers.torch import Rearrange
 from configuration import CFG
 
@@ -53,10 +53,13 @@ def linear_attention(
         k: dimension size of each key's heads
         v: dimension size of each value's heads
 
-    Reference:
+    References:
+        https://arxiv.org/abs/1706.03762
+        https://arxiv.org/pdf/1810.04805.pdf
         https://arxiv.org/abs/2006.16236
+        https://arxiv.org/abs/2104.09864  # RoFormer: Enhanced Transformer with Rotary Position Embedding
+        https://github.com/huggingface/transformers/blob/main/src/transformers/models/roformer/modeling_roformer.py
         https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
-
     """
     BS, SEQ_LEN, NUM_HEADS, DIM_HEADS = q.shape
     projected_q, projected_k = kernel_fn(q, kernel), kernel_fn(k, kernel)
@@ -75,6 +78,48 @@ def linear_attention(
     return attention_matrix
 
 
+def scaled_dot_product_attention(
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    dot_scale: Tensor,
+    attention_dropout: nn.Dropout,
+    padding_mask: Tensor = None,
+    attention_mask: Tensor = None
+) -> Tensor:
+    """ Scaled Dot-Product attention with Masking for padding mask, parallel version for Multi-Head Attention
+
+    Args:
+        q: query matrix, shape (batch_size, seq_len, dim_head)
+        k: key matrix, shape (batch_size, seq_len, dim_head)
+        v: value matrix, shape (batch_size, seq_len, dim_head)
+        dot_scale: scale factor for Q•K^T result
+        attention_dropout: dropout for attention matrix, default rate is 0.1 from official paper
+        padding_mask: mask for attention matrix for MLM, you must check whether or not padding token is 1
+        attention_mask: mask for attention matrix for CLM
+
+    Math:
+        A = softmax(q•k^t/sqrt(D_h)), SA(z) = Av
+
+    Reference:
+        https://arxiv.org/abs/1706.03762
+        https://arxiv.org/pdf/1810.04805.pdf
+        https://arxiv.org/abs/2104.09864  # RoFormer: Enhanced Transformer with Rotary Position Embedding
+        https://github.com/huggingface/transformers/blob/main/src/transformers/models/roformer/modeling_roformer.py
+    """
+    BS, NUM_HEADS, SEQ_LEN, DIM_HEADS = q.shape
+    attention_matrix = torch.matmul(q, k.permute(0, 2, 3, 1).contiguous()) / dot_scale
+    if padding_mask is not None:
+        padding_mask = padding_mask.unsqueeze(1).unsqueeze(2)  # for broadcasting: shape (BS, 1, 1, SEQ_LEN)
+        attention_matrix = attention_matrix.masked_fill(padding_mask == 1, float('-inf'))
+
+    attention_dist = attention_dropout(
+        F.softmax(attention_matrix, dim=-1)
+    )
+    attention_matrix = torch.matmul(attention_dist, v).permute(0, 2, 1, 3).reshape(-1, SEQ_LEN, NUM_HEADS*DIM_HEADS).contiguous()
+    return attention_matrix
+
+
 class MultiHeadAttention(nn.Module):
     """ In this class, we implement workflow of Multi-Head Self-attention for Linear Transformers
     This class has same role as Module "BertAttention" in official Repo (bert.py)
@@ -90,10 +135,12 @@ class MultiHeadAttention(nn.Module):
     Math:
         A = softmax(attention Matrix/sqrt(3*D_h)), SA(z) = Av
 
-    Reference:
+    References:
         https://arxiv.org/abs/1706.03762
         https://arxiv.org/pdf/1810.04805.pdf
         https://arxiv.org/abs/2006.16236
+        https://arxiv.org/abs/2104.09864  # RoFormer: Enhanced Transformer with Rotary Position Embedding
+        https://github.com/huggingface/transformers/blob/main/src/transformers/models/roformer/modeling_roformer.py
         https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
     """
 
@@ -102,7 +149,7 @@ class MultiHeadAttention(nn.Module):
         dim_model: int = 1024,
         num_attention_heads: int = 16,
         dim_head: int = 64,
-        kernel: str = 'elu',
+        kernel: str = 'softmax',
         attention_dropout_prob: float = 0.1
     ) -> None:
         super(MultiHeadAttention, self).__init__()
@@ -113,31 +160,52 @@ class MultiHeadAttention(nn.Module):
         self.fc_k = nn.Linear(self.dim_model, self.dim_model)
         self.fc_v = nn.Linear(self.dim_model, self.dim_model)
         self.fc_concat = nn.Linear(self.dim_model, self.dim_model)
-        self.attention = linear_attention
+        self.attention = scaled_dot_product_attention if kernel == 'softmax' else linear_attention
         self.attention_dropout = nn.Dropout(p=attention_dropout_prob)
+        self.dot_scale = torch.sqrt(torch.tensor(self.dim_head, dtype=torch.float32))
         self.kernel = kernel
         self.eps = 1e-6
 
-    def forward(self, x: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
+    @staticmethod
+    def apply_rotary_position_embeddings(word: Tensor, rotary_pos: Tensor) -> Tensor:
+        BATCH_SIZE, SEQ_LEN, DIM_MODEL = word.shape
+        result = torch.vstack([torch.bmm(rotary_pos, word[i].unsqueeze(-1)).squeeze(-1).view(SEQ_LEN, DIM_MODEL) for i in range(BATCH_SIZE)]).view(BATCH_SIZE, SEQ_LEN, DIM_MODEL)
+        return result
+
+    def forward(self, x: Tensor, rotary_pos_enc: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
         """ x is already passed nn.Layernorm, already multiplied with rotary position encoding """
         assert x.ndim == 3, f'Expected (batch, seq, hidden) got {x.shape}'
         # multiple word embedding, rotary position encoding
+        combined_x = self.apply_rotary_position_embeddings(x, rotary_pos_enc)
 
         # size: bs, seq, nums head, dim head, linear projection
-        q = self.fc_q(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
-        k = self.fc_k(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+        q = self.fc_q(combined_x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+        k = self.fc_k(combined_x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
         v = self.fc_v(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
 
-        attention_matrix = self.attention(
-            q,
-            k,
-            v,
-            self.kernel,
-            self.eps,
-            self.attention_dropout,
-            padding_mask,
-            attention_mask
-        )
+        attention_matrix = None
+        if self.kernel == 'elu':
+            attention_matrix = self.attention(
+                q,
+                k,
+                v,
+                self.kernel,
+                self.eps,
+                self.attention_dropout,
+                padding_mask,
+                attention_mask
+            )
+        elif self.kernel == 'softmax':  # pure self-attention
+            attention_matrix = self.attention(
+                q.permute(0, 2, 1, 3).contiguous(),
+                k,
+                v.permute(0, 2, 1, 3).contiguous(),
+                self.dot_scale,
+                self.attention_dropout,
+                padding_mask,
+                attention_mask
+            )
+
         attention_output = self.fc_concat(attention_matrix)
         return attention_output
 
@@ -153,6 +221,14 @@ class FeedForward(nn.Module):
 
     Math:
         FeedForward(x) = FeedForward(LN(x))+x
+
+    References:
+        https://arxiv.org/abs/1706.03762
+        https://arxiv.org/pdf/1810.04805.pdf
+        https://arxiv.org/abs/2006.16236
+        https://arxiv.org/abs/2104.09864  # RoFormer: Enhanced Transformer with Rotary Position Embedding
+        https://github.com/huggingface/transformers/blob/main/src/transformers/models/roformer/modeling_roformer.py
+        https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
     """
     def __init__(self, dim_model: int = 1024, dim_ffn: int = 4096, hidden_dropout_prob: float = 0.1) -> None:
         super(FeedForward, self).__init__()
@@ -177,6 +253,8 @@ class RoformerEncoderLayer(nn.Module):
         https://arxiv.org/abs/1706.03762
         https://arxiv.org/pdf/1810.04805.pdf
         https://arxiv.org/abs/2006.16236
+        https://arxiv.org/abs/2104.09864  # RoFormer: Enhanced Transformer with Rotary Position Embedding
+        https://github.com/huggingface/transformers/blob/main/src/transformers/models/roformer/modeling_roformer.py
         https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
     """
     def __init__(
@@ -206,13 +284,10 @@ class RoformerEncoderLayer(nn.Module):
             hidden_dropout_prob,
         )
 
-    def forward(self, x: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
+    def forward(self, x: Tensor, rotary_pos_enc: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
         """ rel_pos_emb is fixed for all layer in same forward pass time """
         ln_x = self.layer_norm1(x)
-        residual_x = self.hidden_dropout(
-            self.self_attention(ln_x, padding_mask, attention_mask)
-        ) + x
-
+        residual_x = self.hidden_dropout(self.self_attention(ln_x, rotary_pos_enc, padding_mask, attention_mask)) + x
         ln_x = self.layer_norm2(residual_x)
         fx = self.ffn(ln_x) + residual_x
         return fx
@@ -224,11 +299,19 @@ class RoformerEncoder(nn.Module, AbstractModel):
         2) make absolute position embedding,
         3) matrix sum with word embedding, absolute position embedding
         4) stack num_layers BERTEncoderLayer
-    Output have ONLY result of pure self-attention
 
+    Output have ONLY result of pure self-attention
     Args:
         max_seq: maximum sequence length, named "max_position_embedding" in official repo, default 512, in official paper, this value is called 'k'
         num_layers: number of EncoderLayer, default 6 for base model
+
+    References:
+        https://arxiv.org/abs/1706.03762
+        https://arxiv.org/pdf/1810.04805.pdf
+        https://arxiv.org/abs/2006.16236
+        https://arxiv.org/abs/2104.09864  # RoFormer: Enhanced Transformer with Rotary Position Embedding
+        https://github.com/huggingface/transformers/blob/main/src/transformers/models/roformer/modeling_roformer.py
+        https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
     """
     def __init__(
             self,
@@ -258,27 +341,29 @@ class RoformerEncoder(nn.Module, AbstractModel):
         self.layer_norm = nn.LayerNorm(dim_model, eps=layer_norm_eps)  # for final-Encoder output
         self.gradient_checkpointing = gradient_checkpointing
 
-    def forward(self, inputs: Tensor, abs_pos_emb: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
+    def forward(self, inputs: Tensor, rotary_pos_enc: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
         """
         Args:
             inputs: embedding from input sequence
-            abs_pos_emb: absolute position embedding
+            rotary_pos_enc: rotary position encoding, shape (batch_size, seq_len, dim_model, dim_model)
             padding_mask: mask for Encoder padded token for speeding up to calculate attention score or MLM
             attention_mask: mask for CLM
         """
         layer_output = []
-        x = inputs + abs_pos_emb  # pass to layer
+        x = inputs
         for layer in self.layer:
             if self.gradient_checkpointing and self.cfg.train:
                 x = self._gradient_checkpointing_func(
                     layer.__call__,
                     x,
+                    rotary_pos_enc,
                     padding_mask,
                     attention_mask
                 )
             else:
                 x = layer(
                     x,
+                    rotary_pos_enc,
                     padding_mask,
                     attention_mask
                 )
@@ -288,52 +373,69 @@ class RoformerEncoder(nn.Module, AbstractModel):
         return last_hidden_state, hidden_states
 
 
-class RoPE(nn.Module):
-    """ class for rotary positional encoding
-
-    Args:
-
-    Math:
-
-    References:
-
-
-    """
-    def __init__(self, dim_model: int = 768):
-        super().__init__()
-        self.dim_model = dim_model
-
-
-    def forward(self):
-
-
 class Embedding(nn.Module):
     """ Class module for Roformer Embedding, word embedding & rotary positional encoding
     This module has option => whether or not to use ALBERT Style Factorized Embedding
 
     This Module set & initialize 3 Embedding Layers:
-        1) Word Embedding 2) Rotary Positional Encoding
+        1) Word Embedding
+        2) Rotary Positional Encoding
 
     Args:
         cfg: configuration.py
+
+    References:
+        https://arxiv.org/abs/1706.03762
+        https://arxiv.org/pdf/1810.04805.pdf
+        https://arxiv.org/abs/2006.16236
+        https://arxiv.org/abs/2104.09864  # RoFormer: Enhanced Transformer with Rotary Position Embedding
+        https://github.com/huggingface/transformers/blob/main/src/transformers/models/roformer/modeling_roformer.py
+        https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
     """
     def __init__(self, cfg: CFG) -> None:
         super(Embedding, self).__init__()
         self.cfg = cfg
+        self.batch_size = cfg.batch_size
+        self.max_seq = cfg.max_seq
         self.dim_model = self.cfg.dim_model
         self.max_seq = cfg.max_seq
         self.word_embedding = nn.Embedding(len(cfg.tokenizer), cfg.dim_model)
         self.layer_norm1 = nn.LayerNorm(cfg.dim_model, eps=cfg.layer_norm_eps)  # for word embedding
         self.hidden_dropout = nn.Dropout(p=cfg.hidden_dropout_prob)
-        self.i_arr = torch.arange(1, int(self.cfg.dim_model / 2) + 1)  # for rotary position embedding
-        self.theta = 10000 ** (-2 * (self.i_arr - 1) / self.dim_model)  # for rotary position embedding
+        self.rotary_pos_encoding = self.create_rotation_matrix
 
         # ALBERT Style Factorized Embedding
         if self.cfg.is_mf_embedding:
             self.word_embedding = nn.Embedding(len(cfg.tokenizer), int(cfg.dim_model/6))
             self.projector = nn.Linear(int(cfg.dim_model/6), cfg.dim_model)  # project to original hidden dim
 
-    def forward(self, inputs: Tensor) -> Tuple[nn.Embedding, nn.Embedding]:
+    @torch.no_grad()
+    def create_rotation_matrix(self, seq_len: int) -> Tensor:
+        """ Create a batch of rotation matrices from the given thetas.
+
+        Returns:
+            Tensor: A tensor of shape (batch_size, seq_len, d, d) containing the rotation matrices.
+        """
+        i_arr = torch.arange(1, int(self.dim_model / 2) + 1).repeat_interleave(2).to(self.cfg.device)  # for rotary position embedding
+        theta = 10000 ** (-2 * (i_arr - 1) / self.dim_model)  # for rotary position embedding
+        scaler = torch.arange(1, seq_len + 1, device=self.cfg.device, dtype=torch.float).unsqueeze(1).repeat(1, self.dim_model).reshape(seq_len, self.dim_model)
+        thetas = torch.mul(scaler, theta)
+
+        seq_len, _ = thetas.size()
+        R = torch.eye(self.dim_model, device=thetas.device).repeat(seq_len, 1, 1)
+
+        for i in range(0, self.dim_model, 2):
+            cos_t = torch.cos(thetas[:, i]).unsqueeze(-1)
+            sin_t = torch.sin(thetas[:, i]).unsqueeze(-1)
+
+            R[:, i, i] = cos_t.squeeze(-1)
+            R[:, i + 1, i + 1] = cos_t.squeeze(-1)
+            R[:, i, i + 1] = -sin_t.squeeze(-1)
+            R[:, i + 1, i] = sin_t.squeeze(-1)
+
+        return R
+
+    def forward(self, inputs: Tensor) -> Tuple[nn.Embedding, Tensor]:
         if self.cfg.is_mf_embedding:
             word_embeddings = self.hidden_dropout(
                 self.layer_norm1(self.projector(self.word_embedding(inputs)))
@@ -342,9 +444,7 @@ class Embedding(nn.Module):
             word_embeddings = self.hidden_dropout(
                 self.layer_norm1(self.word_embedding(inputs))
             )
-        rotary_pos_enc = self.rotary_pos_encoding(
-            torch.arange(inputs.shape[1], device="cuda").repeat(inputs.shape[0]).view(inputs.shape[0], -1)
-        )
+        rotary_pos_enc = self.rotary_pos_encoding(inputs.shape[1])
         return word_embeddings, rotary_pos_enc
 
 
@@ -384,6 +484,8 @@ class Roformer(nn.Module, AbstractModel):
         https://arxiv.org/abs/1706.03762
         https://arxiv.org/pdf/1810.04805.pdf
         https://arxiv.org/abs/2006.16236
+        https://arxiv.org/abs/2104.09864  # RoFormer: Enhanced Transformer with Rotary Position Embedding
+        https://github.com/huggingface/transformers/blob/main/src/transformers/models/roformer/modeling_roformer.py
         https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
     """
     def __init__(self, cfg: CFG, num_layers: int = 12) -> None:
