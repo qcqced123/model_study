@@ -168,6 +168,7 @@ class MultiHeadAttention(nn.Module):
 
     @staticmethod
     def apply_rotary_position_embeddings(word: Tensor, rotary_pos: Tensor) -> Tensor:
+        """ Very Un-Optimized way to apply rotary position encoding to word embedding """
         BATCH_SIZE, SEQ_LEN, DIM_MODEL = word.shape
         result = torch.vstack([torch.bmm(rotary_pos, word[i].unsqueeze(-1)).squeeze(-1).view(SEQ_LEN, DIM_MODEL) for i in range(BATCH_SIZE)]).view(BATCH_SIZE, SEQ_LEN, DIM_MODEL)
         return result
