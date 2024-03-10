@@ -11,6 +11,10 @@ from configuration import CFG
 def kernel_fn(x: Tensor, kernel_name: str) -> Tensor:
     """ Select kernel function for attention head
     This is temporary function, we will implement more kernel function in future
+
+    Args:
+        x: input tensor, shape (batch_size, seq_len, dim_head)
+        kernel_name: kernel function name, default 'elu' from official paper
     """
     hidden_state = None
     if kernel_name == 'elu':
@@ -56,7 +60,6 @@ def linear_attention(
     Reference:
         https://arxiv.org/abs/2006.16236
         https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
-
     """
     BS, SEQ_LEN, NUM_HEADS, DIM_HEADS = q.shape
     projected_q, projected_k = kernel_fn(q, kernel), kernel_fn(k, kernel)
@@ -88,7 +91,7 @@ class MultiHeadAttention(nn.Module):
         attention_dropout_prob: dropout rate, default 0.1
 
     Math:
-        A = softmax(attention Matrix/sqrt(3*D_h)), SA(z) = Av
+        A = normalize(Φ(Q).mm(Φ(K).t())).mm(V)
 
     Reference:
         https://arxiv.org/abs/1706.03762
@@ -290,8 +293,9 @@ class LinearTransformerEncoder(nn.Module, AbstractModel):
 class Embedding(nn.Module):
     """ Class module for RoFormer Embedding, word embedding & rotary positional encoding
     This module has option => whether or not to use ALBERT Style Factorized Embedding
+
     This Module set & initialize 3 Embedding Layers:
-        1) Word Embedding 2) Rotary Positional Encoding
+        1) Word Embedding 2) Absolute Position Embedding
 
     Args:
         cfg: configuration.py
@@ -332,7 +336,7 @@ class LinearTransformer(nn.Module, AbstractModel):
     """
     Main class for LinearTransformer, having all of sub-blocks & modules such as Disentangled Self-attention, Encoder
     Init Scale of LinearTransformer Hyper-Parameters, Embedding Layer, Encoder Blocks
-    And then make 3-types of Embedding Layer, Word Embedding, Absolute Position Embedding, Relative Position Embedding
+    And then make 2-types of Embedding Layer, Word Embedding, Absolute Position Embedding
 
     This module has only Encoder Block, not Decoder Block
 

@@ -104,10 +104,12 @@ class MultiHeadAttention(nn.Module):
 class FeedForward(nn.Module):
     """ Class for Feed-Forward Network module in Transformer Encoder Block, this module for BERT
     Same role as Module "BertIntermediate" in official Repo (bert.py)
+
     Args:
         dim_model: dimension of model's latent vector space, default 1024
         dim_ffn: dimension of FFN's hidden layer, default 4096 from official paper
         hidden_dropout_prob: dropout rate, default 0.1
+
     Math:
         FeedForward(x) = FeedForward(LN(x))+x
     """
@@ -157,7 +159,6 @@ class BERTEncoderLayer(nn.Module):
         )
 
     def forward(self, x: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
-        """ rel_pos_emb is fixed for all layer in same forward pass time """
         ln_x = self.layer_norm1(x)
         residual_x = self.hidden_dropout(
             self.self_attention(ln_x, padding_mask, attention_mask)
@@ -173,6 +174,7 @@ class BERTEncoder(nn.Module, AbstractModel):
     3) matrix sum with word embedding, absolute position embedding
     4) stack num_layers BERTEncoderLayer
     Output have ONLY result of pure self-attention
+
     Args:
         max_seq: maximum sequence length, named "max_position_embedding" in official repo, default 512, in official paper, this value is called 'k'
         num_layers: number of EncoderLayer, default 6 for base model
@@ -237,10 +239,13 @@ class BERTEncoder(nn.Module, AbstractModel):
 class Embedding(nn.Module):
     """ BERT Embedding Module class
     This module has option => whether or not to use ALBERT Style Factorized Embedding
+
     This Module set & initialize 3 Embedding Layers:
         1) Word Embedding 2) Absolute Positional Embedding
+
     Args:
         cfg: configuration.py
+
     Notes:
         Absolute Positional Embedding added at bottom layers
     """

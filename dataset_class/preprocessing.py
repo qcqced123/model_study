@@ -6,11 +6,11 @@ import configuration as configuration
 from datasets import load_dataset, Dataset, DatasetDict
 from sklearn.model_selection import StratifiedKFold, GroupKFold, train_test_split
 from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
-from nltk.tokenize import word_tokenize
 from autocorrect import Speller
 from spellchecker import SpellChecker
 from tqdm.auto import tqdm
-from typing import List, Tuple, Union, Dict, Callable, Any
+from typing import List, Tuple, Dict, Callable, Any
+
 
 speller = Speller(lang='en')
 spellchecker = SpellChecker()
@@ -18,8 +18,10 @@ spellchecker = SpellChecker()
 
 def hf_load_dataset(cfg: configuration.CFG) -> DatasetDict:
     """ Load dataset from Huggingface Datasets
+
     Notes:
         This function is temporary just fit-able for Wikipedia dataset
+
     References:
         https://github.com/huggingface/datasets/blob/main/src/datasets/load.py#2247
     """
@@ -29,9 +31,11 @@ def hf_load_dataset(cfg: configuration.CFG) -> DatasetDict:
 
 def hf_split_dataset(cfg: configuration.CFG, dataset: Dataset) -> Tuple[Dataset, Dataset]:
     """ Split dataset from Huggingface Datasets with huggingface method "train_test_split"
+
     Args:
         cfg: configuration.CFG, needed to load split ratio, seed value
         dataset: Huggingface Datasets object, dataset from Huggingface Datasets
+
     Notes:
         This function is temporary just fit-able for Wikipedia dataset & MLM Task
     """
@@ -42,6 +46,7 @@ def hf_split_dataset(cfg: configuration.CFG, dataset: Dataset) -> Tuple[Dataset,
 
 def dataset_split(cfg: configuration.CFG, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """ Split dataset from pandas.DataFrame with sklearn.train_test_split
+
     Args:
         cfg: configuration.CFG, needed to load split ratio, seed value
         df: pandas.DataFrame, dataset from csv file
@@ -56,13 +61,19 @@ def dataset_split(cfg: configuration.CFG, df: pd.DataFrame) -> Tuple[pd.DataFram
 
 
 def dict2df(dataset: Dict) -> pd.DataFrame:
-    """ Convert dictionary to pandas.DataFrame """
+    """ Convert dictionary to pandas.DataFrame
+    """
     df = pd.DataFrame(dataset)
     return df
 
 
 def group_kfold(df: pd.DataFrame, cfg: configuration.CFG) -> pd.DataFrame:
-    """ GroupKFold """
+    """ Group K Fold by sklearn
+
+    Args:
+        df: pandas.DataFrame, dataset from csv file
+        cfg: configuration.CFG, needed to load split ratio, seed value
+    """
     fold = GroupKFold(
         n_splits=cfg.n_folds,
     )
@@ -73,7 +84,12 @@ def group_kfold(df: pd.DataFrame, cfg: configuration.CFG) -> pd.DataFrame:
 
 
 def stratified_kfold(df: pd.DataFrame, cfg: configuration.CFG) -> pd.DataFrame:
-    """ GroupKFold """
+    """ Stratified K Fold by sklearn
+
+    Args:
+        df: pandas.DataFrame, dataset from csv file
+        cfg: configuration.CFG, needed to load split ratio, seed value
+    """
     fold = StratifiedKFold(
         n_splits=cfg.n_folds,
         shuffle=True,
@@ -86,7 +102,12 @@ def stratified_kfold(df: pd.DataFrame, cfg: configuration.CFG) -> pd.DataFrame:
 
 
 def mls_kfold(df: pd.DataFrame, cfg) -> pd.DataFrame:
-    """ Multilabel Stratified KFold """
+    """ Multilabel Stratified KFold by iterstrat
+
+    Args:
+        df: pandas.DataFrame, dataset from csv file
+        cfg: configuration.CFG, needed to load split ratio, seed value
+    """
     tmp_df = df.copy()
     y = pd.get_dummies(data=tmp_df.iloc[:, 2:8], columns=tmp_df.columns[2:8])
     fold = MultilabelStratifiedKFold(
@@ -104,6 +125,7 @@ def mls_kfold(df: pd.DataFrame, cfg) -> pd.DataFrame:
 def add_target_token(cfg: configuration.CFG, token: str) -> None:
     """
     Add special token to pretrained tokenizer
+
     Args:
         cfg: configuration.CFG, needed to load tokenizer from Huggingface AutoTokenizer
         token: str, special token to add
@@ -121,6 +143,7 @@ def add_target_token(cfg: configuration.CFG, token: str) -> None:
 def add_anchor_token(cfg: configuration.CFG, token: str) -> None:
     """
     Add special token to pretrained tokenizer
+
     Args:
         cfg: configuration.CFG, needed to load tokenizer from Huggingface AutoTokenizer
         token: str, special token to add
@@ -137,9 +160,11 @@ def add_anchor_token(cfg: configuration.CFG, token: str) -> None:
 
 def chunking(cfg: configuration.CFG, sequences: Dict) -> List[str]:
     """ Chunking sentence to token using pretrained tokenizer
+
     Args:
         cfg: configuration.CFG, needed to load pretrained tokenizer
         sequences: list, sentence to chunking
+
     References:
         https://huggingface.co/docs/transformers/main/tasks/masked_language_modeling
     """
@@ -149,10 +174,12 @@ def chunking(cfg: configuration.CFG, sequences: Dict) -> List[str]:
 def group_texts(cfg: configuration.CFG, sequences: Dict) -> Dict:
     """ Dealing Problem: some of data instances are longer than the maximum input length for the model,
     This function is ONLY used to HF Dataset Object
+
     1) Concatenate all texts
     2) We drop the small remainder, we could add padding if the model supported it instead of this drop, you can
     3) customize this part to your needs
     4) Split by chunks of max_len
+
     """
     concatenated_sequences = {k: sum(sequences[k], []) for k in sequences.keys()}
     total_length = len(concatenated_sequences[list(sequences.keys())[0]])
@@ -165,15 +192,17 @@ def group_texts(cfg: configuration.CFG, sequences: Dict) -> Dict:
     return result
 
 
-def apply_preprocess(dataset: Dataset, function: Callable, batched: bool = True, num_proc: int = 4, remove_columns: any = None) -> Dataset:
+def apply_preprocess(dataset: Dataset, function: Callable, batched: bool = True, num_proc: int = 4, remove_columns: Any = None) -> Dataset:
     """ Apply preprocessing to text data, which is using huggingface dataset method "map()"
     for pretrained training (MLM, CLM)
+
     Args:
         dataset: Huggingface Datasets object, dataset from Huggingface Datasets
         function: Callable, function that you want to apply
         batched: bool, default True, if you want to apply function to batched data, set True
         num_proc: int, default 4, number of process for multiprocessing
         remove_columns: any, default None, if you want to remove some columns, set column name
+
     References:
         https://huggingface.co/docs/transformers/main/tasks/masked_language_modeling
     """
@@ -186,14 +215,13 @@ def apply_preprocess(dataset: Dataset, function: Callable, batched: bool = True,
     return mapped_dataset
 
 
-def tokenizing(cfg: configuration.CFG, text: str, padding: bool or str = 'max_length') -> any:
-    """
-    Preprocess text for LLM Input, for common batch system
+def tokenizing(cfg: configuration.CFG, text: str, padding: bool or str = 'max_length') -> Any:
+    """ Preprocess text for LLM Input, for common batch system
+
     Args:
         cfg: configuration.CFG, needed to load tokenizer from Huggingface AutoTokenizer
         text: text from dataframe or any other dataset, please pass str type
-        padding: padding options, default 'max_length'
-                 if you want use smart batching, init this param to False
+        padding: padding options, default 'max_length', if you want use smart batching, init this param to False
     """
     inputs = cfg.tokenizer.encode_plus(
         text,
@@ -208,16 +236,17 @@ def tokenizing(cfg: configuration.CFG, text: str, padding: bool or str = 'max_le
     return inputs
 
 
-def adjust_sequences(sequences: list, max_len: int):
-    """
-    Similar to dynamic padding concept
+def adjust_sequences(sequences: List, max_len: int):
+    """ Similar to dynamic padding concept
     Append slicing index from original, because original source code is implemented weired
     So it generates some problem for applying very longer sequence
     Add -1 value to slicing index, so we can get result what we want
+
     Args:
         sequences: list of each cell's token sequence in one unique notebook id, must pass tokenized sequence input_ids
         => sequences = [[1,2,3,4,5,6], [1,2,3,4,5,6], ... , [1,2,3,4,5]]
         max_len: max length of sequence into LLM Embedding Layer, default is 2048 for DeBERTa-V3-Large
+
     Reference:
          https://github.com/louis-she/ai4code/blob/master/ai4code/utils.py#L70
     """
@@ -234,14 +263,15 @@ def adjust_sequences(sequences: list, max_len: int):
     return sequences, length_of_seqs
 
 
-def subsequent_tokenizing(cfg: configuration.CFG, text: str) -> any:
-    """
-    Tokenize input sentence to longer sequence than common tokenizing
+def subsequent_tokenizing(cfg: configuration.CFG, text: str) -> Any:
+    """ Tokenize input sentence to longer sequence than common tokenizing
     Append padding strategy NOT Apply same max length, similar concept to dynamic padding
     Truncate longer sequence to match LLM max sequence
+
     Args:
         cfg: configuration.CFG, needed to load tokenizer from Huggingface AutoTokenizer
         text: text from dataframe or any other dataset, please pass str type
+
     Reference:
         https://www.kaggle.com/competitions/AI4Code/discussion/343714
         https://github.com/louis-she/ai4code/blob/master/tests/test_utils.py#L6
@@ -257,8 +287,8 @@ def subsequent_tokenizing(cfg: configuration.CFG, text: str) -> any:
 
 
 def find_index(x: np.ndarray, value: np.ndarray) -> int:
-    """
-    Method for find some tensor element's index
+    """ Method for find some tensor element's index
+
     Args:
         x: tensor object, which is contained whole tensor elements
         value: element that you want to find index
@@ -267,10 +297,10 @@ def find_index(x: np.ndarray, value: np.ndarray) -> int:
     return tensor_index
 
 
-def subsequent_decode(cfg: configuration.CFG, token_list: list) -> any:
-    """
-    Return decoded text from subsequent_tokenizing & adjust_sequences
+def subsequent_decode(cfg: configuration.CFG, token_list: List) -> Any:
+    """ Return decoded text from subsequent_tokenizing & adjust_sequences
     For making prompt text
+
     Args:
         cfg: configuration.CFG, needed to load tokenizer from Huggingface AutoTokenizer
         token_list: token list from subsequent_tokenizing & adjust_sequences
@@ -279,8 +309,9 @@ def subsequent_decode(cfg: configuration.CFG, token_list: list) -> any:
     return output
 
 
-def sequence_length(cfg: configuration.CFG, text_list: list) -> list:
-    """ Get sequence length of all text data for checking statistics value """
+def sequence_length(cfg: configuration.CFG, text_list: List) -> List:
+    """ Get sequence length of all text data for checking statistics value
+    """
     length_list = []
     for text in tqdm(text_list):
         tmp_text = tokenizing(cfg, text)['attention_mask']
@@ -289,27 +320,32 @@ def sequence_length(cfg: configuration.CFG, text_list: list) -> list:
 
 
 def spelling(text: str, spellchecker: SpellChecker) -> int:
-    """ return number of mis-spelling words in original text """
+    """ return number of mis-spelling words in original
+
+    Args:
+        text: str, text data
+        spellchecker: SpellChecker, spellchecker object from spellchecker library
+    """
     wordlist = text.split()
     amount_miss = len(list(spellchecker.unknown(wordlist)))
     return amount_miss
 
 
 def add_spelling_dictionary(tokens: List[str], spellchecker: SpellChecker, speller: Speller) -> None:
-    """dictionary update for py-spell checker and autocorrect"""
+    """ dictionary update for py-spell checker and autocorrect
+
+    Args:
+        tokens: list of tokens, which is contained prompt text
+        spellchecker: SpellChecker, spellchecker object from spellchecker library
+        speller: Speller, speller object from autocorrect library
+    """
     spellchecker.word_frequency.load_words(tokens)
     speller.nlp_data.update({token: 1000 for token in tokens})
 
 
-def spell_corrector(p_df: pd.DataFrame, s_df: pd.DataFrame, spellchecker: SpellChecker, speller: Speller) -> None:
-    """ correct mis-spell words in summaries text """
-    p_df['prompt_tokens'] = p_df['prompt_text'].apply(lambda x: word_tokenize(x))
-    p_df['prompt_tokens'].apply(lambda x: add_spelling_dictionary(x, spellchecker, speller))
-    s_df['fixed_text'] = s_df['text'].apply(lambda x: speller(x))
-
-
 def check_null(df: pd.DataFrame) -> pd.Series:
-    """ check if input dataframe has null type object...etc """
+    """ check if input dataframe has null type object...etc
+    """
     return df.isnull().sum()
 
 
@@ -388,9 +424,7 @@ def flatten_sublist(inputs: List[List], max_length: int = 512) -> List[List]:
 
 def preprocess4tokenizer(input_ids: List, token_type_ids: List, attention_mask: List):
     """ Preprocess function for handling exception in inputs data instance
-    which is some of input_ids, token_type_ids, attention_mask are not started with [CLS] token
-    or
-    are not ended with [SEP] token
+    which is some of input_ids, token_type_ids, attention_mask are not started with [CLS] token or are not ended with [SEP] token
     """
     for i, inputs in tqdm(enumerate(input_ids)):
         if inputs[0] != 1:

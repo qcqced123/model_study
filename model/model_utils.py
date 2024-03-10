@@ -1,17 +1,12 @@
-import logging
-import inspect
-import functools
 import torch.nn as nn
-from torch.utils.checkpoint import checkpoint
-from torch import Tensor
-from typing import Callable, List
-
-
-logger = logging.getLogger(__name__)
+from typing import List
 
 
 def freeze(module: nn.Module) -> None:
-    """ Freezes module's parameters.
+    """ Freezes module's parameters
+    Args:
+        module: target module to freeze
+
     Examples:
         freezing embeddings and first 2 layers of encoder
         1) freeze(model.embeddings
@@ -22,36 +17,26 @@ def freeze(module: nn.Module) -> None:
 
 
 def get_freeze_parameters(module: nn.Module) -> List[str]:
-    """ Returns names of freezed parameters of the given module.
+    """ Returns names of freeze parameters of the given module.
+
+    Args:
+        module: target module to get freeze parameters
+
     Examples:
-        freezed_parameters = get_freezed_parameters(model)
+        freeze_parameters = get_freeze_parameters(model)
     """
-    freezed_parameters = []
+    freeze_parameters = []
     for name, parameter in module.named_parameters():
         if not parameter.requires_grad:
-            freezed_parameters.append(name)
-    return freezed_parameters
-
-
-def init_weights(auto_cfg, module: nn.Module) -> None:
-    """ Initializes weights of the given module.
-    """
-    if isinstance(module, nn.Linear):
-        module.weight.data.normal_(mean=0.0, std=auto_cfg.initializer_range)
-        if module.bias is not None:
-            module.bias.data.zero_()
-    elif isinstance(module, nn.Embedding):
-        module.weight.data.normal_(mean=0.0, std=auto_cfg.initializer_range)
-        if module.padding_idx is not None:
-            module.weight.data[module.padding_idx].zero_()
-    elif isinstance(module, nn.LayerNorm):
-        module.bias.data.zero_()
-        module.weight.data.fill_(1.0)
+            freeze_parameters.append(name)
+    return freeze_parameters
 
 
 def reinit_topk(model: nn.Module, num_layers: int) -> None:
     """ Re-initialize the last-k transformer Encoder layers.
     Encoder Layer: Embedding, Attention Head, LayerNorm, Feed Forward
+    Initialization will follow the default initialization of the model, which is setting in config json file
+
     Args:
         model: The target transformer model.
         num_layers: The number of layers to be re-initialized.

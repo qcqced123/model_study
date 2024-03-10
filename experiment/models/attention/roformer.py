@@ -129,7 +129,7 @@ class MultiHeadAttention(nn.Module):
         dim_model: dimension of model's latent vector space, default 1024 from official paper
         num_attention_heads: number of heads in MHSA, default 16 from official paper for Transformer
         dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
-        kernel: kernel function for attention head, default 'elu' from official paper
+        kernel: kernel function for attention head, default 'elu' from official paper, softmax is also available
         attention_dropout_prob: dropout rate, default 0.1
 
     Math:
@@ -405,8 +405,7 @@ class Embedding(nn.Module):
         self.cfg = cfg
         self.batch_size = cfg.batch_size
         self.max_seq = cfg.max_seq
-        self.dim_model = self.cfg.dim_model
-        self.max_seq = cfg.max_seq
+        self.dim_model = cfg.dim_model
         self.word_embedding = nn.Embedding(len(cfg.tokenizer), cfg.dim_model)
         self.layer_norm1 = nn.LayerNorm(cfg.dim_model, eps=cfg.layer_norm_eps)  # for word embedding
         self.hidden_dropout = nn.Dropout(p=cfg.hidden_dropout_prob)
@@ -420,18 +419,31 @@ class Embedding(nn.Module):
     @torch.no_grad()
     def create_rotation_matrix(self, seq_len: int) -> Tensor:
         """ Create a batch of rotation matrices from the given thetas.
+        This function must be wrapped with torch.no_grad(), because it's not learnable parameters
+
+        1) Create m*theta matrix (seq_len, dim_model): thetas
+            - m: position index
+            - theta: positional encoding value from static function (10000**(-2 * (i_arr - 1) / self.dim_model))
+
+        2) Create R matrix (seq_len, dim_model, dim_model): R
+            - example:
+                [cos m*theta1, -sin m*theta1, 0, 0]
+                [sin m*theta1, cos m*theta1, 0, 0]
+                [0, 0, cos m*theta2, -sin m*theta2]
+                [0, 0, sin m*theta2, cos m*theta2]
+
+        Args:
+            seq_len: max sequence length in batch
 
         Returns:
             Tensor: A tensor of shape (batch_size, seq_len, d, d) containing the rotation matrices.
         """
         i_arr = torch.arange(1, int(self.dim_model / 2) + 1).repeat_interleave(2).to(self.cfg.device)  # for rotary position embedding
-        theta = 10000 ** (-2 * (i_arr - 1) / self.dim_model)  # for rotary position embedding
+        theta = 10000**(-2 * (i_arr - 1) / self.dim_model)  # for rotary position embedding
         scaler = torch.arange(1, seq_len + 1, device=self.cfg.device, dtype=torch.float).unsqueeze(1).repeat(1, self.dim_model).reshape(seq_len, self.dim_model)
         thetas = torch.mul(scaler, theta)
 
-        seq_len, _ = thetas.size()
         R = torch.eye(self.dim_model, device=thetas.device).repeat(seq_len, 1, 1)
-
         for i in range(0, self.dim_model, 2):
             cos_t = torch.cos(thetas[:, i]).unsqueeze(-1)
             sin_t = torch.sin(thetas[:, i]).unsqueeze(-1)
@@ -457,10 +469,9 @@ class Embedding(nn.Module):
 
 
 class Roformer(nn.Module, AbstractModel):
-    """
-    Main class for Roformer, having all of sub-blocks & modules such as Disentangled Self-attention, Encoder
+    """ Main class for Roformer, having all of sub-blocks & modules such as Disentangled Self-attention, Encoder
     Init Scale of Roformer Hyper-Parameters, Embedding Layer, Encoder Blocks
-    And then make 3-types of Embedding Layer, Word Embedding, Absolute Position Embedding, Relative Position Embedding
+    And then make 2-types of Embedding Layer, Word Embedding, Absolute Position Embedding
 
     This module has only Encoder Block, not Decoder Block
 

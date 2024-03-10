@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch import Tensor
+from typing import List
 
 
 # WeightedLayerPooling for CLS token embedding Ver
 class CLSWeightedLayerPooling(nn.Module):
-    """
-    For Weighted Layer Pooling Class, use CLS token embedding Ver
+    """ For Weighted Layer Pooling Class, use CLS token embedding Ver
+
     Args:
         auto_cfg: AutoConfig from model class member variable
         layer_start: how many layers do you want to use, default 9
@@ -18,9 +18,8 @@ class CLSWeightedLayerPooling(nn.Module):
         self.layer_start = layer_start
         self.num_hidden_layers = auto_cfg.num_hidden_layers
         self.layer_weights = layer_weights if layer_weights is not None else nn.Parameter(torch.tensor([1] * (self.num_hidden_layers + 1 - layer_start), dtype=torch.float))
-            # else nn.Parameter(torch.tensor([0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1, 1, 1.125, 1.25, 1.375, 1.5, 1.625, 1.75, 1.875], dtype=torch.float))
 
-    def forward(self, all_hidden_states, attention_mask) -> Tensor:
+    def forward(self, all_hidden_states: Tensor, attention_mask: Tensor = None) -> Tensor:
         all_layer_embedding = torch.stack(list(all_hidden_states), dim=0)
         all_layer_embedding = all_layer_embedding[self.layer_start:, :, :, :]
         weight_factor = self.layer_weights.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).expand(all_layer_embedding.size())
@@ -31,11 +30,11 @@ class CLSWeightedLayerPooling(nn.Module):
 
 # WeightedLayerPooling: Use Intermediate Layer's Embedding
 class MeanWeightedLayerPooling(nn.Module):
-    """
-    For Weighted Layer Pooling Class
+    """ For Weighted Layer Pooling Class
     In Original Paper, they use [CLS] token for classification task.
     But in common sense, Mean Pooling more good performance than CLS token Pooling
     So, we append last part of this Pooling Method, Mean Pooling Embedding instad of Using CLS Token
+
     Args:
         auto_cfg: AutoConfig from model class member variable
         layer_start: how many layers do you want to use, default 21 (last 4 layers)
@@ -50,7 +49,7 @@ class MeanWeightedLayerPooling(nn.Module):
                 torch.tensor([1] * (self.num_hidden_layers + 1 - layer_start), dtype=torch.float)
             )
 
-    def forward(self, all_hidden_states, attention_mask) -> Tensor:
+    def forward(self, all_hidden_states: Tensor, attention_mask: Tensor = None) -> Tensor:
         all_layer_embedding = torch.stack(list(all_hidden_states), dim=0)
         all_layer_embedding = all_layer_embedding[self.layer_start:, :, :, :]
         weight_factor = self.layer_weights.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).expand(all_layer_embedding.size())
@@ -58,7 +57,7 @@ class MeanWeightedLayerPooling(nn.Module):
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(weighted_average.size()).float()
         sum_embeddings = torch.sum(weighted_average * input_mask_expanded, 1)
         sum_mask = input_mask_expanded.sum(1)
-        sum_mask = torch.clamp(sum_mask, min=1e-9)  # if lower than thres, replace value to threshold (parameter min)
+        sum_mask = torch.clamp(sum_mask, min=1e-9)  # if lower than threshold, replace value to threshold (parameter min)
         weighted_mean_embeddings = sum_embeddings / sum_mask
         return weighted_mean_embeddings
 
@@ -66,6 +65,7 @@ class MeanWeightedLayerPooling(nn.Module):
 # Attention pooling
 class AttentionPooling(nn.Module):
     """ Module for Attention Pooling
+
     Reference:
         https://arxiv.org/abs/1703.03130
     """
@@ -78,7 +78,7 @@ class AttentionPooling(nn.Module):
            nn.Linear(auto_cfg.hidden_size, 1),
         )
 
-    def forward(self, last_hidden_state, attention_mask: list[Tensor]) -> Tensor:
+    def forward(self, last_hidden_state: Tensor, attention_mask: List[Tensor]) -> Tensor:
         w = self.attention(last_hidden_state).float()
         w[attention_mask == 0] = float('-inf')
         w = torch.softmax(w, 1)
@@ -88,8 +88,7 @@ class AttentionPooling(nn.Module):
 
 # Mean Pooling
 class GEMPooling(nn.Module):
-    """
-    Generalized Mean Pooling for Natural Language Processing
+    """ Generalized Mean Pooling for Natural Language Processing
     This class version of GEMPooling for NLP, Transfer from Computer Vision Task Code
 
     Mean Pooling <= GEMPooling <= Max Pooling
@@ -98,9 +97,11 @@ class GEMPooling(nn.Module):
 
     In original paper, they use p=3, but in this class, we use p=4 because torch doesn't support pow calculation
     for negative value tensor, only for non-negative value in odd number exponent
+
     Notes:
          if we get NaN in Backward Pass, we will add some filter function for handling problem
          (Update: 2023-09-04) we get NaN in Backward Pass, So add filter function below
+
     References:
         https://paperswithcode.com/method/generalized-mean-pooling
     """
@@ -108,7 +109,7 @@ class GEMPooling(nn.Module):
         super(GEMPooling, self).__init__()
 
     @staticmethod
-    def forward(last_hidden_state, attention_mask, p: int = 4) -> Tensor:
+    def forward(last_hidden_state: Tensor, attention_mask, p: int = 4) -> Tensor:
         """
         1) Expand Attention Mask from [batch_size, max_len] to [batch_size, max_len, hidden_size]
         2) Sum Embeddings along max_len axis so now we have [batch_size, hidden_size]
@@ -134,7 +135,7 @@ class MeanPooling(nn.Module):
         super(MeanPooling, self).__init__()
 
     @staticmethod
-    def forward(last_hidden_state, attention_mask) -> Tensor:
+    def forward(last_hidden_state: Tensor, attention_mask: Tensor) -> Tensor:
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
         sum_embeddings = torch.sum(last_hidden_state * input_mask_expanded, 1)
         sum_mask = input_mask_expanded.sum(1)
@@ -178,8 +179,10 @@ class MinPooling(nn.Module):
 # Convolution Pooling
 class ConvPooling(nn.Module):
     """ for filtering unwanted feature such as Toxicity Text, Negative Comment...etc
+
     Var:
         kernel_size: similar as window size
+
     References:
         https://www.kaggle.com/code/rhtsingh/utilizing-transformer-representations-efficiently
     """
@@ -219,7 +222,7 @@ class LSTMPooling(nn.Module):
         )
         self.dropout = nn.Dropout(0.1)
 
-    def forward(self, all_hidden_states: list[Tensor]) -> Tensor:
+    def forward(self, all_hidden_states: List[Tensor]) -> Tensor:
         hidden_states = torch.stack([all_hidden_states[layer_i][:, 0].squeeze()\
                                     for layer_i in range(1, self.num_hidden_layers)], dim=1)
         hidden_states = hidden_states.view(-1, self.num_hidden_layers, self.hidden_size)

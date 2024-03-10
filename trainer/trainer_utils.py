@@ -56,6 +56,7 @@ def get_optimizer_grouped_parameters(
 
 def collate(inputs: Dict) -> Dict:
     """ Descending sort inputs by length of sequence
+
     Args:
         inputs: inputs from torch.utils.data.DataLoader, which is from transformers.AutoTokenizer
     """
@@ -98,6 +99,7 @@ def get_scheduler(
     len_train: int
 ) -> torch.optim.lr_scheduler:
     """ Select Scheduler Function (cosine_annealing, cosine, linear)
+
     Args:
         cfg: for getting scheduler options from configuration.py
         optimizer: torch.optim.Optimizer
@@ -143,6 +145,7 @@ def get_swa_scheduler(
     """ SWA Scheduler
     Init scheduler for Stochastic Weight Averaging
     All Args are from torch.optim.swa_utils.SWALR except cfg
+
     Args:
         cfg: for getting SWA scheduler options from configuration.py
         optimizer: torch.optim.swa_utils.SWALR
@@ -170,9 +173,11 @@ class SmartBatchingSampler(Sampler):
     SmartBatching Sampler with naive pytorch torch.utils.data.Sampler implementation, which is iterable-style dataset
     not map-style dataset module.
     This class chunk whole of batch instances by length for making mini-batch by its length
+
     Args:
         data_instance: whole of batch instances, not mini-batch-level
         batch_size: amount of mini-batch from configuration.py or cfg.json
+
     Reference:
         https://www.kaggle.com/code/rhtsingh/speeding-up-transformer-w-optimization-strategies
     """
@@ -206,10 +211,12 @@ class SmartBatchingCollate:
     """
     SmartBatchingCollate will add padding upto highest sequence length, make attention masks,
     targets for each sample in batch.
+
     Args:
         labels: target value of training dataset
         max_length: value from configuration.py or cfg.json which is initialized by user
         pad_token_id: int value from pretrained tokenizer, AutoTokenizer.tokenizer.pad_token_ids
+
     Reference:
         https://www.kaggle.com/code/rhtsingh/speeding-up-transformer-w-optimization-strategies
     """
@@ -261,11 +268,11 @@ class SmartBatchingCollate:
 
 
 class MiniBatchCollate(object):
-    """
-    Collate class for torch.utils.data.DataLoader
+    """ Collate class for torch.utils.data.DataLoader
     This class object to use variable data such as NLP text sequence
     If you use static padding with AutoTokenizer, you don't need this class object
     But if you use dynamic padding with AutoTokenizer, you must use this class object & call
+
     Args:
         batch: data instance from torch.utils.data.DataSet
     """
@@ -288,8 +295,8 @@ class MiniBatchCollate(object):
 
 
 class AWP:
-    """
-    Adversarial Weight Perturbation for OneToOne Trainer
+    """ Adversarial Weight Perturbation for OneToOne Trainer
+
     Args:
         model: model instance from customizing model
         criterion: losses function for training, you must pass instance which is inheritance of torch.nn.Module
@@ -298,6 +305,7 @@ class AWP:
         adv_param: parameter name for adversarial weight perturbation, default is 'weight'
         adv_lr: learning rate for adversarial weight perturbation, default is 1.0
         adv_eps: epsilon for adversarial weight perturbation, default is 0.01
+
     References:
         https://www.kaggle.com/code/skraiii/pppm-tokenclassificationmodel-train-8th-place
     """
@@ -368,6 +376,7 @@ class AWP:
 
 class AverageMeter(object):
     """ Computes and stores the average and current value
+
     Reference:
         https://github.com/pytorch/examples/blob/main/imagenet/main.py
     """
@@ -389,6 +398,7 @@ class AverageMeter(object):
 
 class EarlyStopping(object):
     """ Monitor a metrics and stop training when it stops improving.
+
     Args:
         mode: 'min' for losses base val_score for losses, 'max' for metrics base val_score
         patience: number of checks with no improvement, default = 3

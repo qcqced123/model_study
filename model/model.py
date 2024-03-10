@@ -17,8 +17,11 @@ from experiment.models.attention.distilbert import DistilBERT
 
 class MaskedLanguageModel(nn.Module, AbstractTask):
     """ Custom Model for MLM Task, which is used for pre-training Auto-Encoding Model (AE)
+    You can use backbone model as BERT, DeBERTa, Linear Transformer, Roformer ...
+
     Args:
         cfg: configuration.CFG
+
     References:
         https://huggingface.co/docs/transformers/main/tasks/masked_language_modeling
         https://github.com/huggingface/transformers/blob/main/src/transformers/data/data_collator.py#L748
@@ -94,6 +97,7 @@ class CasualLanguageModel(nn.Module, AbstractTask):
 class SpanBoundaryObjective(nn.Module, AbstractTask):
     """ Custom Model for SBO Task, which is used for pre-training Auto-Encoding Model such as SpanBERT
     Original SpanBERT has two tasks, MLM & SBO, so we need to create instance of MLMHead & SBOHead
+    You can use backbone model as any encoder attention model, alternative to using MLM
 
     Notes:
         L_span = L_MLM + L_SBO
@@ -157,18 +161,23 @@ class SpanBoundaryObjective(nn.Module, AbstractTask):
 
 class ReplacedTokenDetection(nn.Module, AbstractTask):
     """ Custom Model for RTD Task, which is used for pre-training Auto-Encoding Model such as ELECTRA
+    You can use backbone model as any encoder attention model, alternative to using MLM
 
     We add 3 task options:
+
         1) select masking method:
             - pure MLM (Sub-Word Masking)
             - WWM (Whole Word Masking)
             - SBO (Span Boundary Objective)
+
         2) select backbone model: BERT, DeBERTa, ...
+
         3) select sharing embedding method:
             - ES (Embedding Sharing)
             - GDES (Generator Discriminator Embedding Sharing)
 
     you can select any other 3 options in config json file
+
     Args:
         cfg: configuration.CFG
     """

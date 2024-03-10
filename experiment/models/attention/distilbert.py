@@ -10,10 +10,13 @@ from configuration import CFG
 class DistilBERT(nn.Module, AbstractModel):
     """ Main class for DistilBERT Style Model, Teacher-Student Framework
     for Knowledge Distillation aim to lighter Large Scale LLM model. This model have 3 objective functions:
+
         1) distillation loss, calculated by soft targets & soft predictions
             (nn.KLDIVLoss(reduction='batchmean'))
+
         2) student loss, calculated by hard targets & hard predictions
             (nn.CrossEntropyLoss(reduction='mean')), same as pure MLM Loss
+
         3) cosine similarity loss, calculated by student & teacher logit similarity
             (nn.CosineEmbeddingLoss(reduction='mean')), similar as contrastive loss
 

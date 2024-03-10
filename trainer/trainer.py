@@ -26,6 +26,7 @@ from trainer.trainer_utils import AverageMeter, AWP, get_dataloader, get_swa_sch
 class PreTrainTuner:
     """ Trainer class for Pre-Train Pipeline, such as MLM
     So, if you want set options, go to cfg.json file or configuration.py
+
     Args:
         cfg: configuration module, configuration.py
         generator: torch.Generator, for init pytorch random seed
@@ -153,15 +154,17 @@ class PreTrainTuner:
             swa_start: int = None,
             swa_scheduler=None
     ) -> Tuple[Any, Union[float, ndarray, ndarray]]:
-        """ function for train loop with validation for each batch*N Steps """
+        """ function for train loop with validation for each batch*N Steps
+        """
         scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
         losses = AverageMeter()
+
         model.train()
         for step, batch in enumerate(tqdm(loader_train)):
             optimizer.zero_grad(set_to_none=True)
             inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
-            labels = batch['labels'].to(self.cfg.device, non_blocking=True)  # Two target values to GPU
-            padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)  # padding mask to GPU
+            labels = batch['labels'].to(self.cfg.device, non_blocking=True)
+            padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)
             batch_size = inputs.size(0)
 
             with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
@@ -174,18 +177,20 @@ class PreTrainTuner:
             scaler.scale(loss).backward()
             losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
 
-            if self.cfg.awp and epoch >= self.cfg.nth_awp_start_epoch:
+            if self.cfg.awp and epoch >= self.cfg.nth_awp_start_epoch:  # adv training option
                 adv_loss = awp.attack_backward(inputs, padding_mask, labels)
                 scaler.scale(adv_loss).backward()
                 awp._restore()
 
+            # update parameters
             if self.cfg.clipping_grad and (step + 1) % self.cfg.n_gradient_accumulation_steps == 0 or self.cfg.n_gradient_accumulation_steps == 1:
                 scaler.unscale_(optimizer)
                 grad_norm = torch.nn.utils.clip_grad_norm(
                     model.parameters(),
                     self.cfg.max_grad_norm * self.cfg.n_gradient_accumulation_steps
                 )
-                # Stochastic Weight Averaging
+
+                # Stochastic Weight Averaging option
                 if self.cfg.swa and epoch >= int(swa_start):
                     swa_model.update_parameters(model)
                     swa_scheduler.step()
@@ -220,9 +225,9 @@ class PreTrainTuner:
     def train_fn(self, loader_train, model, criterion, optimizer, scheduler, epoch, awp=None, swa_model=None, swa_start=None, swa_scheduler=None) -> Tuple[Tensor, Tensor, Tensor]:
         """ function for train loop
         """
-        # torch.autograd.set_detect_anomaly(True)
         scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
         losses = AverageMeter()
+
         model.train()
         for step, batch in enumerate(tqdm(loader_train)):
             optimizer.zero_grad(set_to_none=True)
@@ -273,12 +278,13 @@ class PreTrainTuner:
         """
         valid_losses = AverageMeter()
         valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
+
         model.eval()
         with torch.no_grad():
             for step, batch in enumerate(tqdm(loader_valid)):
                 inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
-                labels = batch['labels'].to(self.cfg.device, non_blocking=True)  # Two target values to GPU
-                padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)  # padding mask to GPU
+                labels = batch['labels'].to(self.cfg.device, non_blocking=True)
+                padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)
                 batch_size = inputs.size(0)
 
                 logit = model(inputs, padding_mask)
@@ -297,7 +303,6 @@ class PreTrainTuner:
                     wandb.log({
                         f'<Val Step> Valid {self.metric_list[i]}': valid_metrics[self.metric_list[i]].avg
                     })
-
         return valid_losses.avg
 
     def swa_fn(
@@ -307,10 +312,12 @@ class PreTrainTuner:
             val_criterion,
             val_metric_list: List[Callable]
     ) -> Tuple[np.ndarray, List]:
-        """ Stochastic Weight Averaging, it consumes more GPU VRAM & training times """
-        swa_model.eval()
+        """ Stochastic Weight Averaging, it consumes more GPU VRAM & training times
+        """
         valid_losses = AverageMeter()
         valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
+
+        swa_model.eval()
         with torch.no_grad():
             for step, batch in enumerate(tqdm(loader_valid)):
                 inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
@@ -357,12 +364,13 @@ class CLMTuner(PreTrainTuner):
         """ function for train loop with validation for each batch*N Steps """
         scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
         losses = AverageMeter()
+
         model.train()
         for step, batch in enumerate(tqdm(loader_train)):
             optimizer.zero_grad(set_to_none=True)
             inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
-            labels = batch['labels'].to(self.cfg.device, non_blocking=True)  # Two target values to GPU
-            attention_mask = batch['attention_mask'].to(self.cfg.device, non_blocking=True)  # attention mask to GPU
+            labels = batch['labels'].to(self.cfg.device, non_blocking=True)
+            attention_mask = batch['attention_mask'].to(self.cfg.device, non_blocking=True)
             batch_size = inputs.size(0)
 
             with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
@@ -429,12 +437,13 @@ class CLMTuner(PreTrainTuner):
         """
         valid_losses = AverageMeter()
         valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
+
         model.eval()
         with torch.no_grad():
             for step, batch in enumerate(tqdm(loader_valid)):
                 inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
-                labels = batch['labels'].to(self.cfg.device, non_blocking=True)  # Two target values to GPU
-                attention_mask = batch['attention_mask'].to(self.cfg.device, non_blocking=True)  # padding mask to GPU
+                labels = batch['labels'].to(self.cfg.device, non_blocking=True)
+                attention_mask = batch['attention_mask'].to(self.cfg.device, non_blocking=True)
                 batch_size = inputs.size(0)
 
                 logit = model(inputs, attention_mask)
@@ -452,7 +461,6 @@ class CLMTuner(PreTrainTuner):
                     wandb.log({
                         f'<Val Step> Valid {self.metric_list[i]}': valid_metrics[self.metric_list[i]].avg
                     })
-
         return valid_losses.avg
 
 
@@ -460,6 +468,17 @@ class SBOTuner(PreTrainTuner):
     """ Trainer class for Span Boundary Objective Task
     you can select any other implemented Auto-Encoder Model to backbone of this task,
     please check now available models in README.md
+
+    SpanBERT has two loss, one is MLM loss, the other is SBO loss
+
+    1) Masked Language Modeling (MLM, Implemented):
+        same as pure mlm task
+
+    2) Span Boundary Objective (SBO, Implemented):
+        SBO loss is calculated by sum of cross entropy loss between SBO logit and labels
+
+    Math:
+        L_loss = L_mlm + L_sbo
     """
     def __init__(self, cfg: CFG, generator: torch.Generator) -> None:
         super(SBOTuner, self).__init__(cfg, generator)
@@ -487,13 +506,14 @@ class SBOTuner(PreTrainTuner):
         """
         scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
         losses, mlm_losses, sbo_losses = AverageMeter(), AverageMeter(), AverageMeter()
+
         model.train()
         for step, batch in enumerate(tqdm(loader_train)):
             optimizer.zero_grad(set_to_none=True)
             inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
-            labels = batch['labels'].to(self.cfg.device, non_blocking=True)  # Two target values to GPU
-            padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)  # padding mask to GPU
-            mask_labels = batch['mask_labels'].to(self.cfg.device, non_blocking=True)  # mask labels to GPU
+            labels = batch['labels'].to(self.cfg.device, non_blocking=True)
+            padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)
+            mask_labels = batch['mask_labels'].to(self.cfg.device, non_blocking=True)
 
             batch_size = inputs.size(0)
             with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
@@ -576,13 +596,14 @@ class SBOTuner(PreTrainTuner):
         valid_losses, valid_mlm_losses, valid_sbo_losses = AverageMeter(), AverageMeter(), AverageMeter()
         mlm_valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
         sbo_valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
+
         model.eval()
         with torch.no_grad():
             for step, batch in enumerate(tqdm(loader_valid)):
                 inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
-                labels = batch['labels'].to(self.cfg.device, non_blocking=True)  # Two target values to GPU
-                padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)  # padding mask to GPU
-                mask_labels = batch['mask_labels'].to(self.cfg.device)  # mask labels to GPU
+                labels = batch['labels'].to(self.cfg.device, non_blocking=True)
+                padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)
+                mask_labels = batch['mask_labels'].to(self.cfg.device, non_blocking=True)
                 batch_size = inputs.size(0)
 
                 mlm_logit, sbo_logit = model(
@@ -622,7 +643,6 @@ class SBOTuner(PreTrainTuner):
                         f'<Val Step> MLM Valid {self.metric_list[i]}': mlm_valid_metrics[self.metric_list[i]].avg,
                         f'<Val Step> SBO Valid {self.metric_list[i]}': sbo_valid_metrics[self.metric_list[i]].avg,
                     })
-
         return valid_losses.avg, valid_mlm_losses.avg, valid_sbo_losses.avg
 
 
@@ -736,6 +756,7 @@ class RTDTuner(PreTrainTuner):
         """
         scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
         losses, g_losses, d_losses = AverageMeter(), AverageMeter(), AverageMeter()
+
         model.train()
         for step, batch in enumerate(tqdm(loader_train)):
             optimizer.zero_grad(set_to_none=True)
@@ -768,7 +789,6 @@ class RTDTuner(PreTrainTuner):
                 loss = loss / self.cfg.n_gradient_accumulation_steps
 
             scaler.scale(loss).backward()
-
             losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
             g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
             d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
@@ -804,6 +824,7 @@ class RTDTuner(PreTrainTuner):
                 '<Per Step> Gradient Norm': grad_norm,
                 '<Per Step> lr': lr,
             })
+
             """
             1) validate for each size of batch*N Steps
             2) save each part of model's checkpoint when BEST validation score is updated
@@ -862,6 +883,7 @@ class RTDTuner(PreTrainTuner):
         """
         scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
         g_losses, d_losses = AverageMeter(), AverageMeter()
+
         model.train()
         for step, batch in enumerate(tqdm(loader_train)):
             optimizer.zero_grad(set_to_none=True)
@@ -895,7 +917,6 @@ class RTDTuner(PreTrainTuner):
 
             losses = g_loss + d_loss
             scaler.scale(losses).backward()
-
             g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
             d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
 
@@ -963,6 +984,7 @@ class RTDTuner(PreTrainTuner):
         valid_g_losses, valid_d_losses = AverageMeter(), AverageMeter()
         g_valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
         d_valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
+
         model.eval()
         with torch.no_grad():
             for step, batch in enumerate(tqdm(loader_valid)):
@@ -1114,16 +1136,21 @@ class DistillKnowledgeTuner(PreTrainTuner):
     ) -> Tuple[Any, Union[float, Any]]:
         """ Function for train loop with validation for each batch*N Steps
         DistillBERT has three loss:
+
             1) distillation loss, calculated by soft targets & soft predictions
                 (nn.KLDIVLoss(reduction='batchmean'))
+
             2) student loss, calculated by hard targets & hard predictions
                 (nn.CrossEntropyLoss(reduction='mean')), same as pure MLM Loss
+
             3) cosine similarity loss, calculated by student & teacher logit similarity
                 (nn.CosineEmbeddingLoss(reduction='mean')), similar as contrastive loss
+
         Those 3 losses are summed jointly and then backward to student model
         """
         scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
         d_losses, s_losses, c_losses = AverageMeter(), AverageMeter(), AverageMeter()
+
         model.train()
         for step, batch in enumerate(tqdm(loader_train)):
             optimizer.zero_grad(set_to_none=True)
@@ -1146,16 +1173,15 @@ class DistillKnowledgeTuner(PreTrainTuner):
                     padding_mask=padding_mask,
                     mask=mask
                 )
-                d_loss = criterion["KLDivLoss"](soft_pred.log(), soft_target) * self.cfg.alpha_distillation  # nn.KLDIVLoss
-                s_loss = criterion["CrossEntropyLoss"](s_logit.view(-1, self.cfg.vocab_size), labels.view(-1)) * self.cfg.alpha_student  # nn.CrossEntropyLoss
-                c_loss = criterion["CosineEmbeddingLoss"](s_hidden_state, t_hidden_state, c_labels) * self.cfg.alpha_cosine  # nn.CosineEmbeddingLoss
-                loss = d_loss + s_loss + c_loss  # linear combination loss
+                d_loss = criterion["KLDivLoss"](soft_pred.log(), soft_target)  # nn.KLDIVLoss
+                s_loss = criterion["CrossEntropyLoss"](s_logit.view(-1, self.cfg.vocab_size), labels.view(-1))  # nn.CrossEntropyLoss
+                c_loss = criterion["CosineEmbeddingLoss"](s_hidden_state, t_hidden_state, c_labels)  # nn.CosineEmbeddingLoss
+                loss = d_loss*self.cfg.alpha_distillation + s_loss*self.cfg.alpha_student + c_loss*self.cfg.alpha_cosine  # linear combination loss
 
             if self.cfg.n_gradient_accumulation_steps > 1:
                 loss = loss / self.cfg.n_gradient_accumulation_steps
 
             scaler.scale(loss).backward()
-
             d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
             s_losses.update(s_loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
             c_losses.update(c_loss.detach().cpu().numpy(), batch_size)
@@ -1212,7 +1238,6 @@ class DistillKnowledgeTuner(PreTrainTuner):
                         f'{self.cfg.checkpoint_dir}DistilBERT_Student_{self.cfg.mlm_masking}_{self.cfg.max_len}_{self.cfg.module_name}_state_dict.pth'
                     )
                     val_score_max = valid_loss
-
         return d_losses.avg * self.cfg.n_gradient_accumulation_steps, val_score_max
 
     def valid_fn(
@@ -1226,6 +1251,7 @@ class DistillKnowledgeTuner(PreTrainTuner):
         """
         valid_d_losses, valid_s_losses, valid_c_losses = AverageMeter(), AverageMeter(), AverageMeter()
         valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}
+
         model.eval()
         with torch.no_grad():
             for step, batch in enumerate(tqdm(loader_valid)):
@@ -1281,7 +1307,6 @@ class DistillKnowledgeTuner(PreTrainTuner):
                     wandb.log({
                         f'<Val Step> Student Valid {self.metric_list[i]}': valid_metrics[self.metric_list[i]].avg,
                     })
-
         return valid_d_losses.avg, valid_s_losses.avg, valid_c_losses.avg
 
 

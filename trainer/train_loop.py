@@ -15,7 +15,14 @@ g.manual_seed(CFG.seed)
 
 
 def train_loop(cfg: CFG, train_type: str, model_config: str) -> None:
-    """ Base Trainer Loop Function """
+    """ Base Trainer Loop Function
+
+    1) Initialize Trainer Object
+    2) Make Early Stopping Object
+    3) Initialize Metric Checker
+    4) Initialize Train, Validation Input Object
+    5) Check if this train loop need to finish, by Early Stopping Object
+    """
     sharing_method = cfg.share_embed_method if train_type == 'pretrain' and (model_config in ['electra', 'deberta_v3']) else ''
     wandb.init(
         project=cfg.name,
@@ -26,7 +33,7 @@ def train_loop(cfg: CFG, train_type: str, model_config: str) -> None:
         entity="qcqced"
     )
     early_stopping = EarlyStopping(mode=cfg.stop_mode, patience=10)
-    early_stopping.detecting_anomaly()
+    early_stopping.detecting_anomaly()  # call detecting anomaly in pytorch
 
     metric_checker = []
     for _ in range(3):

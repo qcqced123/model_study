@@ -7,6 +7,7 @@ from typing import Dict, List, Tuple
 
 class MLMDataset(Dataset):
     """ Custom Dataset for Masked Language Modeling
+
     Args:
         inputs: inputs from tokenizing by tokenizer, which is a dictionary of input_ids, attention_mask, token_type_ids
     """

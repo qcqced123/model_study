@@ -6,6 +6,7 @@ from configuration import CFG
 class AbstractTask:
     """ Abstract model class for all tasks in this project
     Each task should inherit this class for using common functionalities
+
     Functions:
         1) Init Gradient Checkpointing Flag
         2) Weight Initialization
@@ -19,6 +20,7 @@ class AbstractTask:
     def _init_weights(self, module: nn.Module) -> None:
         """ Over-ride initializes weights of the given module function for torch models
         you must implement this function in your task class
+
         Args:
             module (:obj:`torch.nn.Module`):
                 The module to initialize weights for
@@ -51,11 +53,14 @@ class AbstractTask:
     def select_model(self, num_layers: int) -> nn.Module:
         """ Selects architecture for each task,
         you can easily select your model for experiment from json config files
+
         1) select .py file from input config settings
         2) select class object from input config settings
+
         Args:
             num_layers:
                 The number of layers for each task
+
         Returns:
             model (:obj:`nn.Module`):
                 The model to use for each task
