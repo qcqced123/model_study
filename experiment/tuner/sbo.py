@@ -266,7 +266,7 @@ class SBOHead(nn.Module):
             for j, span in enumerate(batch):  # span level
                 start, end = span["start"], span["end"]
                 length = end - start + 1
-                idx = torch.arange(length, device="cuda")   # .to(self.cfg.device)
+                idx = torch.arange(length, device=self.cfg.device)   # .to(self.cfg.device)
                 context_s, context_e = hidden_states[i, start - 1, :], hidden_states[i, end + 1, :]
                 span_pos_emb = self.span_pos_emb(idx).squeeze(0)
                 if length > 1:
