@@ -3,7 +3,7 @@
         "train": true,
         "test": false,
         "checkpoint_dir": "./saved/",
-        "teacher_state_dict": "WholeWordMasking_512_BERT_state_dict.pth",
+        "teacher_state_dict": "(WWM)_512_BERT_state_dict.pth",
         "student_state_dict": "",
         "name": "DistillationKnowledge",
         "trainer": "DistillKnowledgeTuner",
@@ -32,7 +32,7 @@
 
     "model_size": {
         "teacher_num_layers": 6,
-        "student_num_layers": 3,
+        "student_num_layers": 4,
         "max_seq": 512,
         "num_emd": 2,
         "num_attention_heads": 12,
@@ -52,8 +52,8 @@
         "language": "20231101.en",
         "split_ratio": 0.2,
         "epochs": 20,
-        "batch_size": 11,
-        "val_batch_size": 32,
+        "batch_size": 8,
+        "val_batch_size": 24,
         "val_check": 999999
     },
 
@@ -68,7 +68,7 @@
     },
 
     "scheduler_options": {
-        "scheduler": "constant_with_warmup",
+        "scheduler": "cosine_annealing",
         "batch_scheduler": true,
         "num_cycles": 2,
         "warmup_ratio": 0.0025
