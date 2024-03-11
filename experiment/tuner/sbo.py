@@ -221,65 +221,96 @@ class SBOHead(nn.Module):
         self.bias = nn.Parameter(torch.zeros(cfg.vocab_size))  # for matching vocab size
         self.classifier.bias = self.bias
 
+    # @staticmethod
+    # def find_consecutive_groups(mask_labels: Tensor, target_value: int = 1) -> List[List[Dict]]:
+    #     """ Get the start and end positions of consecutive groups in tensor for the target value
+    #     This method is used for SBO Objective Function, this version is not best performance to make span groups
+    #     ASAP, we will convert current logic into using torch.searchsorted(Tensor, value, right=False)
+    #
+    #     Example:
+    #         test = torch.tensor([1,2, 128000, 128000, 128000, 128000, 128000, 128000, 128000, 5, 6, 7])
+    #         torch.searchsorted(test, 128000), torch.searchsorted(test, 128000, right=True)
+    #         (tensor(2), tensor(12))
+    #
+    #     Args:
+    #         mask_labels: masking tensor for span
+    #         target_value: target value for finding consecutive groups
+    #     """
+    #     all_consecutive_groups = []
+    #     for mask_label in mask_labels:
+    #         consecutive_groups = []
+    #         current_group = None
+    #         for i, value in enumerate(mask_label):
+    #             if value == target_value:
+    #                 if current_group is None:
+    #                     current_group = {"start": i, "end": i}
+    #                 else:
+    #                     current_group["end"] = i
+    #             else:
+    #                 if current_group is not None:
+    #                     consecutive_groups.append(current_group)
+    #                     current_group = None
+    #         if current_group is not None:
+    #             consecutive_groups.append(current_group)
+    #         all_consecutive_groups.append(consecutive_groups)
+    #     return all_consecutive_groups
+    #
+    # def cal_span_emb(self, h: Tensor, hidden_states: Tensor, consecutive_groups: List[List[Dict]]) -> Tensor:
+    #     """ Calculate span embedding for each span in one batch sequence
+    #     Args:
+    #         h: hidden states, already passed through projection layer (dim*3)
+    #         hidden_states: hidden states from encoder
+    #         consecutive_groups: consecutive groups for each batch sequence
+    #     """
+    #     for i, batch in enumerate(consecutive_groups):  # batch level
+    #         for j, span in enumerate(batch):  # span level
+    #             start, end = span["start"], span["end"]
+    #             length = end - start + 1
+    #             idx = torch.arange(length, device=self.cfg.device)   # .to(self.cfg.device)
+    #             context_s, context_e = hidden_states[i, start - 1, :], hidden_states[i, end + 1, :]
+    #             span_pos_emb = self.span_pos_emb(idx).squeeze(0)
+    #             if length > 1:
+    #                 for k, p_h in enumerate(span_pos_emb):  # length of span_pos_emb == length of span of this iterations
+    #                     h[i, start+k, :] = torch.cat([context_s, p_h, context_e], dim=0)
+    #             else:
+    #                 h[i, start, :] = torch.cat([context_s, span_pos_emb, context_e], dim=0)
+    #     return h
+    #
+    # def forward(self, hidden_states: Tensor, mask_labels: Tensor) -> Tensor:
+    #     consecutive_groups = self.find_consecutive_groups(mask_labels)  # [batch, num_consecutive_groups]
+    #     h = self.projector(hidden_states)  # [batch, seq, dim_model*3]
+    #     h_t = self.cal_span_emb(h, hidden_states, consecutive_groups)
+    #     z = self.head(h_t)
+    #     logit = self.classifier(z)
+    #     return logit
+
     @staticmethod
-    def find_consecutive_groups(mask_labels: Tensor, target_value: int = 1) -> List[List[Dict]]:
-        """ Get the start and end positions of consecutive groups in tensor for the target value
-        This method is used for SBO Objective Function, this version is not best performance to make span groups
-        ASAP, we will convert current logic into using torch.searchsorted(Tensor, value, right=False)
+    def find_consecutive_groups(mask_labels: torch.Tensor, target_value: int = 1) -> torch.Tensor:
+        # Using tensor operations to find starts and ends of consecutive groups
+        diff = torch.diff(mask_labels, prepend=torch.tensor([[float('inf')]] * mask_labels.size(0), device=mask_labels.device), append=torch.tensor([[float('inf')]] * mask_labels.size(0), device=mask_labels.device))
+        starts = torch.where(diff == target_value - float('inf'))[1]
+        ends = torch.where(diff == float('inf') - target_value)[1]
+        return starts, ends
 
-        Example:
-            test = torch.tensor([1,2, 128000, 128000, 128000, 128000, 128000, 128000, 128000, 5, 6, 7])
-            torch.searchsorted(test, 128000), torch.searchsorted(test, 128000, right=True)
-            (tensor(2), tensor(12))
+    def cal_span_emb(self, h: torch.Tensor, hidden_states: torch.Tensor, starts: torch.Tensor, ends: torch.Tensor) -> torch.Tensor:
+        # Vectorized span embedding calculation
+        batch_size, seq_len, dim = hidden_states.size()
+        span_lengths = ends - starts + 1
+        max_span_length = span_lengths.max()
+        span_mask = torch.arange(max_span_length, device=hidden_states.device) < span_lengths.unsqueeze(-1)
 
-        Args:
-            mask_labels: masking tensor for span
-            target_value: target value for finding consecutive groups
-        """
-        all_consecutive_groups = []
-        for mask_label in mask_labels:
-            consecutive_groups = []
-            current_group = None
-            for i, value in enumerate(mask_label):
-                if value == target_value:
-                    if current_group is None:
-                        current_group = {"start": i, "end": i}
-                    else:
-                        current_group["end"] = i
-                else:
-                    if current_group is not None:
-                        consecutive_groups.append(current_group)
-                        current_group = None
-            if current_group is not None:
-                consecutive_groups.append(current_group)
-            all_consecutive_groups.append(consecutive_groups)
-        return all_consecutive_groups
+        context_s = hidden_states[torch.arange(batch_size).unsqueeze(-1), starts - 1]
+        context_e = hidden_states[torch.arange(batch_size).unsqueeze(-1), ends + 1]
+        span_pos_emb = self.span_pos_emb(span_mask.long())
 
-    def cal_span_emb(self, h: Tensor, hidden_states: Tensor, consecutive_groups: List[List[Dict]]) -> Tensor:
-        """ Calculate span embedding for each span in one batch sequence
-        Args:
-            h: hidden states, already passed through projection layer (dim*3)
-            hidden_states: hidden states from encoder
-            consecutive_groups: consecutive groups for each batch sequence
-        """
-        for i, batch in enumerate(consecutive_groups):  # batch level
-            for j, span in enumerate(batch):  # span level
-                start, end = span["start"], span["end"]
-                length = end - start + 1
-                idx = torch.arange(length, device=self.cfg.device)   # .to(self.cfg.device)
-                context_s, context_e = hidden_states[i, start - 1, :], hidden_states[i, end + 1, :]
-                span_pos_emb = self.span_pos_emb(idx).squeeze(0)
-                if length > 1:
-                    for k, p_h in enumerate(span_pos_emb):  # length of span_pos_emb == length of span of this iterations
-                        h[i, start+k, :] = torch.cat([context_s, p_h, context_e], dim=0)
-                else:
-                    h[i, start, :] = torch.cat([context_s, span_pos_emb, context_e], dim=0)
+        # Using broadcasting to apply span embeddings
+        h[:, starts, :] = torch.cat([context_s, span_pos_emb, context_e], dim=-1)
         return h
 
-    def forward(self, hidden_states: Tensor, mask_labels: Tensor) -> Tensor:
-        consecutive_groups = self.find_consecutive_groups(mask_labels)  # [batch, num_consecutive_groups]
-        h = self.projector(hidden_states)  # [batch, seq, dim_model*3]
-        h_t = self.cal_span_emb(h, hidden_states, consecutive_groups)
+    def forward(self, hidden_states: torch.Tensor, mask_labels: torch.Tensor) -> torch.Tensor:
+        starts, ends = self.find_consecutive_groups(mask_labels)
+        h = self.projector(hidden_states)
+        h_t = self.cal_span_emb(h, hidden_states, starts, ends)
         z = self.head(h_t)
         logit = self.classifier(z)
         return logit
