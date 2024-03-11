@@ -175,7 +175,7 @@ class PreTrainTuner:
                 loss = loss / self.cfg.n_gradient_accumulation_steps
 
             scaler.scale(loss).backward()
-            losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
+            losses.update(loss.item(), batch_size)  # Must do detach() for avoid memory leak
 
             if self.cfg.awp and epoch >= self.cfg.nth_awp_start_epoch:  # adv training option
                 adv_loss = awp.attack_backward(inputs, padding_mask, labels)
@@ -291,7 +291,7 @@ class PreTrainTuner:
                 flat_logit, flat_labels = logit.view(-1, self.cfg.vocab_size), labels.view(-1)
 
                 loss = val_criterion(flat_logit, flat_labels)
-                valid_losses.update(loss.detach().cpu().numpy(), batch_size)
+                valid_losses.update(loss.item(), batch_size)
 
                 wandb.log({
                     '<Val Step> Valid Loss': valid_losses.avg
@@ -329,7 +329,7 @@ class PreTrainTuner:
                 flat_logit, flat_labels = logit.view(-1, self.cfg.vocab_size), labels.view(-1)
 
                 loss = val_criterion(flat_logit, flat_labels)
-                valid_losses.update(loss.detach().cpu().numpy(), batch_size)
+                valid_losses.update(loss.item(), batch_size)
                 for i, metric_fn in enumerate(val_metric_list):
                     scores = metric_fn(flat_labels.detach().cpu().numpy(), flat_logit.detach().cpu().numpy())
                     valid_metrics[self.metric_list[i]].update(scores, batch_size)
@@ -381,7 +381,7 @@ class CLMTuner(PreTrainTuner):
                 loss = loss / self.cfg.n_gradient_accumulation_steps
 
             scaler.scale(loss).backward()
-            losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
+            losses.update(loss.item(), batch_size)  # Must do detach() for avoid memory leak
 
             if self.cfg.awp and epoch >= self.cfg.nth_awp_start_epoch:
                 adv_loss = awp.attack_backward(inputs, attention_mask, labels)
@@ -450,7 +450,7 @@ class CLMTuner(PreTrainTuner):
                 flat_logit, flat_labels = logit.view(-1, self.cfg.vocab_size), labels.view(-1)
 
                 loss = val_criterion(flat_logit, flat_labels)
-                valid_losses.update(loss.detach().cpu().numpy(), batch_size)
+                valid_losses.update(loss.item(), batch_size)
 
                 wandb.log({
                     '<Val Step> Valid Loss': valid_losses.avg
@@ -530,9 +530,9 @@ class SBOTuner(PreTrainTuner):
                 loss = loss / self.cfg.n_gradient_accumulation_steps
 
             scaler.scale(loss).backward()
-            losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
-            mlm_losses.update(mlm_loss.detach().cpu().numpy(), batch_size)
-            sbo_losses.update(sbo_loss.detach().cpu().numpy(), batch_size)
+            losses.update(loss.item(), batch_size)  # Must do detach() for avoid memory leak
+            mlm_losses.update(mlm_loss.item(), batch_size)
+            sbo_losses.update(sbo_loss.item(), batch_size)
 
             if self.cfg.awp and epoch >= self.cfg.nth_awp_start_epoch:  # later update
                 adv_loss = awp.attack_backward(inputs, padding_mask, labels)
@@ -618,9 +618,9 @@ class SBOTuner(PreTrainTuner):
                 sbo_loss = val_criterion(sbo_logit, labels)
                 loss = mlm_loss + sbo_loss
 
-                valid_losses.update(loss.detach().cpu().numpy(), batch_size)
-                valid_mlm_losses.update(mlm_loss.detach().cpu().numpy(), batch_size)
-                valid_sbo_losses.update(sbo_loss.detach().cpu().numpy(), batch_size)
+                valid_losses.update(loss.item(), batch_size)
+                valid_mlm_losses.update(mlm_loss.item(), batch_size)
+                valid_sbo_losses.update(sbo_loss.item(), batch_size)
 
                 wandb.log({
                     '<Val Step> Total Valid Loss': valid_losses.avg,
@@ -789,9 +789,9 @@ class RTDTuner(PreTrainTuner):
                 loss = loss / self.cfg.n_gradient_accumulation_steps
 
             scaler.scale(loss).backward()
-            losses.update(loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
-            g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
-            d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
+            losses.update(loss.item(), batch_size)  # Must do detach() for avoid memory leak
+            g_losses.update(g_loss.item(), batch_size)
+            d_losses.update(d_loss.item(), batch_size)
 
             if self.cfg.awp and epoch >= self.cfg.nth_awp_start_epoch:  # later update
                 adv_loss = awp.attack_backward(inputs, padding_mask, labels)
@@ -917,8 +917,8 @@ class RTDTuner(PreTrainTuner):
 
             losses = g_loss + d_loss
             scaler.scale(losses).backward()
-            g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
-            d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
+            g_losses.update(g_loss.item(), batch_size)
+            d_losses.update(d_loss.item(), batch_size)
 
             if self.cfg.clipping_grad and (step + 1) % self.cfg.n_gradient_accumulation_steps == 0 or self.cfg.n_gradient_accumulation_steps == 1:
                 scaler.unscale_(optimizer)
@@ -1014,8 +1014,8 @@ class RTDTuner(PreTrainTuner):
                 )
                 d_loss = val_criterion(d_logit.view(-1, 2), d_labels)
 
-                valid_g_losses.update(g_loss.detach().cpu().numpy(), batch_size)
-                valid_d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
+                valid_g_losses.update(g_loss.item(), batch_size)
+                valid_d_losses.update(d_loss.item(), batch_size)
                 valid_loss = valid_g_losses.avg + valid_d_losses.avg
                 wandb.log({
                     '<Val Step> Valid Loss': valid_loss,
@@ -1182,9 +1182,9 @@ class DistillKnowledgeTuner(PreTrainTuner):
                 loss = loss / self.cfg.n_gradient_accumulation_steps
 
             scaler.scale(loss).backward()
-            d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
-            s_losses.update(s_loss.detach().cpu().numpy(), batch_size)  # Must do detach() for avoid memory leak
-            c_losses.update(c_loss.detach().cpu().numpy(), batch_size)
+            d_losses.update(d_loss.item(), batch_size)
+            s_losses.update(s_loss.item(), batch_size)  # Must do detach() for avoid memory leak
+            c_losses.update(c_loss.item(), batch_size)
 
             if self.cfg.awp and epoch >= self.cfg.nth_awp_start_epoch:  # later update, current version is not supported
                 adv_loss = awp.attack_backward(inputs, padding_mask, labels)
@@ -1280,9 +1280,9 @@ class DistillKnowledgeTuner(PreTrainTuner):
                 s_loss = val_criterion["CrossEntropyLoss"](s_logit.view(-1, self.cfg.vocab_size), labels.view(-1)) * self.cfg.alpha_student  # nn.CrossEntropyLoss
                 c_loss = val_criterion["CosineEmbeddingLoss"](s_hidden_state, t_hidden_state, c_labels) * self.cfg.alpha_cosine  # nn.CosineEmbeddingLoss
 
-                valid_d_losses.update(d_loss.detach().cpu().numpy(), batch_size)
-                valid_s_losses.update(s_loss.detach().cpu().numpy(), batch_size)
-                valid_c_losses.update(c_loss.detach().cpu().numpy(), batch_size)
+                valid_d_losses.update(d_loss.item(), batch_size)
+                valid_s_losses.update(s_loss.item(), batch_size)
+                valid_c_losses.update(c_loss.item(), batch_size)
 
                 valid_loss = valid_d_losses.avg + valid_s_losses.avg + valid_c_losses.avg
                 wandb.log({
