@@ -9,7 +9,7 @@
         "name": "CasualLanguageModel",
         "trainer": "CLMTuner",
         "loop": "train_loop",
-        "dataset": "MLMDataset",
+        "dataset": "PretrainDataset",
         "arch_name": "attention",
         "model_name": "gpt2",
         "module_name": "GPT2",

@@ -9,7 +9,7 @@
         "name": "MaskedLanguageModel",
         "trainer": "PreTrainTuner",
         "loop": "train_loop",
-        "dataset": "MLMDataset",
+        "dataset": "PretrainDataset",
         "arch_name": "attention",
         "model_name": "linear_transformer",
         "module_name": "LinearTransformer",

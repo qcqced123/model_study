@@ -8,7 +8,7 @@
         "name": "DistillationKnowledge",
         "trainer": "DistillKnowledgeTuner",
         "loop": "train_loop",
-        "dataset": "MLMDataset",
+        "dataset": "PretrainDataset",
         "arch_name": "attention",
         "model_name": "bert",
         "module_name": "BERT",

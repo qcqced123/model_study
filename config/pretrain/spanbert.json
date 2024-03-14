@@ -9,7 +9,7 @@
         "name": "SpanBoundaryObjective",
         "trainer": "SBOTuner",
         "loop": "train_loop",
-        "dataset": "MLMDataset",
+        "dataset": "PretrainDataset",
         "arch_name": "attention",
         "model_name": "bert",
         "module_name": "BERT",

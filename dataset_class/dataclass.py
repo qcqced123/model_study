@@ -5,8 +5,8 @@ from torch import Tensor
 from typing import Dict, List, Tuple
 
 
-class MLMDataset(Dataset):
-    """ Custom Dataset for Masked Language Modeling
+class PretrainDataset(Dataset):
+    """ Custom Dataset for Pre-
 
     Args:
         inputs: inputs from tokenizing by tokenizer, which is a dictionary of input_ids, attention_mask, token_type_ids
@@ -24,3 +24,30 @@ class MLMDataset(Dataset):
             batch_inputs[k] = torch.as_tensor(v[item])  # reduce memory usage by defending copying tensor
         return batch_inputs
 
+
+class SentimentAnalysisDataset(Dataset):
+    pass
+
+
+class QuestionAnsweringDataset(Dataset):
+    pass
+
+
+class TextGenerationDataset(Dataset):
+    pass
+
+
+class TextSimilarityDataset(Dataset):
+    pass
+
+
+class TextSummationDataset(Dataset):
+    pass
+
+
+class SuperGlueDataset(Dataset):
+    pass
+
+
+class SQuAdDataset(Dataset):
+    pass
