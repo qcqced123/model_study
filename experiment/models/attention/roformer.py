@@ -9,17 +9,20 @@ from einops.layers.torch import Rearrange
 from configuration import CFG
 
 
-def apply_rotary_position_embeddings(sinusoidal_pos, query_layer, key_layer, value_layer=None):
+def apply_rotary_position_embeddings(sinusoidal_pos: Tensor, query_layer: Tensor, key_layer: Tensor, value_layer: Tensor = None):
     """ Apply rotary position encoding to query, key layer
-    Source code from Huggingface's RoFormer model, which is the most optimized way to create positional embedding
+    Original Source code from Huggingface's RoFormer model, which is the most optimized way to create positional embedding
 
     You can find mathematical proof in official paper's Appendix
 
+    To tell you the truth, you doesn't need to match the shape of query, key exactly,
+    but you must match the last dimension: dim_head
+
     Args:
-        sinusoidal_pos: sinusoidal positional encoding, shape [batch, num_dim, seq_len, dim_head]
-        query_layer: query matrix, shape (batch_size, seq_len, dim_head)
-        key_layer: key matrix, shape (batch_size, seq_len, dim_head)
-        value_layer: value matrix, shape (batch_size, seq_len, dim_head)
+        sinusoidal_pos: sinusoidal positional encoding, shape [batch(None), num_dim(None), seq_len, dim_head]
+        query_layer: query matrix, shape (batch_size, num_head, seq_len, dim_head)
+        key_layer: key matrix, shape (batch_size, num_head, seq_len, dim_head)
+        value_layer: value matrix, shape (batch_size, num_head, seq_len, dim_head)
 
     References:
         https://arxiv.org/abs/2104.09864  # RoFormer: Enhanced Transformer with Rotary Position Embedding
@@ -33,11 +36,12 @@ def apply_rotary_position_embeddings(sinusoidal_pos, query_layer, key_layer, val
         query_layer
     )
 
+    # mathematical expression from Appendix in official repo
     query_layer = query_layer * cos_pos + rotate_half_query_layer * sin_pos
     rotate_half_key_layer = torch.stack([-key_layer[..., 1::2], key_layer[..., ::2]], dim=-1).reshape_as(key_layer)
     key_layer = key_layer * cos_pos + rotate_half_key_layer * sin_pos
 
-    if value_layer is not None:
+    if value_layer is not None:  # In official, they don't use value_layer
         rotate_half_value_layer = torch.stack([-value_layer[..., 1::2], value_layer[..., ::2]], dim=-1).reshape_as(
             value_layer
         )
@@ -198,38 +202,40 @@ class MultiHeadAttention(nn.Module):
         self.fc_k = nn.Linear(self.dim_model, self.dim_model)
         self.fc_v = nn.Linear(self.dim_model, self.dim_model)
         self.fc_concat = nn.Linear(self.dim_model, self.dim_model)
+        self.apply_rope = apply_rotary_position_embeddings
         self.attention = scaled_dot_product_attention if kernel == 'softmax' else linear_attention
         self.attention_dropout = nn.Dropout(p=attention_dropout_prob)
         self.dot_scale = torch.sqrt(torch.tensor(self.dim_head, dtype=torch.float32))
         self.kernel = kernel
         self.eps = 1e-6
 
-    @staticmethod
-    def apply_rotary_position_embeddings(word: Tensor, rotary_pos: Tensor) -> Tensor:
-        """ Very Un-Optimized way to apply rotary position encoding to word embedding
-        Notes:
-             ASAP, we will implement more optimized way to apply rotary position encoding to word embedding
-        """
-        BATCH_SIZE, SEQ_LEN, DIM_MODEL = word.shape
-        result = torch.vstack([torch.bmm(rotary_pos, word[i].unsqueeze(-1)).squeeze(-1).view(SEQ_LEN, DIM_MODEL) for i in range(BATCH_SIZE)]).view(BATCH_SIZE, SEQ_LEN, DIM_MODEL)
-        return result
+    # @staticmethod
+    # def apply_rotary_position_embeddings(word: Tensor, rotary_pos: Tensor) -> Tensor:
+    #     """ Very Un-Optimized way to apply rotary position encoding to word embedding
+    #     Notes:
+    #          ASAP, we will implement more optimized way to apply rotary position encoding to word embedding
+    #     """
+    #     BATCH_SIZE, SEQ_LEN, DIM_MODEL = word.shape
+    #     result = torch.vstack([torch.bmm(rotary_pos, word[i].unsqueeze(-1)).squeeze(-1).view(SEQ_LEN, DIM_MODEL) for i in range(BATCH_SIZE)]).view(BATCH_SIZE, SEQ_LEN, DIM_MODEL)
+    #     return result
 
     def forward(self, x: Tensor, rotary_pos_enc: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
         """ x is already passed nn.Layernorm, already multiplied with rotary position encoding """
         assert x.ndim == 3, f'Expected (batch, seq, hidden) got {x.shape}'
-        # multiple word embedding, rotary position encoding
-        combined_x = self.apply_rotary_position_embeddings(x, rotary_pos_enc)
 
         # size: bs, seq, nums head, dim head, linear projection
-        q = self.fc_q(combined_x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
-        k = self.fc_k(combined_x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+        q = self.fc_q(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+        k = self.fc_k(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
         v = self.fc_v(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+
+        # multiple word embedding, rotary position encoding
+        rotary_q, rotary_k = self.apply_rope(rotary_pos_enc, q, k)
 
         attention_matrix = None
         if self.kernel == 'elu':
             attention_matrix = self.attention(
-                q,
-                k,
+                rotary_q,
+                rotary_k,
                 v,
                 self.kernel,
                 self.eps,
@@ -239,8 +245,8 @@ class MultiHeadAttention(nn.Module):
             )
         elif self.kernel == 'softmax':  # pure self-attention
             attention_matrix = self.attention(
-                q.permute(0, 2, 1, 3).contiguous(),
-                k,
+                rotary_q.permute(0, 2, 1, 3).contiguous(),
+                rotary_k,
                 v.permute(0, 2, 1, 3).contiguous(),
                 self.dot_scale,
                 self.attention_dropout,
@@ -417,11 +423,15 @@ class RoformerEncoder(nn.Module, AbstractModel):
 
 class RoFormerSinusoidalPositionalEmbedding(nn.Embedding):
     """ This module produces sinusoidal positional embeddings of any length
-    Source code from Huggingface's RoFormer model, which is the most optimized way to create positional embedding
+    Original Source code from Huggingface's RoFormer model, which is the most optimized way to create positional embedding
 
     Args:
         max_seq: max sequence length of model
         dim_head: dimension of each attention head's hidden states
+
+    References:
+        https://arxiv.org/abs/2104.09864  # RoFormer: Enhanced Transformer with Rotary Position Embedding
+        https://github.com/huggingface/transformers/blob/main/src/transformers/models/roformer/modeling_roformer.py#L323
     """
 
     def __init__(self, max_seq: int, dim_head: int) -> None:
