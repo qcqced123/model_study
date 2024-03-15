@@ -9,6 +9,43 @@ from einops.layers.torch import Rearrange
 from configuration import CFG
 
 
+def apply_rotary_position_embeddings(sinusoidal_pos, query_layer, key_layer, value_layer=None):
+    """ Apply rotary position encoding to query, key layer
+    Source code from Huggingface's RoFormer model, which is the most optimized way to create positional embedding
+
+    You can find mathematical proof in official paper's Appendix
+
+    Args:
+        sinusoidal_pos: sinusoidal positional encoding, shape [batch, num_dim, seq_len, dim_head]
+        query_layer: query matrix, shape (batch_size, seq_len, dim_head)
+        key_layer: key matrix, shape (batch_size, seq_len, dim_head)
+        value_layer: value matrix, shape (batch_size, seq_len, dim_head)
+
+    References:
+        https://arxiv.org/abs/2104.09864  # RoFormer: Enhanced Transformer with Rotary Position Embedding
+        https://github.com/huggingface/transformers/blob/main/src/transformers/models/roformer/modeling_roformer.py#L323
+    """
+    sin, cos = sinusoidal_pos.chunk(2, dim=-1)  # select two element of index values
+    sin_pos = torch.stack([sin, sin], dim=-1).reshape_as(sinusoidal_pos)
+
+    cos_pos = torch.stack([cos, cos], dim=-1).reshape_as(sinusoidal_pos)
+    rotate_half_query_layer = torch.stack([-query_layer[..., 1::2], query_layer[..., ::2]], dim=-1).reshape_as(
+        query_layer
+    )
+
+    query_layer = query_layer * cos_pos + rotate_half_query_layer * sin_pos
+    rotate_half_key_layer = torch.stack([-key_layer[..., 1::2], key_layer[..., ::2]], dim=-1).reshape_as(key_layer)
+    key_layer = key_layer * cos_pos + rotate_half_key_layer * sin_pos
+
+    if value_layer is not None:
+        rotate_half_value_layer = torch.stack([-value_layer[..., 1::2], value_layer[..., ::2]], dim=-1).reshape_as(
+            value_layer
+        )
+        value_layer = value_layer * cos_pos + rotate_half_value_layer * sin_pos
+        return query_layer, key_layer, value_layer
+    return query_layer, key_layer
+
+
 def kernel_fn(x: Tensor, kernel_name: str) -> Tensor:
     """ Select kernel function for attention head
     This is temporary function, we will implement more kernel function in future
@@ -378,6 +415,44 @@ class RoformerEncoder(nn.Module, AbstractModel):
         return last_hidden_state, hidden_states
 
 
+class RoFormerSinusoidalPositionalEmbedding(nn.Embedding):
+    """ This module produces sinusoidal positional embeddings of any length
+    Source code from Huggingface's RoFormer model, which is the most optimized way to create positional embedding
+
+    Args:
+        max_seq: max sequence length of model
+        dim_head: dimension of each attention head's hidden states
+    """
+
+    def __init__(self, max_seq: int, dim_head: int) -> None:
+        super().__init__(max_seq, dim_head)
+        self.weight = self._init_weight(self.weight)
+
+    @staticmethod
+    def _init_weight(out: nn.Parameter) -> nn.Parameter:
+        """
+        Identical to the XLM create_sinusoidal_embeddings except features are not interleaved. The cos features are in
+        the 2nd half of the vector. [dim // 2:]
+        """
+        n_pos, dim = out.shape
+        position_enc = np.array(
+            [[pos / np.power(10000, 2 * (j // 2) / dim) for j in range(dim)] for pos in range(n_pos)]
+        )
+        out.requires_grad = False  # set early to avoid an error in pytorch-1.8+
+        sentinel = dim // 2 if dim % 2 == 0 else (dim // 2) + 1
+        out[:, 0:sentinel] = torch.FloatTensor(np.sin(position_enc[:, 0::2]))
+        out[:, sentinel:] = torch.FloatTensor(np.cos(position_enc[:, 1::2]))
+        out.detach_()
+        return out
+
+    @torch.no_grad()
+    def forward(self, seq_len: int, past_key_values_length: int = 0) -> Tensor:
+        positions = torch.arange(
+            past_key_values_length, past_key_values_length + seq_len, dtype=torch.long, device=self.weight.device
+        )
+        return super().forward(positions)
+
+
 class Embedding(nn.Module):
     """ Class module for Roformer Embedding, word embedding & rotary positional encoding
     This module has option => whether or not to use ALBERT Style Factorized Embedding
@@ -410,7 +485,11 @@ class Embedding(nn.Module):
         self.word_embedding = nn.Embedding(len(cfg.tokenizer), cfg.dim_model)
         self.layer_norm1 = nn.LayerNorm(cfg.dim_model, eps=cfg.layer_norm_eps)  # for word embedding
         self.hidden_dropout = nn.Dropout(p=cfg.hidden_dropout_prob)
-        self.rotary_pos_encoding = self.create_rotation_matrix
+        # self.rotary_pos_encoding = self.create_rotation_matrix
+        self.rotary_pos_encoding = RoFormerSinusoidalPositionalEmbedding(
+            cfg.max_seq,
+            cfg.dim_model // cfg.num_attention_heads
+        )
 
         # ALBERT Style Factorized Embedding
         if self.cfg.is_mf_embedding:
@@ -467,41 +546,6 @@ class Embedding(nn.Module):
             )
         rotary_pos_enc = self.rotary_pos_encoding(inputs.shape[1])
         return word_embeddings, rotary_pos_enc
-
-
-# Source code from Huggingface's RoFormer
-class RoFormerSinusoidalPositionalEmbedding(nn.Embedding):
-    """This module produces sinusoidal positional embeddings of any length."""
-
-    def __init__(self, num_positions: int, embedding_dim: int, padding_idx: Optional[int] = None) -> None:
-        super().__init__(num_positions, embedding_dim)
-        self.weight = self._init_weight(self.weight)
-
-    @staticmethod
-    def _init_weight(out: nn.Parameter) -> nn.Parameter:
-        """
-        Identical to the XLM create_sinusoidal_embeddings except features are not interleaved. The cos features are in
-        the 2nd half of the vector. [dim // 2:]
-        """
-        n_pos, dim = out.shape
-        position_enc = np.array(
-            [[pos / np.power(10000, 2 * (j // 2) / dim) for j in range(dim)] for pos in range(n_pos)]
-        )
-        out.requires_grad = False  # set early to avoid an error in pytorch-1.8+
-        sentinel = dim // 2 if dim % 2 == 0 else (dim // 2) + 1
-        out[:, 0:sentinel] = torch.FloatTensor(np.sin(position_enc[:, 0::2]))
-        out[:, sentinel:] = torch.FloatTensor(np.cos(position_enc[:, 1::2]))
-        out.detach_()
-        return out
-
-    @torch.no_grad()
-    def forward(self, input_ids_shape: torch.Size, past_key_values_length: int = 0) -> torch.Tensor:
-        """`input_ids_shape` is expected to be [bsz x seqlen]."""
-        bsz, seq_len = input_ids_shape[:2]
-        positions = torch.arange(
-            past_key_values_length, past_key_values_length + seq_len, dtype=torch.long, device=self.weight.device
-        )
-        return super().forward(positions)
 
 
 class Roformer(nn.Module, AbstractModel):
