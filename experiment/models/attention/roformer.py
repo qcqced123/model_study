@@ -15,9 +15,6 @@ def apply_rotary_position_embeddings(sinusoidal_pos: Tensor, query_layer: Tensor
 
     You can find mathematical proof in official paper's Appendix
 
-    To tell you the truth, you doesn't need to match the shape of query, key exactly,
-    but you must match the last dimension: dim_head
-
     Args:
         sinusoidal_pos: sinusoidal positional encoding, shape [batch(None), num_dim(None), seq_len, dim_head]
         query_layer: query matrix, shape (batch_size, num_head, seq_len, dim_head)
@@ -103,19 +100,18 @@ def linear_attention(
         https://github.com/huggingface/transformers/blob/main/src/transformers/models/roformer/modeling_roformer.py
         https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
     """
-    BS, SEQ_LEN, NUM_HEADS, DIM_HEADS = q.shape
+    BS, NUM_HEADS, SEQ_LEN, DIM_HEADS = q.shape
     projected_q, projected_k = kernel_fn(q, kernel), kernel_fn(k, kernel)
 
     if padding_mask is not None:  # applying padding mask, calculating normalizer
         projected_k[padding_mask == 1] = 0
 
-    projected_k = projected_k.permute(0, 2, 1, 3).contiguous()
-    kv = torch.matmul(v.permute(0, 2, 3, 1).contiguous(), projected_k)
+    kv = torch.matmul(v.transpose(-1, -2), projected_k)
     z = 1 / torch.clamp(
-        torch.mul(projected_q.permute(0, 2, 1, 3).contiguous(), projected_k.sum(dim=2).unsqueeze(2)).sum(dim=-1),
+        torch.mul(projected_q, projected_k.sum(dim=2).unsqueeze(2)).sum(dim=-1),
         min=eps)  # breakdown by sequence length dimension
     attention_matrix = attention_dropout(
-        torch.einsum("bshq,bhvk,bhs->bshv", projected_q, kv, z).reshape(-1, SEQ_LEN, NUM_HEADS * DIM_HEADS)
+        torch.einsum("bhsq,bhvk,bhs->bshv", projected_q, kv, z).reshape(-1, SEQ_LEN, NUM_HEADS * DIM_HEADS)
     )
     return attention_matrix
 
@@ -150,7 +146,7 @@ def scaled_dot_product_attention(
         https://github.com/huggingface/transformers/blob/main/src/transformers/models/roformer/modeling_roformer.py
     """
     BS, NUM_HEADS, SEQ_LEN, DIM_HEADS = q.shape
-    attention_matrix = torch.matmul(q, k.permute(0, 2, 3, 1).contiguous()) / dot_scale
+    attention_matrix = torch.matmul(q, k.transpose(-1, -2)) / dot_scale
     if padding_mask is not None:
         padding_mask = padding_mask.unsqueeze(1).unsqueeze(2)  # for broadcasting: shape (BS, 1, 1, SEQ_LEN)
         attention_matrix = attention_matrix.masked_fill(padding_mask == 1, float('-inf'))
@@ -224,9 +220,9 @@ class MultiHeadAttention(nn.Module):
         assert x.ndim == 3, f'Expected (batch, seq, hidden) got {x.shape}'
 
         # size: bs, seq, nums head, dim head, linear projection
-        q = self.fc_q(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
-        k = self.fc_k(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
-        v = self.fc_v(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+        q = self.fc_q(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 1, 3).contiguous()
+        k = self.fc_k(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 1, 3).contiguous()
+        v = self.fc_v(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 1, 3).contiguous()
 
         # multiple word embedding, rotary position encoding
         rotary_q, rotary_k = self.apply_rope(rotary_pos_enc, q, k)
@@ -245,9 +241,9 @@ class MultiHeadAttention(nn.Module):
             )
         elif self.kernel == 'softmax':  # pure self-attention
             attention_matrix = self.attention(
-                rotary_q.permute(0, 2, 1, 3).contiguous(),
+                rotary_q,
                 rotary_k,
-                v.permute(0, 2, 1, 3).contiguous(),
+                v,
                 self.dot_scale,
                 self.attention_dropout,
                 padding_mask,
