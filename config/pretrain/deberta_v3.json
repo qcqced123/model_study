@@ -69,7 +69,7 @@
         "weight_decay": 1e-2,
         "adam_epsilon": 1e-6,
         "use_bertadam": false,
-        "betas": [0.9, 0.999]
+        "betas": [0.9, 0.98]
     },
 
     "scheduler_options": {

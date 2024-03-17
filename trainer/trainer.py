@@ -997,7 +997,6 @@ class RTDTuner(PreTrainTuner):
                     mask_labels = batch['mask_labels'].to(self.cfg.device, non_blocking=True)
 
                 batch_size = inputs.size(0)
-
                 # Generator validation part
                 g_logit, d_inputs, d_labels = model.generator_fw(
                     inputs,
@@ -1005,17 +1004,17 @@ class RTDTuner(PreTrainTuner):
                     padding_mask,
                     mask_labels
                 )
-                g_loss = val_criterion(g_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
-
                 # Discriminator validation part
                 d_logit = model.discriminator_fw(
                     d_inputs,
                     padding_mask
                 )
-                d_loss = val_criterion(d_logit.view(-1, 2), d_labels)
+                g_loss = val_criterion(g_logit.view(-1, self.cfg.vocab_size), labels.view(-1))
+                d_loss = val_criterion(d_logit.view(-1, 2), d_labels) * self.cfg.discriminator_lambda
 
                 valid_g_losses.update(g_loss.item(), batch_size)
                 valid_d_losses.update(d_loss.item(), batch_size)
+
                 valid_loss = valid_g_losses.avg + valid_d_losses.avg
                 wandb.log({
                     '<Val Step> Valid Loss': valid_loss,
@@ -1029,7 +1028,7 @@ class RTDTuner(PreTrainTuner):
                         labels.view(-1).detach().cpu().numpy()
                     )
                     d_scores = metric_fn(
-                        d_logit.view(-1, self.cfg.vocab_size).detach().cpu().numpy(),
+                        d_logit.view(-1, 2).detach().cpu().numpy(),
                         d_labels.detach().cpu().numpy()
                     )
                     g_valid_metrics[self.metric_list[i]].update(g_scores, batch_size)
