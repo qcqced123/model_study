@@ -66,12 +66,12 @@ class ELECTRA(nn.Module, AbstractModel):
             delattr(self.discriminator.embeddings.abs_pos_emb, 'weight')
             self.discriminator.embeddings.abs_pos_emb.register_parameter('_weight', self.abs_pos_bias)
 
-            if self.cfg.model_name == 'DeBERTa':
+            if self.cfg.module_name == 'DeBERTa':
                 self.rel_pos_bias = nn.Parameter(
                     torch.zeros_like(self.discriminator.embeddings.rel_pos_emb.weight, device=self.cfg.device)
                 )
                 delattr(self.discriminator.embeddings.rel_pos_emb, 'weight')
-                self.discriminator.embeddings.rel_pos_emb.register_parameter('_weight', self.rel_pos_emb)
+                self.discriminator.embeddings.rel_pos_emb.register_parameter('_weight', self.rel_pos_bias)
         self.share_embedding()
 
     def share_embedding(self) -> None:
@@ -94,7 +94,7 @@ class ELECTRA(nn.Module, AbstractModel):
                 d_p_emb = self.discriminator.embeddings.abs_pos_emb
                 self._set_param(d_p_emb, 'weight', g_p_emb.weight.detach() + d_p_emb._weight)
 
-                if self.cfg.model_name == 'DeBERTa':
+                if self.cfg.module_name == 'DeBERTa':
                     g_rp_emb = self.generator.embeddings.rel_pos_emb
                     d_rp_emb = self.discriminator.embeddings.rel_pos_emb
                     self._set_param(d_rp_emb, 'weight', g_rp_emb.weight.detach() + d_rp_emb._weight)
@@ -107,6 +107,8 @@ class ELECTRA(nn.Module, AbstractModel):
         References:
              https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/apps/tasks/rtd_task.py#L132
         """
+        if hasattr(module, param_name):
+            delattr(module, param_name)
         module.register_buffer(param_name, value)
 
     def generator_fw(
