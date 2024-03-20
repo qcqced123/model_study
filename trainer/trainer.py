@@ -858,19 +858,19 @@ class RTDTuner(PreTrainTuner):
         return d_losses.avg * self.cfg.n_gradient_accumulation_steps, d_val_score_max
 
     def gdes_train_val_fn(
-            self,
-            loader_train,
-            model: nn.Module,
-            criterion: nn.Module,
-            optimizer,
-            scheduler,
-            loader_valid,
-            val_criterion: nn.Module,
-            val_metric_list: List[Callable],
-            g_val_score_max: float,
-            d_val_score_max: float,
-            epoch: int = None,
-            awp: nn.Module = None,
+        self,
+        loader_train,
+        model: nn.Module,
+        criterion: nn.Module,
+        optimizer,
+        scheduler,
+        loader_valid,
+        val_criterion: nn.Module,
+        val_metric_list: List[Callable],
+        g_val_score_max: float,
+        d_val_score_max: float,
+        epoch: int = None,
+        awp: nn.Module = None,
     ) -> Tuple[Any, Union[float, Any]]:
         """ Function for train loop with validation for each batch*N Steps
         ELECTRA has two loss, one is generator loss, the other is discriminator loss Each of two losses are quite different,
@@ -920,7 +920,8 @@ class RTDTuner(PreTrainTuner):
             g_losses.update(g_loss.item(), batch_size)
             d_losses.update(d_loss.item(), batch_size)
 
-            if self.cfg.clipping_grad and (step + 1) % self.cfg.n_gradient_accumulation_steps == 0 or self.cfg.n_gradient_accumulation_steps == 1:
+            if self.cfg.clipping_grad and (
+                step + 1) % self.cfg.n_gradient_accumulation_steps == 0 or self.cfg.n_gradient_accumulation_steps == 1:
                 scaler.unscale_(optimizer)
                 grad_norm = torch.nn.utils.clip_grad_norm(
                     model.parameters(),
@@ -953,7 +954,8 @@ class RTDTuner(PreTrainTuner):
                 )
                 # save checkpoint of generator
                 if g_val_score_max >= g_valid_loss:
-                    print(f'[Update] Generator Valid Score : ({g_val_score_max:.4f} => {g_valid_loss:.4f}) Save Parameter')
+                    print(
+                        f'[Update] Generator Valid Score : ({g_val_score_max:.4f} => {g_valid_loss:.4f}) Save Parameter')
                     print(f'Generator Best Score: {g_valid_loss}')
                     torch.save(
                         model.model.generator.state_dict(),
@@ -963,7 +965,8 @@ class RTDTuner(PreTrainTuner):
 
                 # save checkpoint of Discriminator
                 if d_val_score_max >= d_valid_loss:
-                    print(f'[Update] Discriminator Valid Score : ({d_val_score_max:.4f} => {d_valid_loss:.4f}) Save Parameter')
+                    print(
+                        f'[Update] Discriminator Valid Score : ({d_val_score_max:.4f} => {d_valid_loss:.4f}) Save Parameter')
                     print(f'Discriminator Best Score: {d_valid_loss}')
                     torch.save(
                         model.model.discriminator.state_dict(),
@@ -1116,22 +1119,22 @@ class DistillKnowledgeTuner(PreTrainTuner):
         return model, criterion, val_criterion, val_metric_list, optimizer, lr_scheduler, awp, swa_model, swa_scheduler
 
     def train_val_fn(
-            self,
-            loader_train,
-            model: nn.Module,
-            criterion: Dict[str, nn.Module],
-            optimizer,
-            scheduler,
-            loader_valid,
-            val_criterion: Dict[str, nn.Module],
-            val_metric_list: List[Callable],
-            val_score_max: float,
-            val_score_max_2: float,
-            epoch: int,
-            awp: nn.Module = None,
-            swa_model: nn.Module = None,
-            swa_start: int = None,
-            swa_scheduler=None
+        self,
+        loader_train,
+        model: nn.Module,
+        criterion: Dict[str, nn.Module],
+        optimizer,
+        scheduler,
+        loader_valid,
+        val_criterion: Dict[str, nn.Module],
+        val_metric_list: List[Callable],
+        val_score_max: float,
+        val_score_max_2: float,
+        epoch: int,
+        awp: nn.Module = None,
+        swa_model: nn.Module = None,
+        swa_start: int = None,
+        swa_scheduler=None
     ) -> Tuple[Any, Union[float, Any]]:
         """ Function for train loop with validation for each batch*N Steps
         DistillBERT has three loss:
@@ -1173,9 +1176,11 @@ class DistillKnowledgeTuner(PreTrainTuner):
                     mask=mask
                 )
                 d_loss = criterion["KLDivLoss"](soft_pred.log(), soft_target)  # nn.KLDIVLoss
-                s_loss = criterion["CrossEntropyLoss"](s_logit.view(-1, self.cfg.vocab_size), labels.view(-1))  # nn.CrossEntropyLoss
-                c_loss = criterion["CosineEmbeddingLoss"](s_hidden_state, t_hidden_state, c_labels)  # nn.CosineEmbeddingLoss
-                loss = d_loss*self.cfg.alpha_distillation + s_loss*self.cfg.alpha_student + c_loss*self.cfg.alpha_cosine  # linear combination loss
+                s_loss = criterion["CrossEntropyLoss"](s_logit.view(-1, self.cfg.vocab_size),
+                                                       labels.view(-1))  # nn.CrossEntropyLoss
+                c_loss = criterion["CosineEmbeddingLoss"](s_hidden_state, t_hidden_state,
+                                                          c_labels)  # nn.CosineEmbeddingLoss
+                loss = d_loss * self.cfg.alpha_distillation + s_loss * self.cfg.alpha_student + c_loss * self.cfg.alpha_cosine  # linear combination loss
 
             if self.cfg.n_gradient_accumulation_steps > 1:
                 loss = loss / self.cfg.n_gradient_accumulation_steps
@@ -1190,7 +1195,8 @@ class DistillKnowledgeTuner(PreTrainTuner):
                 scaler.scale(adv_loss).backward()
                 awp._restore()
 
-            if self.cfg.clipping_grad and (step + 1) % self.cfg.n_gradient_accumulation_steps == 0 or self.cfg.n_gradient_accumulation_steps == 1:
+            if self.cfg.clipping_grad and (
+                step + 1) % self.cfg.n_gradient_accumulation_steps == 0 or self.cfg.n_gradient_accumulation_steps == 1:
                 scaler.unscale_(optimizer)
                 grad_norm = torch.nn.utils.clip_grad_norm(
                     model.parameters(),
