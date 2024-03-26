@@ -197,7 +197,7 @@ class MultiHeadAttention(nn.Module):
         self.fc_q = nn.Linear(self.dim_model, self.dim_model)
         self.fc_k = nn.Linear(self.dim_model, self.dim_model)
         self.fc_v = nn.Linear(self.dim_model, self.dim_model)
-        self.fc_concat = nn.Linear(self.dim_model, self.dim_model)
+        self.fc_concat = nn.Linear(self.dim_model, self.dim_model)  # same as W_O in original paper
         self.apply_rope = apply_rotary_position_embeddings
         self.attention = scaled_dot_product_attention if kernel == 'softmax' else linear_attention
         self.attention_dropout = nn.Dropout(p=attention_dropout_prob)
