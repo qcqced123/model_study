@@ -131,7 +131,7 @@ def scaled_dot_product_attention(
         q: query matrix, shape (batch_size, seq_len, dim_head)
         k: key matrix, shape (batch_size, seq_len, dim_head)
         v: value matrix, shape (batch_size, seq_len, dim_head)
-        dot_scale: scale factor for Q•K^T result
+        dot_scale: scale f actor for Q•K^T result
         attention_dropout: dropout for attention matrix, default rate is 0.1 from official paper
         padding_mask: mask for attention matrix for MLM, you must check whether or not padding token is 1
         attention_mask: mask for attention matrix for CLM

@@ -114,6 +114,7 @@ Experiment Application
 │	    ├── clm.py  # Causal Language Model
 │	    ├── rtd.py  # Replaced Token Detection
 │	    ├── sbo.py  # Span Boundary Objective
+│	    ├── lora.py  # Low Rank Adaptation
 │	    └── p_tuning.py 
 │
 ├── dataset_class
@@ -140,19 +141,23 @@ Experiment Application
 - **[BERT] BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding (Complete)**
 - [Longformer] Longformer: The Long-Document Transformer (Continue)
 - [Reformer] Reformer: The Efficient Transformer (Continue)
-- [Roformer] RoFormer: Enhanced Transformer with Rotary Position Embedding (Continue)  
+- **[Roformer] RoFormer: Enhanced Transformer with Rotary Position Embedding (Complete, [Paper Review](https://qcqced123.github.io/nlp/roformer))**  
 - [Linear Transformer] Transformers are RNNs: Fast Autoregressive Transformers with Linear Attention (Continue)
-- **[ELECTRA] Pre-training Text Encoders as Discriminators Rather Than Generators (Complete)**
-- **[SpanBERT] SpanBERT: Improving Pre-training by Representing and Predicting Spans (Complete)**
-- **[DistilBERT] DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter (Complete)**
+- **[ELECTRA] Pre-training Text Encoders as Discriminators Rather Than Generators (Complete, [Paper Review](https://qcqced123.github.io/nlp/electra))**
+- **[SpanBERT] SpanBERT: Improving Pre-training by Representing and Predicting Spans (Complete, [Paper Review](https://qcqced123.github.io/nlp/spanbert))**
+- **[DistilBERT] DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter (Complete, [Paper Review](https://qcqced123.github.io/nlp/distilbert))**
 - [Sentence-BERT] Sentence Embeddings using Siamese BERT-Networks (Continue)
 - **[DeBERTa] DeBERTa: Decoding-Enhanced BERT with Disentangled-Attention (Complete, [Paper Review](https://qcqced123.github.io/nlp/deberta))**
-- **[DeBERTa-V3] Improving DeBERTa using ELECTRA-Style Pre-Training with Gradient-Disentangled Embedding Sharing (Complete)**
+- **[DeBERTa-V3] Improving DeBERTa using ELECTRA-Style Pre-Training with Gradient-Disentangled Embedding Sharing (Complete, [Paper Review](https://qcqced123.github.io/nlp/deberta_v3))**
 - **[GPT2] Language Models are Unsupervised Multitask Learners (Complete)**
 - **[ViT] An Image Is Worth 16x16 Words: Transformers For Image Recognition At Scale (Complete, [Paper Review](https://qcqced123.github.io/cv/vit))**
 - [SwinTransformer] Swin Transformer: Hierarchical Vision Transformer using Shifted Windows (Continue)
 - [CLIP] Learning Transferable Visual Models From Natural Language Supervision (Continue)
 - [BLIP] BLIP: Bootstrapping Language-Image Pre-training for Unified Vision-Language Understanding and Generation (Continue)
+
+#### 🔪 Optimization
+
+- **[LoRA] LoRA: Low-Rank Adaptation of Large Language Models(Complete, [Paper Review](https://qcqced123.github.io/nlp/lora))**
 
 #### 🪢 Recurrent
 

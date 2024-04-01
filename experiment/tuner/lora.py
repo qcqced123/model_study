@@ -21,10 +21,10 @@ class LoRA(nn.Module):
     """
     def __init__(self, dim: int, rank: int):
         super().__init__()
-        self.a = nn.Parameter(torch.randn(dim, rank))  # init by random Gaussian distribution (normal distribution)
-        self.b = nn.Parameter(torch.zeros(rank, dim))  # init by zero
+        self.a = nn.Parameter(torch.randn(rank, dim))  # init by random Gaussian distribution (normal distribution)
+        self.b = nn.Parameter(torch.zeros(dim, rank))  # init by zero
         self.alpha = nn.Parameter(torch.tensor(rank)) / rank
 
     def forward(self, inputs: Tensor) -> Tensor:
-        return torch.matmul(inputs, self.a) @ self.b * self.alpha
+        return torch.matmul(inputs, self.b @ self.a) * self.alpha
 

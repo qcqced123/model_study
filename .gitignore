@@ -412,3 +412,4 @@ $RECYCLE.BIN/
 !/embedding_share_test.ipynb
 .idea/.name
 /.idea
+!/RoPE_test.ipynb
