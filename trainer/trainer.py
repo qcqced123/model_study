@@ -18,7 +18,7 @@ from model import model as task
 from experiment.losses import loss
 from experiment.metrics import metric
 from experiment.tuner import mlm, clm, sbo
-from dataset_class.preprocessing import load_pkl
+from dataset_class.preprocessing import load_all_types_dataset
 from trainer.trainer_utils import get_optimizer_grouped_parameters, get_scheduler
 from trainer.trainer_utils import AverageMeter, AWP, get_dataloader, get_swa_scheduler
 
@@ -41,8 +41,8 @@ class PreTrainTuner:
     def make_batch(self) -> Tuple[DataLoader, DataLoader, int]:
         """ Function for making batch instance
         """
-        train = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/min_384_train')
-        valid = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/min_384_valid')
+        train = load_all_types_dataset(f'./dataset_class/data_folder/{self.cfg.datafolder}/min_384_train.pkl')
+        valid = load_all_types_dataset(f'./dataset_class/data_folder/{self.cfg.datafolder}/min_384_valid.pkl')
 
         # 1) Custom Datasets
         train_dataset = getattr(dataset_class, self.cfg.dataset)(train)
@@ -1333,8 +1333,8 @@ class FineTuningTuner:
 
     def make_batch(self) -> Tuple[DataLoader, DataLoader, int]:
         """ Function for making batch instance """
-        train = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_train')
-        valid = load_pkl(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_valid')
+        train = load_all_types_dataset(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_train.pkl')
+        valid = load_all_types_dataset(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_valid.pkl')
 
         # 1) Custom Datasets
         train_dataset = getattr(dataset_class, self.cfg.dataset)(train)

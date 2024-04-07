@@ -1,4 +1,4 @@
-import re, gc, pickle
+import re, gc, pickle, json
 import pandas as pd
 import numpy as np
 import torch
@@ -458,10 +458,64 @@ def save_pkl(input_dict: Any, filename: str) -> None:
 
 
 def load_pkl(filepath: str) -> Any:
-    """  Load pickle file
+    """ Load pickle file
+
     Examples:
-        filepath = './dataset_class/data_folder/train'
+        filepath = './dataset_class/data_folder/train.pkl'
     """
-    with open(f'{filepath}.pkl', 'rb') as file:
+    with open(f'{filepath}', 'rb') as file:
         output = pickle.load(file)
+    return output
+
+
+def load_json(filepath: str) -> Any:
+    """ Load json file
+
+    Examples:
+        filepath = './dataset_class/data_folder/train.json'
+    """
+    with open(f'{filepath}', 'r') as file:
+        output = json.load(file)
+    return output
+
+
+def load_parquet(filepath: str) -> Dict:
+    """ Load parquet file
+
+    Examples:
+        filepath = './dataset_class/data_folder/train.parquet'
+    """
+    output = pd.read_parquet(filepath).to_dict()
+    return output
+
+
+def load_csv(filepath: str) -> pd.DataFrame:
+    """ Load csv file
+
+    Examples:
+        filepath = './dataset_class/data_folder/train.csv'
+    """
+    output = pd.read_csv(filepath).to_dict()
+    return output
+
+
+def load_all_types_dataset(path: str) -> Dict:
+    """ Load all pickle files from folder
+
+    Args:
+        path: path in your local directory
+
+    Examples:
+        load_all_types_dataset('./data_folder/squad2/train.json')
+        load_all_types_dataset('./data_folder/yahoo_qa/test.csv')
+        load_all_types_dataset('./data_folder/yelp_review/train_0.parquet')
+
+    All of file types are supported: json, csv, parquet, pkl
+    And Then, they are converted to dict type in python
+    """
+    file_types = path.split('.')[-1]
+    if file_types == 'pkl': output = load_pkl(path)
+    elif file_types == 'json': output = load_json(path)
+    elif file_types == 'parquet': output = load_parquet(path)
+    elif file_types == 'csv': output = load_csv(path)
     return output

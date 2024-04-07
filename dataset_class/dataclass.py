@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 
 
 class PretrainDataset(Dataset):
-    """ Custom Dataset for Pre-
+    """ Custom Dataset for Pretraining Task in NLP, such as MLM, CLM, ... etc
 
     Args:
         inputs: inputs from tokenizing by tokenizer, which is a dictionary of input_ids, attention_mask, token_type_ids
@@ -30,11 +30,14 @@ class SentimentAnalysisDataset(Dataset):
 
 
 class QuestionAnsweringDataset(Dataset):
+    """ Pytorch Dataset Module for QuestionAnswering Task in fine-tuning
+    """
     pass
 
 
 class TextGenerationDataset(Dataset):
-    pass
+    """ Pytorch Dataset Module for Text Generation Task in fine-tuning
+    """
 
 
 class TextSimilarityDataset(Dataset):
@@ -49,5 +52,5 @@ class SuperGlueDataset(Dataset):
     pass
 
 
-class SQuAdDataset(Dataset):
+class SquadDataset(Dataset):
     pass

@@ -1,0 +1,122 @@
+{
+    "pipeline_setting": {
+        "train": true,
+        "test": false,
+        "checkpoint_dir": "./saved/",
+        "teacher_state_dict": "(WWM)_512_BERT_state_dict.pth",
+        "student_state_dict": "",
+        "name": "DistillationKnowledge",
+        "trainer": "DistillKnowledgeTuner",
+        "loop": "train_loop",
+        "dataset": "PretrainDataset",
+        "arch_name": "attention",
+        "model_name": "bert",
+        "module_name": "BERT",
+        "tokenizer_name": "bert-base-uncased",
+        "task": "DistillationKnowledge"
+    },
+
+    "pretrain_options": {
+        "is_mf_embedding": false,
+        "mlm_masking": "WholeWordMasking",
+        "mlm_probability": 0.15,
+        "is_teacher_resume": true,
+        "is_student_resume": false,
+        "teacher_load_pretrained": false,
+        "student_load_pretrained": false,
+        "temperature": 2,
+        "alpha_distillation": 5,
+        "alpha_student": 1,
+        "alpha_cosine": 4
+    },
+
+    "model_size": {
+        "teacher_num_layers": 6,
+        "student_num_layers": 4,
+        "max_seq": 512,
+        "num_emd": 2,
+        "num_attention_heads": 12,
+        "dim_model": 768,
+        "dim_ffn": 3072,
+        "hidden_act": "gelu",
+        "layer_norm_eps": 1e-7,
+        "attention_probs_dropout_prob": 0.1,
+        "hidden_dropout_prob": 0.1,
+        "init_weight": "kaiming_normal",
+        "initializer_range": 0.02
+    },
+
+    "data_settings": {
+        "hf_dataset": "wikimedia/wikipedia",
+        "datafolder": "wikipedia_en",
+        "language": "20231101.en",
+        "split_ratio": 0.2,
+        "epochs": 20,
+        "batch_size": 8,
+        "val_batch_size": 24,
+        "val_check": 999999
+    },
+
+    "optimizer_options": {
+        "optimizer": "AdamW",
+        "llrd": false,
+        "lr": 2e-4,
+        "weight_decay": 1e-2,
+        "adam_epsilon": 1e-6,
+        "use_bertadam": false,
+        "betas": [0.9, 0.999]
+    },
+
+    "scheduler_options": {
+        "scheduler": "cosine_annealing",
+        "batch_scheduler": true,
+        "num_cycles": 2,
+        "warmup_ratio": 0.0025
+    },
+
+    "gradient_settings": {
+        "amp_scaler": true,
+        "gradient_checkpoint": true,
+        "clipping_grad": true,
+        "n_gradient_accumulation_steps": 1,
+        "max_grad_norm": 5
+    },
+
+    "loss_options": {
+        "losses_fn": ["KLDivLoss", "CrossEntropyLoss", "CosineEmbeddingLoss"],
+        "val_losses_fn": ["KLDivLoss", "CrossEntropyLoss", "CosineEmbeddingLoss"],
+        "reduction": "mean"
+    },
+
+    "metrics_options": {
+        "metrics": ["accuracy", "cosine_similarity"]
+    },
+
+    "common_settings": {
+        "wandb": true,
+        "seed": 42,
+        "n_gpu": 1,
+        "gpu_id": 0,
+        "num_workers": 4
+    },
+
+    "swa_options": {
+        "swa": false,
+        "swa_start": 2,
+        "swa_lr": 5e-5,
+        "anneal_epochs": 2,
+        "anneal_strategy": "cos"
+    },
+
+    "model_utils": {
+        "stop_mode": "min",
+        "freeze": false,
+        "num_freeze": -1,
+        "reinit": false,
+        "num_reinit": 1,
+        "awp": false,
+        "nth_awp_start_epoch": 1,
+        "awp_eps": 1e-2,
+        "awp_lr": 1e-4
+    }
+}
