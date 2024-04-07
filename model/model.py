@@ -326,3 +326,48 @@ class DistillationKnowledge(nn.Module, AbstractTask):
         )
         return last_hidden_state, s_logit, soft_pred, c_labels
 
+
+class QuestionAnswering(nn.Module, AbstractTask):
+    """ Fine-Tune Task Module for Question Answering Task, which is used for QA Task
+    you can select any backbone model as BERT, DeBERTa, RoBERTa ...  etc from huggingface hub or my own model hub
+
+    Also you can select specific Question Answering Tasks
+    1) Extractive QA
+    2) Community QA
+    3) Long-Form QA
+    4) Multi-Modal QA (Text2Image, Image2Text)
+    """
+    def __init__(self, cfg: CFG) -> None:
+        super(QuestionAnswering, self).__init__()
+        self.cfg = CFG
+        self.model = self.select_model(cfg.num_layers)
+        self._init_weights(self.model)
+
+    def forward(self):
+        pass
+
+
+class TextGeneration(nn.Module, AbstractTask):
+    """ Fine-Tune Task Module for Text Generate Task
+    """
+    def __init__(self, cfg: CFG) -> None:
+        super(TextGeneration, self).__init__()
+        self.cfg = CFG
+        self.model = self.select_model(cfg.num_layers)
+        self._init_weights(self.model)
+
+    def forward(self):
+        pass
+
+
+class SentimentAnalysis(nn.Module, AbstractTask):
+    """ Fine-Tune Task Module for Sentiment Analysis Task
+    """
+    def __init__(self, cfg: CFG) -> None:
+        super(SentimentAnalysis, self).__init__()
+        self.cfg = CFG
+        self.model = self.select_model(cfg.num_layers)
+        self._init_weights(self.model)
+
+    def forward(self):
+        pass
