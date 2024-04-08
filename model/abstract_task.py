@@ -96,6 +96,7 @@ class AbstractTask:
         Reference:
             https://huggingface.co/docs/peft/en/developer_guides/quantization
             https://github.com/huggingface/peft/tree/main/examples/loftq_finetuning
+            https://huggingface.co/docs/peft/en/developer_guides/custom_models
         """
         model = None,
         bit_config = None
@@ -125,6 +126,11 @@ class AbstractTask:
 
         Args:
             model: pretrained model from huggingface model hub
+
+        Notes:
+            Default PEFT LoRA setting is applying to query, key, value, and output layers of each attention layer
+            You can select the applied layers by changing the argument 'target_modules' in LoraConfig
+            => config = LoraConfig(target_modules="all-linear", ...)
 
         Reference:
             https://github.com/huggingface/peft?tab=readme-ov-file
@@ -163,10 +169,9 @@ class AbstractTask:
             lora_alpha=self.cfg.lora_alpha,
             lora_dropout=self.cfg.lora_dropout
         )
-        return get_peft_model(
-            model=model,
-            peft_config=lora_config,
-        )
+        model = get_peft_model(model=model, peft_config=lora_config)
+        replace_lora_weights_loftq(model)
+        return model
 
     def apply_peft_prompt_tuning(self) -> nn.Module:
         """ class method for applying peft p-tuning to pretrained model in fine-tune stage
