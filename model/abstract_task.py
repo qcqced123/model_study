@@ -1,5 +1,11 @@
 import importlib.util
+import torch
 import torch.nn as nn
+from peft import PeftType, TaskType
+from peft import get_peft_config, get_peft_model, LoraConfig, replace_lora_weights_loftq
+from peft import PromptEncoderConfig, PromptEncoder
+from transformers import AutoConfig, AutoModel, BitsAndBytesConfig
+from typing import Tuple
 from configuration import CFG
 
 
@@ -12,6 +18,9 @@ class AbstractTask:
         2) Weight Initialization
             - Pytorch Default Weight Initialization: He Initialization (Kaiming Initialization)
         3) Interface method for making model instance in runtime
+        4) Apply fine-tune options, which are selected in configuration.json
+            - load pretrained weights for fine-tune (own your hub, huggingface model hub ... etc)
+            - apply PEFT (Quantization, LoRA, QLoRA, P-Tuning, ...)
     """
     def __init__(self, cfg: CFG) -> None:
         super(AbstractTask, self).__init__()
@@ -51,7 +60,7 @@ class AbstractTask:
             module.bias.data.zero_()
 
     def select_model(self, num_layers: int) -> nn.Module:
-        """ Selects architecture for each task,
+        """ Selects architecture for each task (pretrain),
         you can easily select your model for experiment from json config files
 
         1) select .py file from input config settings
@@ -73,3 +82,105 @@ class AbstractTask:
         model = getattr(module, self.cfg.module_name)(self.cfg, num_layers)  # get instance in runtime
         return model
 
+    def select_pt_model(self) -> Tuple[nn.Module, nn.Module]:
+        """ Selects architecture for each task (fine-tune),
+        you can easily select your model for experiment from json config files
+        or choose the pretrained weight hub (own your pretrain, huggingface ... etc)
+
+        Var:
+            self.hub: hub name for choosing pretrained weights, now you can ONLY select huggingface hub,
+                      because LoRA, QLoRA, P-Tuning are not yet implemented for local hub models
+        Notes:
+            pass this arguments => 'huggingface', 'local' (Not Yet)
+
+        Reference:
+            https://huggingface.co/docs/peft/en/developer_guides/quantization
+            https://github.com/huggingface/peft/tree/main/examples/loftq_finetuning
+        """
+        model = None,
+        bit_config = None
+        prompt_encoder = None
+        if self.cfg.qlora:
+            bit_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.bfloat16,  # bfloat16 is recommended
+                bnb_4bit_use_double_quant=False,
+                bnb_4bit_quant_type='nf4'
+            )
+        if self.cfg.hub == 'local': raise NotImplementedError("Not Yet, Please pass hub argument to huggingface for now")
+        elif self.cfg.hub == 'huggingface':
+            config = AutoConfig.from_pretrained(self.cfg.model_name)
+            model = AutoModel.from_pretrained(
+                self.cfg.model_name,
+                config=config,
+                quantization_config=bit_config
+            )
+
+        model = self.apply_peft_lora(model) if self.cfg.lora else self.apply_peft_qlora(model)
+        if self.cfg.p_tuning: prompt_encoder = self.apply_peft_prompt_tuning(model)
+        return model, prompt_encoder
+
+    def apply_peft_lora(self, model: nn.Module) -> nn.Module:
+        """ class method for applying peft lora to pretrained model in fine-tune stage
+
+        Args:
+            model: pretrained model from huggingface model hub
+
+        Reference:
+            https://github.com/huggingface/peft?tab=readme-ov-file
+            https://huggingface.co/docs/peft/en/developer_guides/lora
+            https://arxiv.org/abs/2106.09685
+            https://arxiv.org/abs/2305.14314
+        """
+        lora_config = LoraConfig(
+            task_type=getattr(TaskType, self.cfg.task_type),
+            inference_mode=False,
+            r=self.cfg.lora_rank,  # rank value
+            lora_alpha=self.cfg.lora_alpha,
+            lora_dropout=self.cfg.lora_dropout
+        )
+        return get_peft_model(
+            model=model,
+            peft_config=lora_config,
+        )
+
+    def apply_peft_qlora(self, model: nn.Module) -> nn.Module:
+        """ class method for applying peft Q-lora to pretrained model in fine-tune stage
+
+        Args:
+            model: pretrained model from huggingface model hub
+
+        Reference:
+            https://github.com/huggingface/peft?tab=readme-ov-file
+            https://huggingface.co/docs/peft/en/developer_guides/lora
+            https://arxiv.org/abs/2106.09685
+            https://arxiv.org/abs/2305.14314
+        """
+        lora_config = LoraConfig(
+            task_type=getattr(TaskType, self.cfg.task_type),
+            inference_mode=False,
+            r=self.cfg.lora_rank,  # rank value
+            lora_alpha=self.cfg.lora_alpha,
+            lora_dropout=self.cfg.lora_dropout
+        )
+        return get_peft_model(
+            model=model,
+            peft_config=lora_config,
+        )
+
+    def apply_peft_prompt_tuning(self) -> nn.Module:
+        """ class method for applying peft p-tuning to pretrained model in fine-tune stage
+
+        Args:
+            model: pretrained model from huggingface model hub
+        """
+        config = PromptEncoderConfig(
+            peft_type=self.cfg.prompt_tuning_type,
+            task_type=self.cfg.task_type,
+            num_virtual_tokens=self.cfg.num_virtual_tokens,
+            token_dim=self.cfg.virtual_token_dim,
+            encoder_reparameterization_type="MLP",
+            encoder_hidden_size=self.cfg.prompt_encoder_hidden_size,
+        )
+        prompt_encoder = PromptEncoder(config)
+        return prompt_encoder
