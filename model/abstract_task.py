@@ -108,6 +108,8 @@ class AbstractTask:
                 bnb_4bit_use_double_quant=False,
                 bnb_4bit_quant_type='nf4'
             )
+
+        # load pretrained weights from model hub
         if self.cfg.hub == 'local': raise NotImplementedError("Not Yet, Please pass hub argument to huggingface for now")
         elif self.cfg.hub == 'huggingface':
             config = AutoConfig.from_pretrained(self.cfg.model_name)
@@ -117,8 +119,13 @@ class AbstractTask:
                 quantization_config=bit_config
             )
 
-        model = self.apply_peft_lora(model) if self.cfg.lora else self.apply_peft_qlora(model)
-        if self.cfg.p_tuning: prompt_encoder = self.apply_peft_prompt_tuning(model)
+        # apply lora, qlora
+        if self.cfg.lora or self.cfg.qlora:
+            if self.cfg.qlora: model = self.apply_peft_qlora(model)
+            else: model = self.apply_peft_lora(model)
+
+        # apply prompt tuning
+        if self.cfg.prompt_tuning: prompt_encoder = self.apply_peft_prompt_tuning(model)
         return model, prompt_encoder
 
     def apply_peft_lora(self, model: nn.Module) -> nn.Module:

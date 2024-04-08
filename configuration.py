@@ -157,3 +157,17 @@ class CFG:
     alpha_student = 0.5
     alpha_cosine = 0.5
 
+    """ Fine-Tuning Option """
+    hub = "huggingface"
+    lora = True
+    qlora = False
+    lora_rank = 8
+    lora_alpha = 32
+    lora_dropout = 0.1
+    task_type = 'SEQ2SEQ'
+    prompt_tuning = False
+    prompt_tuning_type = 'P-TUNING'
+    num_virtual_tokens = 20
+    virtual_token_dim = 768
+    prompt_encoder_hidden_size = 768
+

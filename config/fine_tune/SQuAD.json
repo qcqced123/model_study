@@ -16,18 +16,19 @@
         "task": "DistillationKnowledge"
     },
 
-    "pretrain_options": {
-        "is_mf_embedding": false,
-        "mlm_masking": "WholeWordMasking",
-        "mlm_probability": 0.15,
-        "is_teacher_resume": true,
-        "is_student_resume": false,
-        "teacher_load_pretrained": false,
-        "student_load_pretrained": false,
-        "temperature": 2,
-        "alpha_distillation": 5,
-        "alpha_student": 1,
-        "alpha_cosine": 4
+    "fine_tune_options": {
+        "hub": "huggingface",
+        "lora": true,
+        "qlora": false,
+        "lora_rank": 8,
+        "lora_alpha": 32,
+        "lora_dropout": 0.1,
+        "task_type": "SEQ2SEQ",
+        "prompt_tuning": false,
+        "prompt_tuning_type": "P-TUNING",
+        "num_virtual_tokens": 20,
+        "virtual_token_dim": 768,
+        "prompt_encoder_hidden_size": 768
     },
 
     "model_size": {
