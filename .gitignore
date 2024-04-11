@@ -413,3 +413,5 @@ $RECYCLE.BIN/
 .idea/.name
 /.idea
 !/RoPE_test.ipynb
+tutorial/product_search_tutorial/myntra1.parquet
+tutorial/product_search_tutorial/myntra2.parquet
