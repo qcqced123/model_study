@@ -1,19 +1,13 @@
 {
     "pipeline_setting": {
-        "train": true,
-        "test": false,
         "checkpoint_dir": "./saved/",
-        "teacher_state_dict": "(WWM)_512_BERT_state_dict.pth",
-        "student_state_dict": "",
         "name": "DistillationKnowledge",
-        "trainer": "DistillKnowledgeTuner",
+        "trainer": "FineTuningTuner",
         "loop": "train_loop",
         "dataset": "PretrainDataset",
-        "arch_name": "attention",
-        "model_name": "bert",
-        "module_name": "BERT",
-        "tokenizer_name": "bert-base-uncased",
-        "task": "DistillationKnowledge"
+        "task": "QuestionAnswering",
+        "model_name": "microsoft/deberta-v3-large",
+        "tokenizer_name": "microsoft/deberta-v3-large"
     },
 
     "fine_tune_options": {
@@ -28,17 +22,8 @@
         "prompt_tuning_type": "P-TUNING",
         "num_virtual_tokens": 20,
         "virtual_token_dim": 768,
-        "prompt_encoder_hidden_size": 768
-    },
-
-    "model_size": {
-        "teacher_num_layers": 6,
-        "student_num_layers": 4,
+        "prompt_encoder_hidden_size": 768,
         "max_seq": 512,
-        "num_emd": 2,
-        "num_attention_heads": 12,
-        "dim_model": 768,
-        "dim_ffn": 3072,
         "hidden_act": "gelu",
         "layer_norm_eps": 1e-7,
         "attention_probs_dropout_prob": 0.1,
@@ -101,23 +86,11 @@
         "num_workers": 4
     },
 
-    "swa_options": {
-        "swa": false,
-        "swa_start": 2,
-        "swa_lr": 5e-5,
-        "anneal_epochs": 2,
-        "anneal_strategy": "cos"
-    },
-
     "model_utils": {
         "stop_mode": "min",
         "freeze": false,
         "num_freeze": -1,
         "reinit": false,
-        "num_reinit": 1,
-        "awp": false,
-        "nth_awp_start_epoch": 1,
-        "awp_eps": 1e-2,
-        "awp_lr": 1e-4
+        "num_reinit": 1
     }
 }
