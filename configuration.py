@@ -95,6 +95,7 @@ class CFG:
     anneal_strategy = 'cos'  # default = cos, available option: linear
 
     """ Model Options """
+    num_labels = 2
     vocab_size = tokenizer.vocab_size
     max_seq = 512
     num_layers = 12

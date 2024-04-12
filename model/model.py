@@ -2,11 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 from configuration import CFG
-from .model_utils import freeze
+from .model_utils import freeze, reinit_topk
 from model.abstract_task import AbstractTask
+from experiment.pooling import pooling
 from experiment.tuner.clm import CLMHead
 from experiment.tuner.mlm import MLMHead
 from experiment.tuner.sbo import SBOHead
@@ -339,22 +340,56 @@ class QuestionAnswering(nn.Module, AbstractTask):
     """
     def __init__(self, cfg: CFG) -> None:
         super(QuestionAnswering, self).__init__()
-        self.cfg = CFG
-        self.model = self.select_model(cfg.num_layers)
-        self._init_weights(self.model)
+        self.cfg = cfg
+        self.model, self.prompt_encoder = self.select_pt_model()
+        self.fc = nn.Linear(self.cfg.dim_model, 2)
+
+        self._init_weights(self.fc)
+        if self.cfg.freeze:
+            freeze(self.model.embeddings)
+            freeze(self.model.encoder.layer[:self.cfg.num_freeze])
+
+        if self.cfg.reinit:
+            reinit_topk(self.model, self.cfg.num_reinit)
+
+        if self.cfg.gradient_checkpoint:
+            self.model.gradient_checkpointing_enable()
+
+    def feature(self, inputs: dict):
+        outputs = self.model(**inputs)
+        return outputs
 
     def forward(self):
         pass
 
 
 class TextGeneration(nn.Module, AbstractTask):
-    """ Fine-Tune Task Module for Text Generate Task
+    """ Fine-Tune Task Module for Text Generation Task
     """
     def __init__(self, cfg: CFG) -> None:
         super(TextGeneration, self).__init__()
-        self.cfg = CFG
-        self.model = self.select_model(cfg.num_layers)
-        self._init_weights(self.model)
+        self.cfg = cfg
+        self.model, self.prompt_encoder = self.select_pt_model()
+        self.fc = nn.Linear(
+            self.cfg.dim_model,
+            self.cfg.vocab_size,
+            bias=False
+        )
+
+        self._init_weights(self.fc)
+        if self.cfg.freeze:
+            freeze(self.model.embeddings)
+            freeze(self.model.encoder.layer[:self.cfg.num_freeze])
+
+        if self.cfg.reinit:
+            reinit_topk(self.model, self.cfg.num_reinit)
+
+        if self.cfg.gradient_checkpoint:
+            self.model.gradient_checkpointing_enable()
+
+    def feature(self, inputs: dict):
+        outputs = self.model(**inputs)
+        return outputs
 
     def forward(self):
         pass
@@ -365,9 +400,35 @@ class SentimentAnalysis(nn.Module, AbstractTask):
     """
     def __init__(self, cfg: CFG) -> None:
         super(SentimentAnalysis, self).__init__()
-        self.cfg = CFG
-        self.model = self.select_model(cfg.num_layers)
-        self._init_weights(self.model)
+        self.cfg = cfg
+        self.model, self.prompt_encoder = self.select_pt_model()
+        self.pooling = getattr(pooling, self.cfg.pooling)(self.cfg)
+        self.fc = nn.Linear(
+            self.cfg.dim_model,
+            self.cfg.num_labels,
+            bias=False
+        )
 
-    def forward(self):
-        pass
+        self._init_weights(self.fc)
+        if self.cfg.freeze:
+            freeze(self.model.embeddings)
+            freeze(self.model.encoder.layer[:self.cfg.num_freeze])
+
+        if self.cfg.reinit:
+            reinit_topk(self.model, self.cfg.num_reinit)
+
+        if self.cfg.gradient_checkpoint:
+            self.model.gradient_checkpointing_enable()
+
+    def feature(self, inputs: Dict):
+        outputs = self.model(**inputs)
+        return outputs
+
+    def forward(self, inputs: Dict) -> Tensor:
+        h = self.feature(inputs)
+        features = h.last_hidden_state
+        if self.cfg.pooling == 'WeightedLayerPooling':  # using all encoder layer's output
+            features = h.hidden_states
+        embedding = self.pooling(features, inputs['attention_mask'])
+        logit = self.fc(embedding)
+        return logit
