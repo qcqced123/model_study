@@ -26,31 +26,85 @@ class PretrainDataset(Dataset):
 
 
 class SentimentAnalysisDataset(Dataset):
-    pass
+    """ Pytorch Dataset Module for Sentiment Analysis Task in fine-tuning
+
+    Args:
+    """
+    def __init__(self) -> None:
+        pass
+
+    def __len__(self) -> int:
+        pass
+
+    def __getitem__(self, item: int) -> Tuple[Tensor, Tensor]:
+        pass
 
 
 class QuestionAnsweringDataset(Dataset):
     """ Pytorch Dataset Module for QuestionAnswering Task in fine-tuning
     """
-    pass
+    def __init__(self) -> None:
+        pass
+
+    def __len__(self) -> int:
+        pass
+
+    def __getitem__(self, item: int) -> Tuple[Tensor, Tensor]:
+        pass
 
 
 class TextGenerationDataset(Dataset):
     """ Pytorch Dataset Module for Text Generation Task in fine-tuning
     """
+    def __init__(self) -> None:
+        pass
+
+    def __len__(self) -> int:
+        pass
+
+    def __getitem__(self, item: int) -> Tuple[Tensor, Tensor]:
+        pass
 
 
 class TextSimilarityDataset(Dataset):
-    pass
+    def __init__(self) -> None:
+        pass
+
+    def __len__(self) -> int:
+        pass
+
+    def __getitem__(self, item: int) -> Tuple[Tensor, Tensor]:
+        pass
 
 
 class TextSummationDataset(Dataset):
-    pass
+    def __init__(self) -> None:
+        pass
+
+    def __len__(self) -> int:
+        pass
+
+    def __getitem__(self, item: int) -> Tuple[Tensor, Tensor]:
+        pass
 
 
 class SuperGlueDataset(Dataset):
-    pass
+    def __init__(self) -> None:
+        pass
+
+    def __len__(self) -> int:
+        pass
+
+    def __getitem__(self, item: int) -> Tuple[Tensor, Tensor]:
+        pass
 
 
 class SquadDataset(Dataset):
-    pass
+    def __init__(self) -> None:
+        pass
+
+    def __len__(self) -> int:
+        pass
+
+    def __getitem__(self, item: int) -> Tuple[Tensor, Tensor]:
+        pass
