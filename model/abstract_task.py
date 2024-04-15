@@ -191,7 +191,7 @@ class AbstractTask:
             task_type=self.cfg.task_type,
             num_virtual_tokens=self.cfg.num_virtual_tokens,
             token_dim=self.cfg.virtual_token_dim,
-            encoder_reparameterization_type="MLP",
+            encoder_reparameterization_type=self.cfg.encoder_reparameterization_type,
             encoder_hidden_size=self.cfg.prompt_encoder_hidden_size,
         )
         prompt_encoder = PromptEncoder(config)

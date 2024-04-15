@@ -1,11 +1,11 @@
 {
     "pipeline_setting": {
         "checkpoint_dir": "./saved/",
-        "name": "DistillationKnowledge",
+        "name": "SentimentAnalysis",
         "trainer": "FineTuningTuner",
         "loop": "train_loop",
-        "dataset": "PretrainDataset",
-        "task": "QuestionAnswering",
+        "dataset": "SentimentAnalysisDataset",
+        "task": "SentimentAnalysis",
         "model_name": "meta-llama/Llama-2-7b",
         "tokenizer_name": "meta-llama/Llama-2-7b"
     },
@@ -20,6 +20,7 @@
         "task_type": "SEQ2SEQ",
         "prompt_tuning": false,
         "prompt_tuning_type": "P-TUNING",
+        "encoder_reparameterization_type": "LSTM",
         "num_virtual_tokens": 20,
         "virtual_token_dim": 768,
         "prompt_encoder_hidden_size": 768,

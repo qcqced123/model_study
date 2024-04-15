@@ -28,7 +28,7 @@ class PreTrainTuner:
     So, if you want set options, go to cfg.json file or configuration.py
 
     Args:
-        cfg: configuration module, configuration.py
+        cfg: configuration module, confriguration.py
         generator: torch.Generator, for init pytorch random seed
     """
     def __init__(self, cfg: CFG, generator: torch.Generator) -> None:

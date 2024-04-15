@@ -168,6 +168,7 @@ class CFG:
     task_type = 'SEQ2SEQ'
     prompt_tuning = False
     prompt_tuning_type = 'P-TUNING'
+    encoder_reparameterization_type = 'LSTM'
     num_virtual_tokens = 20
     virtual_token_dim = 768
     prompt_encoder_hidden_size = 768
