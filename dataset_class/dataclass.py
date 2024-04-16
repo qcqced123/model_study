@@ -48,9 +48,7 @@ class SentimentAnalysisDataset(Dataset):
         self.df = unify_feature_name(df, self.name_rule)
         self.text = self.df.get('text').tolist()
         self.label = self.df.get('rating').tolist()
-        self.title = self.df.get('title', None)
-        self.product_name = self.df.get('product_name', None)
-        self.category = self.df.get('category', None)
+        self.title = self.df.get('title', None).tolist()
 
     def __len__(self) -> int:
         return len(self.label)

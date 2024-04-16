@@ -1,4 +1,4 @@
-import re, gc, pickle, json
+import re, gc, pickle, json, os
 import pandas as pd
 import numpy as np
 import torch
@@ -524,6 +524,32 @@ def load_all_types_dataset(path: str) -> pd.DataFrame:
         output = load_csv(path)
 
     return output
+
+
+def split_jsonl(input_file: str, output_dir: str, chunk_size: str) -> int:
+    """ Split a large jsonl file into smaller jsonl files
+
+    Args:
+        input_file: str, path to the input jsonl file
+        output_dir: str, path to the output directory
+        chunk_size: int, number of lines in each output file,
+                         this value determines the number of output files and size of each file
+    """
+    with open(input_file, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+
+    total_lines = len(lines)
+    num_chunks = (total_lines + chunk_size - 1) // chunk_size
+
+    for i in tqdm(range(num_chunks)):
+        chunk_start = i * chunk_size
+        chunk_end = min((i + 1) * chunk_size, total_lines)
+        output_file = os.path.join(output_dir, f'part{i+1}.jsonl')
+
+        with open(output_file, 'w', encoding='utf-8') as out_f:
+            for line in lines[chunk_start:chunk_end]:
+                out_f.write(line)
+    return num_chunks
 
 
 def jsonl_to_json(jsonl_file: str, json_file: str) -> None:
