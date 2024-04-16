@@ -396,7 +396,15 @@ class TextGeneration(nn.Module, AbstractTask):
 
 
 class SentimentAnalysis(nn.Module, AbstractTask):
-    """ Fine-Tune Task Module for Sentiment Analysis Task
+    """ Fine-Tune Task Module for Sentiment Analysis Task, same as multi-class classification task, not regression tasks
+    We set target classes as 5, which is meaning of 1 to 5 stars
+
+    All of dataset should be unified by name rule, for making prompt sentences and labels range 1 to 5 stars rating
+
+        1) if your dataset's column name's are not unified
+            - please add new keys to name_dict in dataset_class/name_rule/sentiment_analysis.py
+        2) if your dataset's target labels are not range 1 to 5
+            - ASAP, We make normalizing function for target labels range 1 to 5 rating
     """
     def __init__(self, cfg: CFG) -> None:
         super(SentimentAnalysis, self).__init__()
@@ -425,10 +433,13 @@ class SentimentAnalysis(nn.Module, AbstractTask):
         return outputs
 
     def forward(self, inputs: Dict) -> Tensor:
-        h = self.feature(inputs)
+        """ need to implement p-tuning options in forward function """
+        h = self.model.encoder(torch.cat([self.prompt_encoder(0) + self.model.embeddings(inputs[1:-1]) + self.prompt_encoder(1)],dim=1)) if self.prompt_encoder is not None else self.feature(inputs)
+
         features = h.last_hidden_state
         if self.cfg.pooling == 'WeightedLayerPooling':  # using all encoder layer's output
             features = h.hidden_states
+
         embedding = self.pooling(features, inputs['attention_mask'])
         logit = self.fc(embedding)
         return logit

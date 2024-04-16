@@ -415,3 +415,5 @@ $RECYCLE.BIN/
 !/RoPE_test.ipynb
 tutorial/semantic_search/product_search_tutorial/myntra1.parquet
 tutorial/semantic_search/product_search_tutorial/myntra2.parquet
+*.parquet
+*.parquet

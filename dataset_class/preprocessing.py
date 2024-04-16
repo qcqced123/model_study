@@ -215,7 +215,7 @@ def apply_preprocess(dataset: Dataset, function: Callable, batched: bool = True,
     return mapped_dataset
 
 
-def tokenizing(cfg: configuration.CFG, text: str, padding: bool or str = 'max_length') -> Any:
+def tokenizing(cfg: configuration.CFG, text: str, padding: bool or str = 'max_length') -> Dict[str, torch.Tensor]:
     """ Preprocess text for LLM Input, for common batch system
 
     Args:
@@ -229,10 +229,10 @@ def tokenizing(cfg: configuration.CFG, text: str, padding: bool or str = 'max_le
         padding=padding,
         truncation=True,
         return_tensors=None,
-        add_special_tokens=False,  # later, we will add ourselves
+        add_special_tokens=False,  # lat we will add ourselves
     )
     for k, v in inputs.items():
-        inputs[k] = torch.tensor(v)
+        inputs[k] = torch.as_tensor(v)  # as_tensor for reducing memory usage, this ops doesn't copy tensor
     return inputs
 
 
@@ -468,24 +468,23 @@ def load_pkl(filepath: str) -> Any:
     return output
 
 
-def load_json(filepath: str) -> Any:
+def load_json(filepath: str) -> pd.DataFrame:
     """ Load json file
 
     Examples:
         filepath = './dataset_class/data_folder/train.json'
     """
-    with open(f'{filepath}', 'r') as file:
-        output = json.load(file)
+    output = pd.read_json(filepath)
     return output
 
 
-def load_parquet(filepath: str) -> Dict:
+def load_parquet(filepath: str) -> pd.DataFrame:
     """ Load parquet file
 
     Examples:
         filepath = './dataset_class/data_folder/train.parquet'
     """
-    output = pd.read_parquet(filepath).to_dict()
+    output = pd.read_parquet(filepath)
     return output
 
 
@@ -495,11 +494,11 @@ def load_csv(filepath: str) -> pd.DataFrame:
     Examples:
         filepath = './dataset_class/data_folder/train.csv'
     """
-    output = pd.read_csv(filepath).to_dict()
+    output = pd.read_csv(filepath)
     return output
 
 
-def load_all_types_dataset(path: str) -> Dict:
+def load_all_types_dataset(path: str) -> pd.DataFrame:
     """ Load all pickle files from folder
 
     Args:
@@ -513,9 +512,55 @@ def load_all_types_dataset(path: str) -> Dict:
     All of file types are supported: json, csv, parquet, pkl
     And Then, they are converted to dict type in python
     """
+    output = None
     file_types = path.split('.')[-1]
-    if file_types == 'pkl': output = load_pkl(path)
-    elif file_types == 'json': output = load_json(path)
-    elif file_types == 'parquet': output = load_parquet(path)
-    elif file_types == 'csv': output = load_csv(path)
+    if file_types == 'pkl':
+        output = load_pkl(path)
+    elif file_types == 'json':
+        output = load_json(path)
+    elif file_types == 'parquet':
+        output = load_parquet(path)
+    elif file_types == 'csv':
+        output = load_csv(path)
+
     return output
+
+
+def jsonl_to_json(jsonl_file: str, json_file: str) -> None:
+    """ Convert jsonl file to json file
+
+    Args:
+        jsonl_file: input jsonl file path
+        json_file: output json file path, which is converted from jsonl file
+
+    Examples:
+        jsonl_to_json('./data_folder/amazon_review/beauty.jsonl', './data_folder/amazon_review/beauty.json')
+    """
+    with open(jsonl_file, 'r', encoding='utf-8') as f:
+        jsonl_data = f.readlines()
+
+    json_data = [json.loads(line.strip()) for line in jsonl_data]
+    with open(json_file, 'w', encoding='utf-8') as f:
+        json.dump(json_data, f, ensure_ascii=False, indent=4)
+
+
+def unify_feature_name(df: pd.DataFrame, rule: Dict) -> pd.DataFrame:
+    """ Unify feature name (column name) in dataframe with each fine-tune task
+    Use dictionary to map the feature name to unified feature name for each task
+
+    Args:
+        df: pd.DataFrame, dataset from csv file
+        rule: dict, dictionary for mapping feature name to unified feature name, came from name_rule module
+
+    Notes:
+        1) sentiment analysis:
+            rule = {
+                'text': 'text',
+                'review': 'text',
+                'sentence_title': 'title',
+                'rating': 'rating',
+                'label': 'rating',
+                }
+    """
+    df.columns = [rule[col] for col in df.columns]
+    return df

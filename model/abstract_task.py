@@ -182,13 +182,11 @@ class AbstractTask:
 
     def apply_peft_prompt_tuning(self) -> nn.Module:
         """ class method for applying peft p-tuning to pretrained model in fine-tune stage
-
-        Args:
-            model: pretrained model from huggingface model hub
         """
+        task_type = None if not self.cfg.task_type else self.cfg.task_type
         config = PromptEncoderConfig(
             peft_type=self.cfg.prompt_tuning_type,
-            task_type=self.cfg.task_type,
+            task_type=task_type,
             num_virtual_tokens=self.cfg.num_virtual_tokens,
             token_dim=self.cfg.virtual_token_dim,
             encoder_reparameterization_type=self.cfg.encoder_reparameterization_type,

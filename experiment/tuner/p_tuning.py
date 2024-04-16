@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from configuration import CFG
 from torch import Tensor
@@ -19,8 +18,9 @@ class PromptEncoder(nn.Module):
         c_end: tensor index of context span's end position, same as start index of right template part
 
     Notes:
-        1) nn.Dropout(p=dropout): because this module will be used for instead of nn.Embedding Layer,
-                               in common sense, we do not apply Dropout to Inputs Embedding Layer
+        1) nn.Dropout(p=dropout): Because this module will be used for instead of nn.Embedding Layer,
+                                  in common sense, we do not apply Dropout to Inputs Embedding Layer.
+                                  So, we do not apply dropout into mlp layer
         2) nn.GELU(): In original paper, author use RELU() but we use GELU because of common sense
 
     Maths:
@@ -35,25 +35,26 @@ class PromptEncoder(nn.Module):
         https://huggingface.co/docs/peft/package_reference/p_tuning
         https://github.com/huggingface/peft/blob/main/src/peft/tuners/p_tuning/model.py
     """
-    def __init__(self, cfg: CFG, c_src: int, c_end: int, dim_model: int = 1024, dropout: float = 0.1) -> None:
+    def __init__(self, cfg: CFG, c_src: int, c_end: int) -> None:
         super(PromptEncoder, self).__init__()
         self.cfg = cfg
         self.context_start = c_src
         self.context_end = c_end
-        self.dim_model = dim_model
-        self.dim_mlp = self.dim_model*2
-        self.prompt_embedding = nn.Embedding(self.cfg.num_virtual_tokens, dim_model)
+        self.dim_mlp = self.cfg.virtual_token_dim*2
+
+        self.prompt_embedding = nn.Embedding(self.cfg.num_virtual_tokens, self.cfg.virtual_token_dim)
         self.prompt_encoder = nn.LSTM(
-            dim_model,
-            dim_model,
+            self.cfg.virtual_token_dim,
+            self.cfg.virtual_token_dim,
             num_layers=2,
+            batch_first=True,
             bidirectional=True,
-            dropout=dropout,
+            dropout=self.cfg.hidden_dropout_prob,
         )
         self.mlp = nn.Sequential(
             nn.Linear(self.dim_mlp, self.dim_mlp),
             nn.GELU(),
-            nn.Linear(self.dim_mlp, self.dim_model),
+            nn.Linear(self.dim_mlp, self.cfg.virtual_token_dim),
         )
 
     def forward(self, inputs: Tensor) -> Tensor:
