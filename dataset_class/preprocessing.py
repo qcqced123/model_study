@@ -83,11 +83,12 @@ def group_kfold(df: pd.DataFrame, cfg: configuration.CFG) -> pd.DataFrame:
     return df
 
 
-def stratified_kfold(df: pd.DataFrame, cfg: configuration.CFG) -> pd.DataFrame:
+def stratified_kfold(df: pd.DataFrame, label_name: str, cfg: configuration.CFG) -> pd.DataFrame:
     """ Stratified K Fold by sklearn
 
     Args:
         df: pandas.DataFrame, dataset from csv file
+        label_name: target label name for stratified kfold
         cfg: configuration.CFG, needed to load split ratio, seed value
     """
     fold = StratifiedKFold(
@@ -96,7 +97,7 @@ def stratified_kfold(df: pd.DataFrame, cfg: configuration.CFG) -> pd.DataFrame:
         random_state=cfg.seed
     )
     df['fold'] = -1
-    for num, (tx, vx) in enumerate(fold.split(X=df, y=df['prompt_id'])):
+    for num, (tx, vx) in enumerate(fold.split(X=df, y=df[f'{label_name}'])):
         df.loc[vx, "fold"] = int(num)
     return df
 
@@ -507,7 +508,7 @@ def load_all_types_dataset(path: str) -> pd.DataFrame:
     Examples:
         load_all_types_dataset('./data_folder/squad2/train.json')
         load_all_types_dataset('./data_folder/yahoo_qa/test.csv')
-        load_all_types_dataset('./data_folder/yelp_review/train_0.parquet')
+        load_all_types_dataset('./data_folder/yelp/train_0.parquet')
 
     All of file types are supported: json, csv, parquet, pkl
     And Then, they are converted to dict type in python
@@ -560,7 +561,7 @@ def jsonl_to_json(jsonl_file: str, json_file: str) -> None:
         json_file: output json file path, which is converted from jsonl file
 
     Examples:
-        jsonl_to_json('./data_folder/amazon_review/beauty.jsonl', './data_folder/amazon_review/beauty.json')
+        jsonl_to_json('./data_folder/amazon/beauty.jsonl', './data_folder/amazon/beauty.json')
     """
     with open(jsonl_file, 'r', encoding='utf-8') as f:
         jsonl_data = f.readlines()

@@ -1316,59 +1316,41 @@ class DistillKnowledgeTuner(PreTrainTuner):
 
 
 class FineTuningTuner:
-    """ Trainer class for Baseline Fine-Tuning Pipeline
+    """ Trainer class for baseline fine-tune pipeline, such as text classification, sequence labeling, etc.
+
+    Text Generation, Question Answering, Text Similarity and so on are not supported on this class
+    They may be added another module, inherited from this class
     """
     def __init__(self, cfg: CFG, generator: torch.Generator) -> None:
         self.cfg = cfg
-        self.model_name = self.cfg.module_name
-        self.tokenizer = self.cfg.tokenizer
+        self.fold_value = 3
         self.generator = generator
+        self.model_name = self.cfg.model_name
+        self.tokenizer = self.cfg.tokenizer
         self.metric_list = self.cfg.metrics
 
     def make_batch(self) -> Tuple[DataLoader, DataLoader, int]:
-        """ Function for making batch instance """
-        train = load_all_types_dataset(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_train.pkl')
-        valid = load_all_types_dataset(f'./dataset_class/data_folder/{self.cfg.datafolder}/384_valid.pkl')
+        base_path = './dataset_class/data_folder/'
+        df = load_all_types_dataset(base_path + self.cfg.domain + 'train.csv')
 
-        # 1) Custom Datasets
+        train = df[df['fold'] != self.fold_value]
+        valid = df[df['fold'] == self.fold_value]
+
         train_dataset = getattr(dataset_class, self.cfg.dataset)(train)
         valid_dataset = getattr(dataset_class, self.cfg.dataset)(valid)
 
-        # 2) selecting custom masking method for each task
-        collate_fn = None
-        if self.cfg.task == 'MaskedLanguageModel':
-            collate_fn = getattr(mlm, 'MLMCollator')(self.cfg)
-        elif self.cfg.task == 'CasualLanguageModel':
-            collate_fn = getattr(clm, 'CLMCollator')(self.cfg)
-        elif self.cfg.task == 'SpanBoundaryObjective':
-            collate_fn = getattr(sbo, 'SpanCollator')(
-                self.cfg,
-                self.cfg.masking_budget,
-                self.cfg.span_probability,
-                self.cfg.max_span_length,
-            )
-        elif self.cfg.task == 'ReplacedTokenDetection':
-            if self.cfg.rtd_masking == 'MaskedLanguageModel':
-                collate_fn = getattr(mlm, 'MLMCollator')(self.cfg)
-            elif self.cfg.rtd_masking == 'SpanBoundaryObjective':
-                collate_fn = getattr(sbo, 'SpanCollator')(
-                    self.cfg,
-                    self.cfg.masking_budget,
-                    self.cfg.span_probability,
-                    self.cfg.max_span_length,
-                )
-
-        # 3) Initializing torch.utils.data.DataLoader Module
         loader_train = get_dataloader(
             cfg=self.cfg,
             dataset=train_dataset,
-            collate_fn=collate_fn,
-            generator=self.generator
+            collate_fn=self.cfg.collator,
+            sampler=self.cfg.sampler,
+            generator=self.generator,
         )
         loader_valid = get_dataloader(
             cfg=self.cfg,
             dataset=valid_dataset,
-            collate_fn=collate_fn,
+            collate_fn=self.cfg.collator,
+            sampler=self.cfg.sampler,
             generator=self.generator,
             shuffle=False,
             drop_last=False
@@ -1380,6 +1362,7 @@ class FineTuningTuner:
         The design is inspired by the Builder Pattern
         """
         model = getattr(task, self.cfg.task)(self.cfg)
+
         # load checkpoint when you set 'resume' to True
         if self.cfg.resume:
             model.load_state_dict(
@@ -1391,12 +1374,14 @@ class FineTuningTuner:
         criterion = getattr(loss, self.cfg.loss_fn)(self.cfg.reduction)
         val_criterion = getattr(loss, self.cfg.val_loss_fn)(self.cfg.reduction)
         val_metric_list = [getattr(metric, f'{metrics}') for metrics in self.metric_list]
+
         grouped_optimizer_params = get_optimizer_grouped_parameters(
             model,
             self.cfg.layerwise_lr,
             self.cfg.layerwise_weight_decay,
             self.cfg.layerwise_lr_decay
         )
+
         optimizer = getattr(transformers, self.cfg.optimizer)(
             params=grouped_optimizer_params,
             lr=self.cfg.layerwise_lr,
@@ -1404,37 +1389,56 @@ class FineTuningTuner:
             correct_bias=not self.cfg.layerwise_use_bertadam
         )
         lr_scheduler = get_scheduler(self.cfg, optimizer, len_train)
-        return model, criterion, val_criterion, val_metric_list, optimizer, lr_scheduler
+
+        # init SWA Module
+        swa_model, swa_scheduler = None, None
+        if self.cfg.swa:
+            swa_model = AveragedModel(model)
+            swa_scheduler = get_swa_scheduler(self.cfg, optimizer)
+
+        # init AWP Module
+        awp = None
+        if self.cfg.awp:
+            awp = AWP(
+                model,
+                criterion,
+                optimizer,
+                self.cfg.awp,
+                adv_lr=self.cfg.awp_lr,
+                adv_eps=self.cfg.awp_eps
+            )
+        return model, criterion, val_criterion, val_metric_list, optimizer, lr_scheduler, awp, swa_model, swa_scheduler
 
     def train_val_fn(
         self,
         loader_train,
         model: nn.Module,
-        criterion: Dict[str, nn.Module],
+        criterion: nn.Module,
         optimizer,
         scheduler,
         loader_valid,
-        val_criterion: Dict[str, nn.Module],
+        val_criterion: nn.Module,
         val_metric_list: List[Callable],
         val_score_max: float,
         val_score_max_2: float,
         epoch: int,
-    ) -> Tuple[Any, Union[float, Any]]:
-        """
-        """
+        awp: nn.Module = None,
+        swa_model: nn.Module = None,
+        swa_start: int = None,
+        swa_scheduler=None
+    ) -> Tuple[Any, Union[float, ndarray, ndarray]]:
         losses = AverageMeter()
         scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
 
         model.train()
         for step, batch in enumerate(tqdm(loader_train)):
             optimizer.zero_grad(set_to_none=True)
-            inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
+            inputs = {k: v.to(self.cfg.device, non_blocking=True) for k, v in batch.items() if k != 'labels'}
             labels = batch['labels'].to(self.cfg.device, non_blocking=True)
-            padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)
-            batch_size = inputs.size(0)
 
+            batch_size = labels.size(0)
             with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
-                logit = model(inputs, padding_mask)
+                logit = model(inputs)
                 loss = criterion(logit.view(-1), labels.view(-1))
 
             if self.cfg.n_gradient_accumulation_steps > 1:
@@ -1458,7 +1462,7 @@ class FineTuningTuner:
             grad_norm = grad_norm.detach().cpu().numpy()
 
             wandb.log({
-                '<Per Step> Total Train Loss': loss.avg,
+                '<Per Step> Total Train Loss': losses.avg,
                 '<Per Step> Gradient Norm': grad_norm,
                 '<Per Step> lr': lr,
             })
@@ -1487,7 +1491,7 @@ class FineTuningTuner:
         self,
         loader_valid,
         model: nn.Module,
-        val_criterion: Dict[str, nn.Module],
+        val_criterion: nn.Module,
         val_metric_list: List[Callable]
     ) -> Tuple[float, float, float]:
         """
@@ -1498,17 +1502,17 @@ class FineTuningTuner:
         model.eval()
         with torch.no_grad():
             for step, batch in enumerate(tqdm(loader_valid)):
-                inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
+                inputs = {k: v.to(self.cfg.device, non_blocking=True) for k, v in batch.items() if k != 'labels'}
                 labels = batch['labels'].to(self.cfg.device, non_blocking=True)
-                padding_mask = batch['padding_mask'].to(self.cfg.device, non_blocking=True)
-                batch_size = inputs.size(0)
 
-                logit = model(inputs, padding_mask)
+                batch_size = labels.size(0)
+
+                logit = model(inputs)
                 loss = val_criterion(logit.view(-1), labels.view(-1))
 
                 valid_losses.update(loss.item(), batch_size)
-
                 wandb.log({'<Val Step> Valid Loss': valid_losses.avg})
+
                 for i, metric_fn in enumerate(val_metric_list):
                     if self.metric_list[i] == 'accuracy':
                         scores = metric_fn(

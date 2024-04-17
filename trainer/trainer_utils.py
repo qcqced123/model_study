@@ -31,24 +31,27 @@ def get_optimizer_grouped_parameters(
     """
     no_decay = ["bias", "LayerNorm.bias"]  # LayerNorm.weight
     optimizer_grouped_parameters = [
-        {"params": [p for n, p in model.named_parameters() if "model" not in n],
-         "weight_decay": 0.0,
-         "lr": layerwise_lr
-         },
+        {
+            "params": [p for n, p in model.named_parameters() if "model" not in n],
+             "weight_decay": 0.0,
+             "lr": layerwise_lr
+        },
     ]
     layers = [model.model.embeddings] + list(model.model.encoder.layer)
     layers.reverse()
     lr = layerwise_lr
     for layer in layers:
         optimizer_grouped_parameters += [
-            {"params": [p for n, p in layer.named_parameters() if not any(nd in n for nd in no_decay)],
-             "weight_decay": layerwise_weight_decay,
-             "lr": lr,
-             },
-            {"params": [p for n, p in layer.named_parameters() if any(nd in n for nd in no_decay)],
-             "weight_decay": 0.0,
-             "lr": lr,
-             },
+            {
+                "params": [p for n, p in layer.named_parameters() if not any(nd in n for nd in no_decay)],
+                "weight_decay": layerwise_weight_decay,
+                "lr": lr,
+            },
+            {
+                "params": [p for n, p in layer.named_parameters() if any(nd in n for nd in no_decay)],
+                "weight_decay": 0.0,
+                "lr": lr,
+            },
         ]
         lr *= layerwise_lr_decay
     return optimizer_grouped_parameters
@@ -75,7 +78,7 @@ def get_dataloader(
     sampler=None,
     drop_last: bool = True
 ) -> DataLoader:
-    """ function for initializing torch.utils.data.DataLoader Module
+    """ function for initiaflizing torch.utils.data.DataLoader Module
     All Args are from torch.nn.utils.data.DataLoader except cfg
     """
     dataloader = DataLoader(
@@ -194,6 +197,7 @@ class SmartBatchingSampler(Sampler):
             last_batch = self.batches.pop(-1)
             np.random.shuffle(self.batches)
             self.batches.append(last_batch)
+
         self._inds = list(more_itertools.flatten(self.batches))
         yield from self._inds
 

@@ -33,9 +33,14 @@ class PretrainDataset(Dataset):
 class SentimentAnalysisDataset(Dataset):
     """ Pytorch Dataset Module for Sentiment Analysis Task in fine-tuning
 
+    Baseline Dataset for Sentiment Analysis Task is Amazon Review Dataset,
+
+    ASAP, we will extend this module for more general sentiment analysis dataset
+    such as Yelp, IMDB, and so on
+
     Args:
         cfg: configuration file for the experiment
-        df: pandas DataFrame for the dataset
+        df: pd.DataFrame for the dataset
 
     Returns:
         inputs: dictionary of input_ids, attention_mask, token_type_ids from huggingface tokenizer
@@ -47,8 +52,8 @@ class SentimentAnalysisDataset(Dataset):
         self.name_rule = sentiment_analysis.name_dict
         self.df = unify_feature_name(df, self.name_rule)
         self.text = self.df.get('text').tolist()
-        self.label = self.df.get('rating').tolist()
         self.title = self.df.get('title', None).tolist()
+        self.label = self.df.get('rating').tolist()
 
     def __len__(self) -> int:
         return len(self.label)
@@ -56,8 +61,11 @@ class SentimentAnalysisDataset(Dataset):
     def __getitem__(self, item: int) -> Tuple[Dict, Tensor]:
         cls_token, sep_token = self.cfg.tokenizer.cls_token, self.cfg.tokenizer.sep_token
 
-        text = cls_token + self.text[item].apply(cleaning_words) + sep_token
-        inputs = tokenizing(text, self.cfg.tokenizer, self.cfg.max_len)
+        prompt = ''
+        prompt += cls_token + self.title[item].apply(cleaning_words) + sep_token
+        prompt += self.text[item].apply(cleaning_words) + sep_token
+
+        inputs = tokenizing(self.cfg, prompt, False)
         labels = torch.as_tensor(self.label[item])
         return inputs, labels
 

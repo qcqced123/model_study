@@ -1,5 +1,6 @@
 import torch
-from transformers import AutoTokenizer
+from trainer.trainer_utils import SmartBatchingSampler, SmartBatchingCollate
+from transformers import AutoTokenizer, DataCollatorWithPadding
 
 
 class CFG:
@@ -24,6 +25,7 @@ class CFG:
     loop = 'train_loop'
     hf_dataset = 'wikimedia/wikipedia'
     language = '20231101.en'
+    domain = 'wikipedia_en'
     dataset = 'MLMDataset'  # dataset_class.dataclass.py -> MLMDataset, CLMDataset ... etc
     arch_name = 'attention'
     model_name = 'deberta'
@@ -44,8 +46,11 @@ class CFG:
     num_workers = 4
 
     """ Data Options """
+    batching = 'random'
+    collator = DataCollatorWithPadding(tokenizer) if batching == 'random' else SmartBatchingCollate
+    sampler = None if batching == 'random' else SmartBatchingSampler
     split_ratio = 0.2
-    n_folds = 5
+    n_folds = 10
     max_len = 512
     epochs = 10
     batch_size = 64

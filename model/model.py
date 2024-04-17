@@ -433,10 +433,11 @@ class SentimentAnalysis(nn.Module, AbstractTask):
         return outputs
 
     def forward(self, inputs: Dict) -> Tensor:
-        """ need to implement p-tuning options in forward function """
-        h = self.model.encoder(torch.cat([self.prompt_encoder(0) + self.model.embeddings(inputs[1:-1]) + self.prompt_encoder(1)],dim=1)) if self.prompt_encoder is not None else self.feature(inputs)
-
+        """ need to implement p-tuning options in forward function
+        """
+        h = self.feature(inputs)
         features = h.last_hidden_state
+
         if self.cfg.pooling == 'WeightedLayerPooling':  # using all encoder layer's output
             features = h.hidden_states
 
