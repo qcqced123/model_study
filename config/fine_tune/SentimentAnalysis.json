@@ -1,6 +1,6 @@
 {
     "pipeline_setting": {
-        "type": "train",
+        "pipeline_type": "train",
         "name": "SentimentAnalysis",
         "trainer": "FineTuningTuner",
         "loop": "train_loop",

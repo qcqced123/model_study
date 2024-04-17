@@ -23,15 +23,26 @@ def train_loop(cfg: CFG, train_type: str, model_config: str) -> None:
     4) Initialize Train, Validation Input Object
     5) Check if this train loop need to finish, by Early Stopping Object
     """
-    sharing_method = cfg.share_embed_method if train_type == 'pretrain' and (model_config in ['electra', 'deberta_v3']) else ''
-    wandb.init(
-        project=cfg.name,
-        name=f'[{cfg.arch_name}]' + cfg.module_name,
-        config=class2dict(cfg),
-        group=f'{sharing_method}/{cfg.module_name}/layers_{cfg.num_layers}/{cfg.rtd_masking}/{cfg.mlm_masking}/max_length_{cfg.max_seq}/',
-        job_type='train',
-        entity="qcqced"
-    )
+    if train_type == 'pretrain':
+        sharing_method = cfg.share_embed_method if (model_config in ['electra', 'deberta_v3']) else ''
+        wandb.init(
+            project=cfg.name,
+            name=f'[{cfg.arch_name}]' + cfg.module_name,
+            config=class2dict(cfg),
+            group=f'{sharing_method}/{cfg.module_name}/layers_{cfg.num_layers}/{cfg.rtd_masking}/{cfg.mlm_masking}/max_length_{cfg.max_seq}/',
+            job_type='train',
+            entity="qcqced"
+        )
+    elif train_type == 'fine_tune':
+        wandb.init(
+            project=cfg.name,
+            name=f'[{cfg.arch_name}]' + cfg.module_name,
+            config=class2dict(cfg),
+            group=f'{cfg.module_name}/layers_{cfg.num_layers}/max_length_{cfg.max_len}/',
+            job_type='train',
+            entity="qcqced"
+        )
+
     early_stopping = EarlyStopping(mode=cfg.stop_mode, patience=10)
     early_stopping.detecting_anomaly()  # call detecting anomaly in pytorch
 

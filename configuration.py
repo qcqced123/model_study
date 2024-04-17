@@ -13,6 +13,7 @@ class CFG:
 
     """ Pipeline Setting """
     train, test = True, False
+    pipeline_type = 'train'  # options: pretrain, rtd, sbo, distillation, fine-tuning
     checkpoint_dir = 'saved/model'
     resume, load_pretrained, state_dict = True, False, '/'
     generator_state_dict = '/'
