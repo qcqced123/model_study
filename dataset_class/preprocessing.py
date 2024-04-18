@@ -1,3 +1,4 @@
+import emoji
 import re, gc, pickle, json, os
 import pandas as pd
 import numpy as np
@@ -350,6 +351,13 @@ def check_null(df: pd.DataFrame) -> pd.Series:
     return df.isnull().sum()
 
 
+def null2str(df: pd.DataFrame) -> pd.DataFrame:
+    """ Convert null type object to string type object
+    """
+    df = df.fillna(' ')
+    return df
+
+
 def load_data(data_path: str) -> pd.DataFrame:
     """ Load data_folder from csv file like as train.csv, test.csv, val.csv
     """
@@ -369,8 +377,20 @@ def no_multi_spaces(text):
 
 
 def underscore_to_space(text: str):
-    text = text.replace("_", " ")
-    text = text.replace("-", " ")
+    try:
+        text = text.replace("_", " ")
+        text = text.replace("-", " ")
+
+    except: print(text)
+    return text
+
+
+def emoji2text(text: str) -> str:
+    """ Convert emoji to text
+    """
+    try: text = emoji.demojize(text)
+    except: print(text)
+
     return text
 
 
@@ -386,7 +406,8 @@ def preprocess_text(source):
 def cleaning_words(text: str) -> str:
     """ Apply all of cleaning process to text data
     """
-    tmp_text = underscore_to_space(text)
+    tmp_text = emoji2text(text)
+    tmp_text = underscore_to_space(tmp_text)
     tmp_text = no_char(tmp_text)
     tmp_text = preprocess_text(tmp_text)
     tmp_text = no_multi_spaces(tmp_text)
@@ -597,3 +618,4 @@ def unify_feature_name(df: pd.DataFrame, rule: Dict) -> pd.DataFrame:
 
     df.columns = new_col
     return df
+

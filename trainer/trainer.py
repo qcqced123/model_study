@@ -1439,7 +1439,7 @@ class FineTuningTuner:
             batch_size = labels.size(0)
             with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
                 logit = model(inputs)
-                loss = criterion(logit.view(-1), labels.view(-1))
+                loss = criterion(logit.view(-1, self.cfg.num_labels), labels.view(-1))
 
             if self.cfg.n_gradient_accumulation_steps > 1:
                 loss = loss / self.cfg.n_gradient_accumulation_steps
@@ -1508,7 +1508,7 @@ class FineTuningTuner:
                 batch_size = labels.size(0)
 
                 logit = model(inputs)
-                loss = val_criterion(logit.view(-1), labels.view(-1))
+                loss = val_criterion(logit.view(-1, self.cfg.num_labels), labels.view(-1))
 
                 valid_losses.update(loss.item(), batch_size)
                 wandb.log({'<Val Step> Valid Loss': valid_losses.avg})

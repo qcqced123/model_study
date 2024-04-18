@@ -409,10 +409,14 @@ class SentimentAnalysis(nn.Module, AbstractTask):
     def __init__(self, cfg: CFG) -> None:
         super(SentimentAnalysis, self).__init__()
         self.cfg = cfg
-        self.model, self.prompt_encoder = self.select_pt_model()
+        self.components = self.select_pt_model()
+        self.auto_cfg = self.components['plm_config']
+        self.model = self.components['plm']
+        self.prompt_encoder = self.components['prompt_encoder']
+
         self.pooling = getattr(pooling, self.cfg.pooling)(self.cfg)
         self.fc = nn.Linear(
-            self.cfg.dim_model,
+            self.auto_cfg.hidden_size,
             self.cfg.num_labels,
             bias=False
         )

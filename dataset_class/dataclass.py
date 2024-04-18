@@ -54,12 +54,12 @@ class SentimentAnalysisDataset(Dataset):
         self.text = self.df.get('text').tolist()
         self.title = self.df.get('title', None).tolist()
         self.domain = self.df.get('domain', None).tolist()
-        self.label = self.df.get('rating')
+        self.ratings = self.df.get('rating', None).tolist()
 
     def __len__(self) -> int:
-        return len(self.label)
+        return len(self.df)
 
-    def __getitem__(self, item: int) -> Tuple[Dict, Tensor]:
+    def __getitem__(self, item: int) -> Dict:
         cls_token, sep_token = self.cfg.tokenizer.cls_token, self.cfg.tokenizer.sep_token
 
         prompt = ''
@@ -68,9 +68,9 @@ class SentimentAnalysisDataset(Dataset):
         prompt += cleaning_words(self.text[item]) + sep_token
 
         inputs = tokenizing(self.cfg, prompt, False)
-        labels = torch.tensor(self.label.iloc[item])
-        print(labels)
-        return inputs, labels
+        # inputs['labels'] = torch.as_tensor(self.df.iloc[item, 0:1])
+        inputs['labels'] = torch.as_tensor(self.ratings[item] - 1)  # 1 ~ 5 -> 0 ~ 4
+        return inputs
 
 
 class QuestionAnsweringDataset(Dataset):

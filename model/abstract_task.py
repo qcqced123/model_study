@@ -5,7 +5,7 @@ from peft import PeftType, TaskType
 from peft import get_peft_config, get_peft_model, LoraConfig
 from peft import PromptEncoderConfig, PromptEncoder
 from transformers import AutoConfig, AutoModel, BitsAndBytesConfig
-from typing import Tuple
+from typing import Tuple, Dict
 from configuration import CFG
 
 
@@ -82,7 +82,7 @@ class AbstractTask:
         model = getattr(module, self.cfg.module_name)(self.cfg, num_layers)  # get instance in runtime
         return model
 
-    def select_pt_model(self) -> Tuple[nn.Module, nn.Module]:
+    def select_pt_model(self) -> Dict:
         """ Selects architecture for each task (fine-tune),
         you can easily select your model for experiment from json config files
         or choose the pretrained weight hub (own your pretrain, huggingface ... etc)
@@ -98,6 +98,7 @@ class AbstractTask:
             https://github.com/huggingface/peft/tree/main/examples/loftq_finetuning
             https://huggingface.co/docs/peft/en/developer_guides/custom_models
         """
+        config = None
         model = None,
         bit_config = None
         prompt_encoder = None
@@ -126,7 +127,11 @@ class AbstractTask:
 
         # apply prompt tuning
         if self.cfg.prompt_tuning: prompt_encoder = self.apply_peft_prompt_tuning(model)
-        return model, prompt_encoder
+        return {
+            'plm_config': config,
+            'plm': model,
+            'prompt_encoder': prompt_encoder
+        }
 
     def apply_peft_lora(self, model: nn.Module) -> nn.Module:
         """ class method for applying peft lora to pretrained model in fine-tune stage
