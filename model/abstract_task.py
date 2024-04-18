@@ -2,7 +2,7 @@ import importlib.util
 import torch
 import torch.nn as nn
 from peft import PeftType, TaskType
-from peft import get_peft_config, get_peft_model, LoraConfig, replace_lora_weights_loftq
+from peft import get_peft_config, get_peft_model, LoraConfig
 from peft import PromptEncoderConfig, PromptEncoder
 from transformers import AutoConfig, AutoModel, BitsAndBytesConfig
 from typing import Tuple
@@ -146,7 +146,7 @@ class AbstractTask:
             https://arxiv.org/abs/2305.14314
         """
         lora_config = LoraConfig(
-            task_type=getattr(TaskType, self.cfg.task_type),
+            task_type=getattr(TaskType, self.cfg.task_type) if self.cfg.task_type != 'None' else None,
             inference_mode=False,
             r=self.cfg.lora_rank,  # rank value
             lora_alpha=self.cfg.lora_alpha,
@@ -169,16 +169,17 @@ class AbstractTask:
             https://arxiv.org/abs/2106.09685
             https://arxiv.org/abs/2305.14314
         """
-        lora_config = LoraConfig(
-            task_type=getattr(TaskType, self.cfg.task_type),
-            inference_mode=False,
-            r=self.cfg.lora_rank,  # rank value
-            lora_alpha=self.cfg.lora_alpha,
-            lora_dropout=self.cfg.lora_dropout
-        )
-        model = get_peft_model(model=model, peft_config=lora_config)
-        replace_lora_weights_loftq(model)
-        return model
+        # lora_config = LoraConfig(
+        #     task_type=getattr(TaskType, self.cfg.task_type),
+        #     inference_mode=False,
+        #     r=self.cfg.lora_rank,  # rank value
+        #     lora_alpha=self.cfg.lora_alpha,
+        #     lora_dropout=self.cfg.lora_dropout
+        # )
+        # model = get_peft_model(model=model, peft_config=lora_config)
+        # replace_lora_weights_loftq(model)
+        # return model
+        pass
 
     def apply_peft_prompt_tuning(self) -> nn.Module:
         """ class method for applying peft p-tuning to pretrained model in fine-tune stage

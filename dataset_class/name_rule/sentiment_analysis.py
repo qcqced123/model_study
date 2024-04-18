@@ -14,6 +14,7 @@ name_dict = {
     'review_text': 'text',
     'comment_text': 'text',
     'sentence_text': 'text',
+    'title': 'title',
     'review_title': 'title',
     'comment_title': 'title',
     'sentence_title': 'title',
@@ -36,9 +37,13 @@ name_dict = {
     'product_code': 'product_id',
     'product': 'product_name',
     'product_name': 'product_name',
-    'category_code': 'category_code',
-    'product_asin': 'category_code',
+    'category_code': 'category_id',
+    'product_asin': 'category_id',
+    'parent_asin': 'category_id',
+    'domain': 'domain',
     'category': 'category',
     'thumbnail': 'images',
+    'images': 'images',
+    'fold': 'fold'
 }
 

@@ -589,5 +589,11 @@ def unify_feature_name(df: pd.DataFrame, rule: Dict) -> pd.DataFrame:
                 'label': 'rating',
                 }
     """
-    df.columns = [rule[col] for col in df.columns]
+    new_col = []
+    for col in df.columns:
+        try: col = rule[col]
+        except: pass
+        new_col.append(col)
+
+    df.columns = new_col
     return df

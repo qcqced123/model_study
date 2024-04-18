@@ -1,5 +1,5 @@
 import torch
-from trainer.trainer_utils import SmartBatchingSampler, SmartBatchingCollate
+# from trainer.trainer_utils import SmartBatchingSampler, SmartBatchingCollate
 from transformers import AutoTokenizer, DataCollatorWithPadding
 
 
@@ -48,8 +48,8 @@ class CFG:
 
     """ Data Options """
     batching = 'random'
-    collator = DataCollatorWithPadding(tokenizer) if batching == 'random' else SmartBatchingCollate
-    sampler = None if batching == 'random' else SmartBatchingSampler
+    collator = DataCollatorWithPadding(tokenizer)  # if batching == 'random' else SmartBatchingCollate
+    sampler = None # if batching == 'random' else SmartBatchingSampler
     split_ratio = 0.2
     n_folds = 10
     max_len = 512

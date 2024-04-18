@@ -12,6 +12,7 @@ from utils.util import sync_config
 from huggingface_hub import login
 warnings.filterwarnings('ignore')
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = 'true'
 os.environ["LRU_CACHE_CAPACITY"] = "4096"
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "garbage_collection_threshold:0.8, max_split_size_mb:32"
 
@@ -19,8 +20,9 @@ check_library(True)
 all_type_seed(CFG, True)
 torch.cuda.empty_cache()
 
-token = sys.stdin.readline().rstrip()
-login(token)  # login to huggingface hub
+# token = sys.stdin.readline().rstrip()
+# login(token)  # login to huggingface hub
+# login()  # login to huggingface hub
 
 
 def main(train_type: str, model_config: str, cfg: CFG) -> None:

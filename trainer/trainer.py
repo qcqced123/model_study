@@ -1336,8 +1336,8 @@ class FineTuningTuner:
         train = df[df['fold'] != self.fold_value]
         valid = df[df['fold'] == self.fold_value]
 
-        train_dataset = getattr(dataset_class, self.cfg.dataset)(train)
-        valid_dataset = getattr(dataset_class, self.cfg.dataset)(valid)
+        train_dataset = getattr(dataset_class, self.cfg.dataset)(self.cfg, train)
+        valid_dataset = getattr(dataset_class, self.cfg.dataset)(self.cfg, valid)
 
         loader_train = get_dataloader(
             cfg=self.cfg,
@@ -1355,7 +1355,7 @@ class FineTuningTuner:
             shuffle=False,
             drop_last=False
         )
-        return loader_train, loader_valid, len(train['input_ids'])
+        return loader_train, loader_valid, len(train)
 
     def model_setting(self, len_train: int):
         """ Function for init backbone's configuration & train utils setting,

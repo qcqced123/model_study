@@ -4,9 +4,9 @@ import configuration
 from torch.utils.data import Dataset
 from torch import Tensor
 from typing import Dict, List, Tuple
-from name_rule import sentiment_analysis
-from preprocessing import tokenizing, unify_feature_name, cleaning_words
-from preprocessing import subsequent_tokenizing, adjust_sequences
+from .name_rule import sentiment_analysis
+from .preprocessing import tokenizing, unify_feature_name, cleaning_words
+from .preprocessing import subsequent_tokenizing, adjust_sequences
 
 
 class PretrainDataset(Dataset):
@@ -53,7 +53,8 @@ class SentimentAnalysisDataset(Dataset):
         self.df = unify_feature_name(df, self.name_rule)
         self.text = self.df.get('text').tolist()
         self.title = self.df.get('title', None).tolist()
-        self.label = self.df.get('rating').tolist()
+        self.domain = self.df.get('domain', None).tolist()
+        self.label = self.df.get('rating')
 
     def __len__(self) -> int:
         return len(self.label)
@@ -62,11 +63,13 @@ class SentimentAnalysisDataset(Dataset):
         cls_token, sep_token = self.cfg.tokenizer.cls_token, self.cfg.tokenizer.sep_token
 
         prompt = ''
-        prompt += cls_token + self.title[item].apply(cleaning_words) + sep_token
-        prompt += self.text[item].apply(cleaning_words) + sep_token
+        prompt += cls_token + self.domain[item] + sep_token
+        prompt += cleaning_words(self.title[item]) + sep_token
+        prompt += cleaning_words(self.text[item]) + sep_token
 
         inputs = tokenizing(self.cfg, prompt, False)
-        labels = torch.as_tensor(self.label[item])
+        labels = torch.tensor(self.label.iloc[item])
+        print(labels)
         return inputs, labels
 
 
