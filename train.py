@@ -20,8 +20,8 @@ check_library(True)
 all_type_seed(CFG, True)
 torch.cuda.empty_cache()
 
-# token = sys.stdin.readline().rstrip()
-# login(token)  # login to huggingface hub
+token = sys.stdin.readline().rstrip()
+login(token)  # login to huggingface hub
 # login()  # login to huggingface hub
 
 

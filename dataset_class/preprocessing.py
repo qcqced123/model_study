@@ -317,7 +317,7 @@ def sequence_length(cfg: configuration.CFG, text_list: List) -> List:
     length_list = []
     for text in tqdm(text_list):
         tmp_text = tokenizing(cfg, text)['attention_mask']
-        length_list.append(tmp_text.count(1))
+        length_list.append(torch.eq(tmp_text, 1))
     return length_list
 
 
@@ -377,20 +377,15 @@ def no_multi_spaces(text):
 
 
 def underscore_to_space(text: str):
-    try:
-        text = text.replace("_", " ")
-        text = text.replace("-", " ")
-
-    except: print(text)
+    text = text.replace("_", " ")
+    text = text.replace("-", " ")
     return text
 
 
 def emoji2text(text: str) -> str:
     """ Convert emoji to text
     """
-    try: text = emoji.demojize(text)
-    except: print(text)
-
+    text = emoji.demojize(text)
     return text
 
 
