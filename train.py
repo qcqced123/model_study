@@ -1,6 +1,4 @@
 import os
-import sys
-
 import torch
 import argparse
 import warnings
@@ -20,12 +18,11 @@ check_library(True)
 all_type_seed(CFG, True)
 torch.cuda.empty_cache()
 
-token = sys.stdin.readline().rstrip()
-login(token)  # login to huggingface hub
 # login()  # login to huggingface hub
 
 
-def main(train_type: str, model_config: str, cfg: CFG) -> None:
+def main(train_type: str, model_config: str, hf_login_token: str, cfg: CFG) -> None:
+    login(hf_login_token)  # login to huggingface hub
     config_path = f'config/{train_type}/{model_config}.json'
     sync_config(OmegaConf.load(config_path))  # load json config
     getattr(train_loop, cfg.loop)(cfg, train_type, model_config)  # init object
@@ -35,6 +32,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Train Script")
     parser.add_argument("train_type", type=str, help="Train Type Selection")
     parser.add_argument("model_config", type=str, help="Model config Selection")
+    parser.add_argument("hf_login_token", type=str, help="Huggingface Token")
     args = parser.parse_args()
 
-    main(args.train_type, args.model_config, CFG)
+    main(args.train_type, args.model_config, args.hf_login_token, CFG)
