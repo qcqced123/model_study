@@ -21,7 +21,7 @@ def train_loop(cfg: CFG, train_type: str, model_config: str) -> None:
     2) Make Early Stopping Object
     3) Initialize Metric Checker
     4) Initialize Train, Validation Input Object
-    5) Check if this train loop need to finish, by Early Stopping Object
+    5) Check if this train loop need     to finish, by Early Stopping Object
     """
     if train_type == 'pretrain':
         sharing_method = cfg.share_embed_method if (model_config in ['electra', 'deberta_v3']) else ''

@@ -38,7 +38,7 @@
 
     "data_settings": {
         "batching": "random",
-        "epochs": 20,
+        "epochs": 5,
         "batch_size": 64,
         "val_batch_size": 64,
         "val_check": 999999,
@@ -48,7 +48,8 @@
     "optimizer_options": {
         "optimizer": "AdamW",
         "llrd": true,
-        "lr": 2e-4,
+        "layerwise_lr": 2e-4,
+        "layerwise_lr_decay": 0.9,
         "weight_decay": 1e-2,
         "adam_epsilon": 1e-6,
         "use_bertadam": false,
@@ -58,8 +59,8 @@
     "scheduler_options": {
         "scheduler": "cosine_annealing",
         "batch_scheduler": true,
-        "num_cycles": 2,
-        "warmup_ratio": 0.0025
+        "num_cycles": 1,
+        "warmup_ratio": 0.25
     },
 
     "gradient_settings": {

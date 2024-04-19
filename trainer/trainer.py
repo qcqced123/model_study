@@ -1378,15 +1378,15 @@ class FineTuningTuner:
         grouped_optimizer_params = get_optimizer_grouped_parameters(
             model,
             self.cfg.layerwise_lr,
-            self.cfg.layerwise_weight_decay,
+            self.cfg.weight_decay,
             self.cfg.layerwise_lr_decay
         )
 
         optimizer = getattr(transformers, self.cfg.optimizer)(
             params=grouped_optimizer_params,
             lr=self.cfg.layerwise_lr,
-            eps=self.cfg.layerwise_adam_epsilon,
-            correct_bias=not self.cfg.layerwise_use_bertadam
+            eps=self.cfg.adam_epsilon,
+            correct_bias=not self.cfg.use_bertadam
         )
         lr_scheduler = get_scheduler(self.cfg, optimizer, len_train)
 

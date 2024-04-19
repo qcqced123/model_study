@@ -418,3 +418,4 @@ tutorial/semantic_search/product_search_tutorial/myntra2.parquet
 *.parquet
 *.parquet
 !/dataset_class/EDA.ipynb
+/dataset_class

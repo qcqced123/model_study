@@ -33,8 +33,8 @@ def get_optimizer_grouped_parameters(
     optimizer_grouped_parameters = [
         {
             "params": [p for n, p in model.named_parameters() if "model" not in n],
-             "weight_decay": 0.0,
-             "lr": layerwise_lr
+            "weight_decay": 0.0,
+            "lr": layerwise_lr
         },
     ]
     layers = [model.model.embeddings] + list(model.model.encoder.layer)
