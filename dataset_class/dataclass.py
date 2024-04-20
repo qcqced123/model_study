@@ -73,10 +73,9 @@ class SentimentAnalysisDataset(Dataset):
         return inputs
 
 
-class QuestionAnsweringDataset(Dataset):
-    """ Pytorch Dataset Module for QuestionAnswering Task in fine-tuning
+class TextGenerationDataset(Dataset):
+    """ Pytorch Dataset Module for Text Generation Task in fine-tuning
     """
-
     def __init__(self) -> None:
         super().__init__()
         pass
@@ -88,9 +87,10 @@ class QuestionAnsweringDataset(Dataset):
         pass
 
 
-class TextGenerationDataset(Dataset):
-    """ Pytorch Dataset Module for Text Generation Task in fine-tuning
+class QuestionAnsweringDataset(Dataset):
+    """ Pytorch Dataset Module for QuestionAnswering Task in fine-tuning
     """
+
     def __init__(self) -> None:
         super().__init__()
         pass

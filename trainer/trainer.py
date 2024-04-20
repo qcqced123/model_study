@@ -1,8 +1,10 @@
 import wandb
-import torch
-import torch.nn as nn
 import numpy as np
 import transformers
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 import dataset_class.dataclass as dataset_class
 
@@ -1323,7 +1325,7 @@ class SequenceClassificationTuner:
     """
     def __init__(self, cfg: CFG, generator: torch.Generator) -> None:
         self.cfg = cfg
-        self.fold_value = 3
+        self.fold_value = 3  # you can change any other value: range 0 to 9
         self.generator = generator
         self.model_name = self.cfg.model_name
         self.tokenizer = self.cfg.tokenizer
@@ -1469,7 +1471,7 @@ class SequenceClassificationTuner:
                 '<Per Step> lr': lr,
             })
 
-            # validate for each size of batch*N Steps
+            # step-level validation
             if ((step + 1) % self.cfg.val_check == 0) or ((step + 1) == len(loader_train)):
                 d_valid_loss, s_valid_loss, c_valid_loss = self.valid_fn(
                     loader_valid,
@@ -1478,7 +1480,6 @@ class SequenceClassificationTuner:
                     val_metric_list
                 )
                 valid_loss = d_valid_loss + s_valid_loss + c_valid_loss
-                # save checkpoint of ONLY student, not including mlm head
                 if val_score_max >= valid_loss:
                     print(f'[Update] Total Valid Score : ({val_score_max:.4f} => {valid_loss:.4f}) Save Parameter')
                     print(f'Total Best Score: {valid_loss}')
@@ -1517,12 +1518,13 @@ class SequenceClassificationTuner:
 
                 for i, metric_fn in enumerate(val_metric_list):
                     if self.metric_list[i] == 'accuracy':
+                        preds = F.softmax(logit.view(-1, self.cfg.num_labels), dim=-1)
                         scores = metric_fn(
-                            logit.view(-1, self.cfg.vocab_size).detach().cpu().numpy(),
+                            torch.argmax(preds, dim=-1).detach().cpu().numpy(),
                             labels.view(-1).detach().cpu().numpy()
                         )
                     valid_metrics[self.metric_list[i]].update(scores, batch_size)
                     wandb.log({
-                        f'<Val Step> Student Valid {self.metric_list[i]}': valid_metrics[self.metric_list[i]].avg,
+                        f'<Val Step> Valid {self.metric_list[i]}': valid_metrics[self.metric_list[i]].avg,
                     })
         return valid_losses.avg

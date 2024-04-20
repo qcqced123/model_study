@@ -341,7 +341,12 @@ class QuestionAnswering(nn.Module, AbstractTask):
     def __init__(self, cfg: CFG) -> None:
         super(QuestionAnswering, self).__init__()
         self.cfg = cfg
-        self.model, self.prompt_encoder = self.select_pt_model()
+        self.components = self.select_pt_model()
+        self.auto_cfg = self.components['plm_config']
+        self.model = self.components['plm']
+        self.prompt_encoder = self.components['prompt_encoder']
+
+        self.model.resize_token_embeddings(len(self.cfg.tokenizer))
         self.fc = nn.Linear(self.cfg.dim_model, 2)
 
         self._init_weights(self.fc)
@@ -369,7 +374,12 @@ class TextGeneration(nn.Module, AbstractTask):
     def __init__(self, cfg: CFG) -> None:
         super(TextGeneration, self).__init__()
         self.cfg = cfg
-        self.model, self.prompt_encoder = self.select_pt_model()
+        self.components = self.select_pt_model()
+        self.auto_cfg = self.components['plm_config']
+        self.model = self.components['plm']
+        self.prompt_encoder = self.components['prompt_encoder']
+
+        self.model.resize_token_embeddings(len(self.cfg.tokenizer))
         self.fc = nn.Linear(
             self.cfg.dim_model,
             self.cfg.vocab_size,

@@ -12,21 +12,46 @@ warnings.filterwarnings('ignore')
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = 'true'
 os.environ["LRU_CACHE_CAPACITY"] = "4096"
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "garbage_collection_threshold:0.8, max_split_size_mb:32"
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandalbe_segments:True"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "garbage_collection_threshold:0.8, expandable_segments:True"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:32"
+
+
+# tokenizer type of each model architecture
+BPE = [
+    'RobertaTokenizerFast',
+    'GPT2TokenizerFast',
+    'LlamaTokenizerFast',
+]
+
+SPM = [
+    'DebertaV2TokenizerFast',
+    'DebertaTokenizerFast',
+    'XLMRobertaTokenizerFast',
+]
+
+WORDPIECE = [
+    'BertTokenizerFast',
+    'ElectraTokenizerFast',
+]
 
 check_library(True)
 all_type_seed(CFG, True)
 torch.cuda.empty_cache()
 
-# login()  # login to huggingface hub
-
 
 def main(train_type: str, model_config: str, hf_login_token: str, cfg: CFG) -> None:
     login(hf_login_token)  # login to huggingface hub
     config_path = f'config/{train_type}/{model_config}.json'
-    sync_config(OmegaConf.load(config_path))  # load json config
-    cfg.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+    sync_config(OmegaConf.load(config_path))
+
+    # init tokenizer for BPE Tokenizer
+    if cfg.tokenizer.__class__.__name__ in BPE and cfg.tokenizer.pad_token is None:
+        if cfg.tokenizer.bos_token.startswith('<'):
+            cfg.tokenizer.add_special_tokens({'pad_token': '<pad>'})
+
+        elif cfg.tokenizer.bos_token.startswith('['):
+            cfg.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+
     getattr(train_loop, cfg.loop)(cfg, train_type, model_config)  # init object
 
 
