@@ -1315,7 +1315,7 @@ class DistillKnowledgeTuner(PreTrainTuner):
         return valid_d_losses.avg, valid_s_losses.avg, valid_c_losses.avg
 
 
-class FineTuningTuner:
+class SequenceClassificationTuner:
     """ Trainer class for baseline fine-tune pipeline, such as text classification, sequence labeling, etc.
 
     Text Generation, Question Answering, Text Similarity and so on are not supported on this class
@@ -1427,6 +1427,8 @@ class FineTuningTuner:
         swa_start: int = None,
         swa_scheduler=None
     ) -> Tuple[Any, Union[float, ndarray, ndarray]]:
+        """ train method with step-level validation
+        """
         losses = AverageMeter()
         scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
 
@@ -1494,7 +1496,7 @@ class FineTuningTuner:
         val_criterion: nn.Module,
         val_metric_list: List[Callable]
     ) -> Tuple[float, float, float]:
-        """
+        """ validation method for sentence(sequence) classification task
         """
         valid_losses = AverageMeter()
         valid_metrics = {self.metric_list[i]: AverageMeter() for i in range(len(self.metric_list))}

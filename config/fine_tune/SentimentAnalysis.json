@@ -2,7 +2,7 @@
     "pipeline_setting": {
         "pipeline_type": "train",
         "name": "SentimentAnalysis",
-        "trainer": "FineTuningTuner",
+        "trainer": "SequenceClassificationTuner",
         "loop": "train_loop",
         "task": "SentimentAnalysis",
         "domain": "commerce/amazon/",
