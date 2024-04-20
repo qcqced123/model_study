@@ -403,6 +403,7 @@ class SentimentAnalysis(nn.Module, AbstractTask):
 
         1) if your dataset's column name's are not unified
             - please add new keys to name_dict in dataset_class/name_rule/sentiment_analysis.py
+
         2) if your dataset's target labels are not range 1 to 5
             - ASAP, We make normalizing function for target labels range 1 to 5 rating
     """
@@ -414,6 +415,7 @@ class SentimentAnalysis(nn.Module, AbstractTask):
         self.model = self.components['plm']
         self.prompt_encoder = self.components['prompt_encoder']
 
+        self.model.resize_token_embeddings(len(self.cfg.tokenizer))
         self.pooling = getattr(pooling, self.cfg.pooling)(self.cfg)
         self.fc = nn.Linear(
             self.auto_cfg.hidden_size,

@@ -15,8 +15,8 @@
 
     "fine_tune_options": {
         "hub": "huggingface",
-        "lora": true,
-        "qlora": false,
+        "lora": false,
+        "qlora": true,
         "lora_rank": 8,
         "lora_alpha": 32,
         "lora_dropout": 0.1,
@@ -39,8 +39,8 @@
     "data_settings": {
         "batching": "random",
         "epochs": 5,
-        "batch_size": 48,
-        "val_batch_size": 48,
+        "batch_size": 64,
+        "val_batch_size": 64,
         "val_check": 999999,
         "num_labels": 5
     },
@@ -68,7 +68,7 @@
         "gradient_checkpoint": true,
         "clipping_grad": true,
         "n_gradient_accumulation_steps": 1,
-        "max_grad_norm": 5
+        "max_grad_norm": 1
     },
 
     "loss_options": {

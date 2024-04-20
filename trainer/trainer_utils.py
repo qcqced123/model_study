@@ -10,6 +10,28 @@ from typing import List, Tuple, Dict, Type, Union
 from utils.helper import seed_worker
 
 
+def get_model_layers(model: nn.Module) -> List[nn.Module]:
+    """ Get specific layers of each architecture of model
+
+    Args:
+        model: model instance from PLM for supervised fine-tune
+
+    """
+    layers = []
+    attrs = [attr for attr in model.__dict__ if not callable(getattr(model, attr))]
+    if 'encoder' in attrs:  # Encoder Model: BERT, RoBERTa, ALBERT, ELECTRA, DeBERTa, BigBird, Longformer, Reformer
+        layers = [model.model.embeddings] + list(model.model.encoder.layer)
+
+    elif 'h' in attrs:  # Decoder Model: GPT2
+        layers = [model.model.wte] + [model.model.wpe] + list(model.model.h)
+
+    elif 'layers' in attrs:  # Decoder Model: LLAMA
+        layers = [model.model.embed_tokens] + list(model.model.layers)
+
+    layers.reverse()
+    return layers
+
+
 def get_optimizer_grouped_parameters(
     model: nn.Module,
     layerwise_lr: float,
@@ -17,17 +39,33 @@ def get_optimizer_grouped_parameters(
     layerwise_lr_decay: float
 ) -> List[Dict[str, float]]:
     """ Grouped Version Layer-wise learning rate decay
+
     This function implemented for fine-tuning pre-trained model to task specific model or domain specific model
     So not used in pre-training phase, in pre-training phase, you can use only pure optimizer without layer-wise lr decay
 
-    1) initialize lr for task specific layer
-    2) initialize lr for every layer
+    1) select specific layers of each architecture of model: (get_model_layers())
+      - encoder type (bert, roberta, albert, electra, deberta, bigbird, longformer, reformer)
+        - embedding layer: model.embeddings
+        - encoder: model.encoder
+
+      - decoder type: gpt2, t5, bart, pegasus, prophetnet, reformer, blenderbot
+        - word token embedding: model.wte
+        - position embedding: model.wpe
+        - decoder: model.h
+
+      - llama:
+        - embedding layer: model.embed_tokens
+        - decoder: model.layers
+
+    2) initialize lr for task specific layer
+    3) initialize lr for every layer
 
     Args:
         model: model instance from customizing model
         layerwise_lr: learning rate for task specific layer
         layerwise_weight_decay: weight decay for task specific layer
         layerwise_lr_decay: learning rate decay for every layer
+
     """
     no_decay = ["bias", "LayerNorm.bias"]  # LayerNorm.weight
     optimizer_grouped_parameters = [
@@ -37,8 +75,8 @@ def get_optimizer_grouped_parameters(
             "lr": layerwise_lr
         },
     ]
-    layers = [model.model.embeddings] + list(model.model.encoder.layer)
-    layers.reverse()
+
+    layers = get_model_layers(model)
     lr = layerwise_lr
     for layer in layers:
         optimizer_grouped_parameters += [

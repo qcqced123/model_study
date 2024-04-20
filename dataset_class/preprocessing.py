@@ -217,13 +217,19 @@ def apply_preprocess(dataset: Dataset, function: Callable, batched: bool = True,
     return mapped_dataset
 
 
-def tokenizing(cfg: configuration.CFG, text: str, padding: bool or str = 'max_length') -> Dict[str, torch.Tensor]:
+def tokenizing(
+        cfg: configuration.CFG,
+        text: str,
+        padding: bool or str = 'max_length',
+        return_token_type_ids: bool = False
+) -> Dict[str, torch.Tensor]:
     """ Preprocess text for LLM Input, for common batch system
 
     Args:
         cfg: configuration.CFG, needed to load tokenizer from Huggingface AutoTokenizer
         text: text from dataframe or any other dataset, please pass str type
         padding: padding options, default 'max_length', if you want use smart batching, init this param to False
+        return_token_type_ids: bool, default False, if you want to use token_type_ids, set True
     """
     inputs = cfg.tokenizer.encode_plus(
         text,
@@ -232,6 +238,7 @@ def tokenizing(cfg: configuration.CFG, text: str, padding: bool or str = 'max_le
         truncation=True,
         return_tensors=None,
         add_special_tokens=False,  # lat we will add ourselves
+        return_token_type_ids=return_token_type_ids,
     )
     for k, v in inputs.items():
         inputs[k] = torch.as_tensor(v)  # as_tensor for reducing memory usage, this ops doesn't copy tensor

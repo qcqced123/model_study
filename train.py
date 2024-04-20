@@ -13,6 +13,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = 'true'
 os.environ["LRU_CACHE_CAPACITY"] = "4096"
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "garbage_collection_threshold:0.8, max_split_size_mb:32"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandalbe_segments:True"
 
 check_library(True)
 all_type_seed(CFG, True)
@@ -25,6 +26,7 @@ def main(train_type: str, model_config: str, hf_login_token: str, cfg: CFG) -> N
     login(hf_login_token)  # login to huggingface hub
     config_path = f'config/{train_type}/{model_config}.json'
     sync_config(OmegaConf.load(config_path))  # load json config
+    cfg.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
     getattr(train_loop, cfg.loop)(cfg, train_type, model_config)  # init object
 
 

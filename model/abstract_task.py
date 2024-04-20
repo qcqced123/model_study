@@ -105,13 +105,15 @@ class AbstractTask:
         if self.cfg.qlora:
             bit_config = BitsAndBytesConfig(
                 load_in_4bit=True,
-                bnb_4bit_compute_dtype=torch.bfloat16,  # bfloat16 is recommended
-                bnb_4bit_use_double_quant=False,
-                bnb_4bit_quant_type='nf4'
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_compute_dtype=torch.bfloat16
             )
 
         # load pretrained weights from model hub
-        if self.cfg.hub == 'local': raise NotImplementedError("Not Yet, Please pass hub argument to huggingface for now")
+        if self.cfg.hub == 'local':
+            raise NotImplementedError("Not Yet, Please pass hub argument to huggingface for now")
+
         elif self.cfg.hub == 'huggingface':
             config = AutoConfig.from_pretrained(self.cfg.model_name)
             model = AutoModel.from_pretrained(
@@ -122,11 +124,12 @@ class AbstractTask:
 
         # apply lora, qlora
         if self.cfg.lora or self.cfg.qlora:
-            if self.cfg.qlora: model = self.apply_peft_qlora(model)
-            else: model = self.apply_peft_lora(model)
+            model = self.apply_peft_lora(model)
 
         # apply prompt tuning
-        if self.cfg.prompt_tuning: prompt_encoder = self.apply_peft_prompt_tuning(model)
+        if self.cfg.prompt_tuning:
+            prompt_encoder = self.apply_peft_prompt_tuning(model)
+
         return {
             'plm_config': config,
             'plm': model,
@@ -134,7 +137,7 @@ class AbstractTask:
         }
 
     def apply_peft_lora(self, model: nn.Module) -> nn.Module:
-        """ class method for applying peft lora to pretrained model in fine-tune stage
+        """ class method for applying peft lora and qlora to pretrained model in fine-tune stage
 
         Args:
             model: pretrained model from huggingface model hub
@@ -155,36 +158,13 @@ class AbstractTask:
             inference_mode=False,
             r=self.cfg.lora_rank,  # rank value
             lora_alpha=self.cfg.lora_alpha,
-            lora_dropout=self.cfg.lora_dropout
+            lora_dropout=self.cfg.lora_dropout,
+            bias='none',
         )
         return get_peft_model(
             model=model,
             peft_config=lora_config,
         )
-
-    def apply_peft_qlora(self, model: nn.Module) -> nn.Module:
-        """ class method for applying peft Q-lora to pretrained model in fine-tune stage
-
-        Args:
-            model: pretrained model from huggingface model hub
-
-        Reference:
-            https://github.com/huggingface/peft?tab=readme-ov-file
-            https://huggingface.co/docs/peft/en/developer_guides/lora
-            https://arxiv.org/abs/2106.09685
-            https://arxiv.org/abs/2305.14314
-        """
-        # lora_config = LoraConfig(
-        #     task_type=getattr(TaskType, self.cfg.task_type),
-        #     inference_mode=False,
-        #     r=self.cfg.lora_rank,  # rank value
-        #     lora_alpha=self.cfg.lora_alpha,
-        #     lora_dropout=self.cfg.lora_dropout
-        # )
-        # model = get_peft_model(model=model, peft_config=lora_config)
-        # replace_lora_weights_loftq(model)
-        # return model
-        pass
 
     def apply_peft_prompt_tuning(self) -> nn.Module:
         """ class method for applying peft p-tuning to pretrained model in fine-tune stage

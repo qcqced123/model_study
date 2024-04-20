@@ -60,15 +60,15 @@ class SentimentAnalysisDataset(Dataset):
         return len(self.df)
 
     def __getitem__(self, item: int) -> Dict:
-        cls_token, sep_token = self.cfg.tokenizer.cls_token, self.cfg.tokenizer.sep_token
+        cls_token = self.cfg.tokenizer.cls_token if self.cfg.tokenizer.cls_token is not None else '<s>'
+        sep_token = self.cfg.tokenizer.sep_token if self.cfg.tokenizer.sep_token is not None else '</s>'
 
         prompt = ''
         prompt += cls_token + self.domain[item] + sep_token
         prompt += cleaning_words(self.title[item]) + sep_token
         prompt += cleaning_words(self.text[item]) + sep_token
 
-        inputs = tokenizing(self.cfg, prompt, False)
-        # inputs['labels'] = torch.as_tensor(self.df.iloc[item, 0:1])
+        inputs = tokenizing(self.cfg, prompt, False, False)
         inputs['labels'] = torch.as_tensor(self.ratings[item] - 1)  # 1 ~ 5 -> 0 ~ 4
         return inputs
 

@@ -36,10 +36,10 @@ def train_loop(cfg: CFG, train_type: str, model_config: str) -> None:
     elif train_type == 'fine_tune':
         wandb.init(
             project=cfg.name,
-            name=f'[{cfg.arch_name}]' + cfg.module_name,
+            name=f'{cfg.model_name}',
             config=class2dict(cfg),
-            group=f'{cfg.module_name}/layers_{cfg.num_layers}/max_length_{cfg.max_len}/',
-            job_type='train',
+            group=f'{cfg.domain}/{cfg.pooling}/{cfg.max_len}',
+            job_type=f"{cfg.pipeline_type}",
             entity="qcqced"
         )
 
@@ -48,13 +48,12 @@ def train_loop(cfg: CFG, train_type: str, model_config: str) -> None:
 
     metric_checker = []
     for _ in range(3):
-        if cfg.stop_mode == 'min':
-            metric_checker.append(np.inf)
-        if cfg.stop_mode == 'max':
-            metric_checker.append(-np.inf)
-    epoch_val_score_max, val_score_max, val_score_max_2 = metric_checker
+        if cfg.stop_mode == 'min': metric_checker.append(np.inf)
+        elif cfg.stop_mode == 'max': metric_checker.append(-np.inf)
 
+    epoch_val_score_max, val_score_max, val_score_max_2 = metric_checker
     train_input = getattr(trainer, cfg.trainer)(cfg, g)  # init object
+
     loader_train, loader_valid, len_train = train_input.make_batch()
     model, criterion, val_criterion, val_metric_list, optimizer, lr_scheduler, awp, swa_model, swa_scheduler = train_input.model_setting(
         len_train

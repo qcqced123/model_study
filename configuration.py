@@ -31,7 +31,7 @@ class CFG:
     arch_name = 'attention'
     model_name = 'deberta'
     module_name = 'BERT'
-    tokenizer_name = 'microsoft/deberta-v3-large'  # later, remove this line
+    tokenizer_name = 'meta-llama/Llama-2-7b-chat-hf'  # later, remove this line
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
     task = 'MaskedLanguageModel'  # options: MaskedLanguageModel, CasualLanguageModel
     pooling = 'MeanPooling'
