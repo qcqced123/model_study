@@ -40,7 +40,7 @@
         "batching": "random",
         "epochs": 5,
         "batch_size": 64,
-        "val_batch_size": 64,
+        "val_batch_size": 32,
         "val_check": 10,
         "num_labels": 99999999999
     },
