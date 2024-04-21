@@ -300,7 +300,10 @@ class PreTrainTuner:
                 })
 
                 for i, metric_fn in enumerate(val_metric_list):
-                    scores = metric_fn(flat_labels.detach().cpu().numpy(), flat_logit.detach().cpu().numpy())
+                    scores = metric_fn(
+                        flat_labels.detach().cpu().numpy(),
+                        flat_logit.detach().cpu().numpy()
+                    )
                     valid_metrics[self.metric_list[i]].update(scores, batch_size)
                     wandb.log({
                         f'<Val Step> Valid {self.metric_list[i]}': valid_metrics[self.metric_list[i]].avg
@@ -1517,12 +1520,10 @@ class SequenceClassificationTuner:
                 wandb.log({'<Val Step> Valid Loss': valid_losses.avg})
 
                 for i, metric_fn in enumerate(val_metric_list):
-                    if self.metric_list[i] == 'accuracy':
-                        preds = F.softmax(logit.view(-1, self.cfg.num_labels), dim=-1)
-                        scores = metric_fn(
-                            torch.argmax(preds, dim=-1).detach().cpu().numpy(),
-                            labels.view(-1).detach().cpu().numpy()
-                        )
+                    scores = metric_fn(
+                        labels.view(-1).detach().cpu().numpy(),
+                        logit.view(-1, self.cfg.num_labels).detach().cpu().numpy()
+                    )
                     valid_metrics[self.metric_list[i]].update(scores, batch_size)
                     wandb.log({
                         f'<Val Step> Valid {self.metric_list[i]}': valid_metrics[self.metric_list[i]].avg,

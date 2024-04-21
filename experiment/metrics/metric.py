@@ -1,13 +1,16 @@
-import torch.nn as nn
 import numpy as np
+import torch.nn as nn
+import configuration as configuration
 from torch import Tensor
 
 
 def accuracy(y_true: np.array, y_pred: np.array) -> float:
-    """ accuracy metric function for Masked Langauge Model
+    """ accuracy metric function for classification task such as MLM, SentimentAnalysis ... and so on
+
     Args:
         y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
         y_pred: prediction, must be 2D Array for MLM Task (batch_size*sequence, vocab size)
+
     """
     correct, len_label = 0, len(y_true[y_true != -100])
     pred = np.argmax(y_pred, axis=-1)  # return index of max value
@@ -34,24 +37,87 @@ def pearson_score(y_true: np.array, y_pred: np.array) -> float:
     return corr
 
 
-def recall(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """ recall = tp / (tp + fn) """
-    tp = np.sum((y_true == 1) & (y_pred == 1))  # same as np.bitwise
-    fn = np.sum((y_true == 1) & (y_pred == 0))
-    score = tp / (tp + fn)
-    return round(score.mean(), 4)
+def precision(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG) -> float:
+    """ calculate recall metrics for binary classification
+
+    Args:
+        y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
+        y_pred: prediction, must be 2D Array for MLM Task (batch_size*sequence, vocab size)
+        cfg: configuration file for the experiment, for setting the mode of calculating precision
+
+    Math:
+        precision = tp / (tp + fp)
+    """
+    # for binary classification
+    if cfg.num_labels == 2:
+        tp = np.sum((y_true == 1) & (y_pred == 1))  # same as np.bitwise
+        fp = np.sum((y_true == 0) & (y_pred == 1))
+        if tp + fp == 0:
+            score = 0
+        else:
+            score = tp / (tp + fp)
+
+    # for multi-class classification
+    else:
+        score, unique_classes = [], np.unique(y_true)
+        for class_ in unique_classes:
+            tp = np.sum((y_true == class_) & (y_pred == class_))
+            fp = np.sum((y_true != class_) & (y_pred == class_))
+
+            # Handling division by zero
+            if tp + fp == 0:
+                score.append(0.0)
+            else:
+                score.append(tp / (tp + fp))
+
+    return round(np.mean(score), 4)
 
 
-def precision(y_true, y_pred) -> float:
-    """ precision = tp / (tp + fp) """
-    tp = np.sum((y_true == 1) & (y_pred == 1))  # same as np.bitwise
-    fp = np.sum((y_true == 0) & (y_pred == 1))
-    score = tp / (tp + fp)
-    return round(score.mean(), 4)
+def recall(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG) -> float:
+    """ calculate recall metrics for binary classification, multi-class classification
+
+    Args:
+        y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
+        y_pred: prediction, must be 2D Array for MLM Task (batch_size*sequence, vocab size)
+        cfg: configuration file for the experiment, for setting the mode of calculating recall
+
+    Math:
+        recall = tp / (tp + fn)
+    """
+    # for binary classification
+    if cfg.num_labels == 2:
+        tp = np.sum((y_true == y_pred) & (y_true != 1))  # same as np.bitwise
+        fn = np.sum((y_true == y_pred) & (y_true == 0))
+        if tp + fn == 0:
+            score = 0
+        else:
+            score = tp / (tp + fn)
+
+    # for multi-class classification
+    else:
+        score, unique_classes = [], np.unique(y_true)
+        for class_ in unique_classes:
+            tp = np.sum((y_true == class_) & (y_pred == class_))
+            fn = np.sum((y_true == class_) & (y_pred != class_))
+
+            # Handling division by zero
+            if tp + fn == 0:
+                score.append(0.0)
+            else:
+                score.append(tp / (tp + fn))
+
+    return round(np.mean(score), 4)
 
 
-def f_beta(y_true: np.ndarray, y_pred: np.ndarray, beta: float = 2) -> float:
-    """ method for F_beta score
+def f_beta(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG, beta: float = 2) -> float:
+    """ calculate function for F_beta score in binary classification, multi-class classification
+
+    Args:
+        y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
+        y_pred: prediction, must be 2D Array for MLM Task (batch_size*sequence, vocab size)
+        cfg: configuration file for the experiment, for setting the mode of calculating F_beta
+        beta: float, default is 2
+
     Math:
         TP (true positive): pred == 1 && true == 1
         FP (false positive): pred == 1 && true == 0
@@ -59,17 +125,19 @@ def f_beta(y_true: np.ndarray, y_pred: np.ndarray, beta: float = 2) -> float:
         f_beta = (1 + beta ** 2) * precision * recall / (beta ** 2 * precision + recall)
         if you want to emphasize precision, set beta < 1, options: 0.3, 0.6
         if you want to emphasize recall, set beta > 1, options: 1.5, 2
+
     Reference:
         https://blog.naver.com/PostView.naver?blogId=wideeyed&logNo=221531998840&parentCategoryNo=&categoryNo=2&
     """
-    tp = np.sum((y_true == 1) & (y_pred == 1))  # same as np.bitwise
-    fp = np.sum((y_true == 0) & (y_pred == 1))
-    fn = np.sum((y_true == 1) & (y_pred == 0))
+    f_precision, f_recall = precision(y_true, y_pred, cfg), recall(y_true, y_pred, cfg)
+    numerator, denominator = (1 + beta**2) * f_precision * f_recall, (beta ** 2 * f_precision + f_recall)
 
-    f_precision = tp / (tp + fp)
-    f_recall = tp / (tp + fn)
-    score = (1 + beta ** 2) * f_precision * f_recall / (beta ** 2 * f_precision + f_recall)
-    return round(score.mean(), 4)
+    if denominator == 0:
+        score = 0
+    else:
+        score = numerator / denominator
+
+    return round(np.mean(score), 4)
 
 
 def cosine_similarity(a: Tensor, b: Tensor, eps=1e-8) -> np.ndarray:
