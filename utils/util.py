@@ -5,17 +5,25 @@ from pathlib import Path
 from itertools import repeat
 from collections import OrderedDict
 from configuration import CFG
+from transformers import AutoTokenizer, DataCollatorWithPadding
+from trainer.trainer_utils import SmartBatchingSampler, SmartBatchingCollate
 
 
-def sync_config(json_config: json) -> None:
+def sync_config(config: CFG, json_config: json) -> None:
     """ Sync configuration settings from json file to CFG
+
     Args:
+        config: configuration file for the experiment
         json_config: json configuration file, loaded from OmegaConf.load('your_path.json')
 
     """
     for settings in json_config.values():
         for k, v in settings.items():
-            setattr(CFG, k, v)
+            setattr(config, k, v)
+
+    setattr(config, 'tokenizer', AutoTokenizer.from_pretrained(config.tokenizer_name))  # set tokenizer
+    setattr(config, 'collator', DataCollatorWithPadding(config.tokenizer) if config.batching == 'random' else SmartBatchingCollate)  # set batch collator
+    setattr(config, 'sampler', None if config.batching == 'random' else SmartBatchingSampler)  # set batch sampler
 
 
 def ensure_dir(dirname):

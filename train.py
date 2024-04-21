@@ -39,10 +39,10 @@ all_type_seed(CFG, True)
 torch.cuda.empty_cache()
 
 
-def main(train_type: str, model_config: str, hf_login_token: str, cfg: CFG) -> None:
+def main(cfg: CFG, train_type: str, model_config: str, hf_login_token: str) -> None:
     login(hf_login_token)  # login to huggingface hub
     config_path = f'config/{train_type}/{model_config}.json'
-    sync_config(OmegaConf.load(config_path))
+    sync_config(cfg, OmegaConf.load(config_path))
 
     # init tokenizer for BPE Tokenizer
     if cfg.tokenizer.__class__.__name__ in BPE and cfg.tokenizer.pad_token is None:
@@ -56,10 +56,11 @@ def main(train_type: str, model_config: str, hf_login_token: str, cfg: CFG) -> N
 
 
 if __name__ == '__main__':
+    config = CFG
     parser = argparse.ArgumentParser(description="Train Script")
     parser.add_argument("train_type", type=str, help="Train Type Selection")
     parser.add_argument("model_config", type=str, help="Model config Selection")
     parser.add_argument("hf_login_token", type=str, help="Huggingface Token")
     args = parser.parse_args()
 
-    main(args.train_type, args.model_config, args.hf_login_token, CFG)
+    main(config, args.train_type, args.model_config, args.hf_login_token)

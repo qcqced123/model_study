@@ -614,7 +614,7 @@ def unify_feature_name(df: pd.DataFrame, rule: Dict) -> pd.DataFrame:
     """
     new_col = []
     for col in df.columns:
-        try:  col = rule[col]
+        try: col = rule[col]
         except: pass
         new_col.append(col)
 

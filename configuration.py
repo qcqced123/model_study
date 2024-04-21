@@ -1,6 +1,6 @@
 import torch
 # from trainer.trainer_utils import SmartBatchingSampler, SmartBatchingCollate
-from transformers import AutoTokenizer, DataCollatorWithPadding
+# from transformers import AutoTokenizer, DataCollatorWithPadding
 
 
 class CFG:
@@ -31,8 +31,8 @@ class CFG:
     arch_name = 'attention'
     model_name = 'deberta'
     module_name = 'BERT'
-    tokenizer_name = 'meta-llama/Llama-2-7b-chat-hf'  # later, remove this line
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+    tokenizer_name = 'microsoft/deberta-v3-large'  # later, remove this line
+    tokenizer = None
     task = 'MaskedLanguageModel'  # options: MaskedLanguageModel, CasualLanguageModel
     pooling = 'MeanPooling'
 
@@ -48,8 +48,8 @@ class CFG:
 
     """ Data Options """
     batching = 'random'
-    collator = DataCollatorWithPadding(tokenizer)  # if batching == 'random' else SmartBatchingCollate
-    sampler = None # if batching == 'random' else SmartBatchingSampler
+    collator = None  # if batching == 'random' else SmartBatchingCollate
+    sampler = None  # if batching == 'random' else SmartBatchingSampler
     split_ratio = 0.2
     n_folds = 10
     max_len = 512
