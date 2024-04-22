@@ -4,13 +4,13 @@ import configuration as configuration
 from torch import Tensor
 
 
-def accuracy(y_true: np.array, y_pred: np.array) -> float:
+def accuracy(y_true: np.array, y_pred: np.array, cfg: configuration.CFG = None) -> float:
     """ accuracy metric function for classification task such as MLM, SentimentAnalysis ... and so on
 
     Args:
         y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
         y_pred: prediction, must be 2D Array for MLM Task (batch_size*sequence, vocab size)
-
+        cfg: configuration file for the experiment, for setting the mode of calculating accuracy
     """
     correct, len_label = 0, len(y_true[y_true != -100])
     pred = np.argmax(y_pred, axis=-1)  # return index of max value
@@ -48,6 +48,8 @@ def precision(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG) ->
     Math:
         precision = tp / (tp + fp)
     """
+    y_pred = np.argmax(y_pred, axis=-1)
+
     # for binary classification
     if cfg.num_labels == 2:
         tp = np.sum((y_true == 1) & (y_pred == 1))  # same as np.bitwise
@@ -84,6 +86,8 @@ def recall(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG) -> fl
     Math:
         recall = tp / (tp + fn)
     """
+    y_pred = np.argmax(y_pred, axis=-1)
+
     # for binary classification
     if cfg.num_labels == 2:
         tp = np.sum((y_true == y_pred) & (y_true != 1))  # same as np.bitwise

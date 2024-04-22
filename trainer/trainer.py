@@ -1526,7 +1526,8 @@ class SequenceClassificationTuner:
                 for i, metric_fn in enumerate(val_metric_list):
                     scores = metric_fn(
                         flat_label,
-                        flat_logit
+                        flat_logit,
+                        self.cfg
                     )
                     valid_metrics[self.metric_list[i]].update(scores, batch_size)
                     wandb.log({
