@@ -7,8 +7,8 @@
         "task": "SentimentAnalysis",
         "domain": "commerce/amazon/",
         "dataset": "SentimentAnalysisDataset",
-        "model_name": "allenai/longformer-base-4096",
-        "tokenizer_name": "allenai/longformer-base-4096",
+        "model_name": "meta-llama/Llama-2-7b-chat-hf",
+        "tokenizer_name": "meta-llama/Llama-2-7b-chat-hf",
         "resume": false,
         "checkpoint_dir": "./saved/"
     },
@@ -41,7 +41,7 @@
         "epochs": 5,
         "batch_size": 64,
         "val_batch_size": 32,
-        "val_check": 9999999999,
+        "val_check": 999999999999,
         "num_labels": 5
     },
 
