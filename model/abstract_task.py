@@ -4,7 +4,7 @@ import torch.nn as nn
 from peft import PeftType, TaskType
 from peft import get_peft_config, get_peft_model, LoraConfig
 from peft import PromptEncoderConfig, PromptEncoder
-from transformers import AutoConfig, AutoModel, BitsAndBytesConfig
+from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, BitsAndBytesConfig
 from typing import Tuple, Dict
 from configuration import CFG
 
