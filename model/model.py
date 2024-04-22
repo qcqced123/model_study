@@ -369,7 +369,13 @@ class QuestionAnswering(nn.Module, AbstractTask):
 
 
 class TextGeneration(nn.Module, AbstractTask):
-    """ Fine-Tune Task Module for Text Generation Task
+    """ Fine-Tune Task Module for Text Generation Task, same as language modeling task (causal language modeling)
+    you can select any backbone model as GPT, T5, BART ... etc from huggingface hub or my own model hub
+
+    All of dataset should be unified by name rule, for making prompt sentences and labels range 1 to 5 stars rating
+
+        1) if your dataset's column name's are not unified
+            - please add new keys to name_dict in dataset_class/name_rule/sentiment_analysis.py
     """
     def __init__(self, cfg: CFG) -> None:
         super(TextGeneration, self).__init__()

@@ -15,9 +15,12 @@ class AbstractTask:
 
     Functions:
         1) Init Gradient Checkpointing Flag
+
         2) Weight Initialization
             - Pytorch Default Weight Initialization: He Initialization (Kaiming Initialization)
+
         3) Interface method for making model instance in runtime
+
         4) Apply fine-tune options, which are selected in configuration.json
             - load pretrained weights for fine-tune (own your hub, huggingface model hub ... etc)
             - apply PEFT (Quantization, LoRA, QLoRA, P-Tuning, ...)

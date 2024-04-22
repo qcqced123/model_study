@@ -109,7 +109,7 @@ def recall(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG) -> fl
     return round(np.mean(score), 4)
 
 
-def f_beta(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG, beta: float = 2) -> float:
+def f_beta(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG, beta: float = 1) -> float:
     """ calculate function for F_beta score in binary classification, multi-class classification
 
     Args:
@@ -130,7 +130,7 @@ def f_beta(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG, beta:
         https://blog.naver.com/PostView.naver?blogId=wideeyed&logNo=221531998840&parentCategoryNo=&categoryNo=2&
     """
     f_precision, f_recall = precision(y_true, y_pred, cfg), recall(y_true, y_pred, cfg)
-    numerator, denominator = (1 + beta**2) * f_precision * f_recall, (beta ** 2 * f_precision + f_recall)
+    numerator, denominator = (1 + beta**2) * f_precision * f_recall, (beta**2 * f_precision + f_recall)
 
     if denominator == 0:
         score = 0
@@ -153,7 +153,7 @@ def cosine_similarity(a: Tensor, b: Tensor, eps=1e-8) -> np.ndarray:
     return output
 
 
-def ppl(loss: np.ndarray):
+def ppl(loss: np.ndarray) -> float:
     """ for calculating metric named 'Perplexity',
     which is used by validating language modeling task such as rnn, gpt
 
@@ -162,5 +162,6 @@ def ppl(loss: np.ndarray):
 
     Maths:
         PPL(x) = exp(CE)
+
     """
     return np.exp(loss)

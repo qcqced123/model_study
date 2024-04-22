@@ -78,7 +78,7 @@
     },
 
     "metrics_options": {
-        "metrics": ["accuracy"]
+        "metrics": ["accuracy", "f_beta"]
     },
 
     "common_settings": {
