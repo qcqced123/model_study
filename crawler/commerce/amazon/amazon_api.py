@@ -1,10 +1,10 @@
 import sys
-
 import bottlenose
 from bs4 import BeautifulSoup
 
 
-def get_product_name(asin):
+def get_product_name(asin: str) -> None:
+    """ Using Amazon Open API named bottlenose,"""
     try:
         response = amazon.ItemLookup(ItemId=asin, ResponseGroup='ItemAttributes', SearchIndex='All')
         soup = BeautifulSoup(response, 'xml')
@@ -14,6 +14,7 @@ def get_product_name(asin):
     except Exception as e:
         print(f"Error: {e}")
         return None
+
 
 if __name__ == '__main__':
     AMAZON_ACCESS_KEY_ID = sys.stdin.readline().rstrip()
