@@ -102,7 +102,7 @@ class CFG:
 
     """ Model Options """
     num_labels = 2
-    vocab_size = tokenizer.vocab_size
+    vocab_size = None
     max_seq = 512
     num_layers = 12
     num_emd = 2

@@ -22,6 +22,7 @@ def sync_config(config: CFG, json_config: json) -> None:
             setattr(config, k, v)
 
     setattr(config, 'tokenizer', AutoTokenizer.from_pretrained(config.tokenizer_name))  # set tokenizer
+    setattr(config, 'vocab_size', config.tokenizer.vocab_size)  # set vocab size
     setattr(config, 'collator', DataCollatorWithPadding(config.tokenizer) if config.batching == 'random' else SmartBatchingCollate)  # set batch collator
     setattr(config, 'sampler', None if config.batching == 'random' else SmartBatchingSampler)  # set batch sampler
 
