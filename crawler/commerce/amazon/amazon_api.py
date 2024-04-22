@@ -8,7 +8,8 @@ def get_product_name(asin: str) -> None:
     try:
         response = amazon.ItemLookup(ItemId=asin, ResponseGroup='ItemAttributes', SearchIndex='All')
         soup = BeautifulSoup(response, 'xml')
-        return soup
+        title = soup.find('Title').text
+        return title
 
     except Exception as e:
         print(f"Error: {e}")
