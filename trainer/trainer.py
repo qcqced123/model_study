@@ -1542,3 +1542,9 @@ class SequenceClassificationTuner:
                     class_names=[f"Rating {i + 1}" for i in range(self.cfg.num_labels)]
                 )})
         return valid_losses.avg
+
+
+class TextGenerationTuner:
+    """ Fine-tune class for Text Generation, Summarization
+    """
+    pass

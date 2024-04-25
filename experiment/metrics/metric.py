@@ -2,6 +2,8 @@ import numpy as np
 import torch.nn as nn
 import configuration as configuration
 from torch import Tensor
+from typing import Tuple, List, Dict
+from collections import Counter
 
 
 def accuracy(y_true: np.array, y_pred: np.array, cfg: configuration.CFG = None) -> float:
@@ -169,3 +171,76 @@ def ppl(loss: np.ndarray) -> float:
 
     """
     return np.exp(loss)
+
+
+def bleu(y_true: List[str], y_pred: List[str], n_size: int = 4, cfg: configuration.CFG = None) -> float:
+    """ calculate BLEU score for machine translation task
+
+    you must pass list of string for ground truth and prediction
+    string must be tokenized by tokenizer such as 'mecab', 'sentencepiece', 'wordpiece' and so on,
+    also they must be decoded by tokenizer to string, not tensor
+
+    Input example:
+        prediction= "the the the the the the"
+        reference= "the cat is on the mat"
+
+        prediction, reference = prediction.split(' '), reference.split(' ')
+        bleu(prediction, reference, 1)
+        => 0.3333
+
+    Args:
+        y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
+        y_pred: prediction, must be 2D Array for MLM Task (batch_size*sequence, vocab size)
+        n_size: int, default is 4, which is meaning of the maximum n-gram size
+        cfg: configuration file for the experiment, for setting BLEU-N, tokenizer
+
+    Math:
+        BLEU-N = BR*(p1*p2*p3*...pn)^(1/n)
+        BR = min(1, exp(1 - ref_len/gen_len))
+        => exponential penalty, if gen_Len is shorter than ref_len, than penalty will be much big
+
+    Reference:
+        https://github.com/tensorflow/nmt/blob/master/nmt/scripts/bleu.py
+        https://github.com/huggingface/datasets/blob/main/metrics/bleu/bleu.py
+    """
+
+    def calculate_ngram() -> int:
+        """ calculate n-gram score for BLEU-N
+
+        mathematical expression of this function is:
+             p1*p2*p3*...pn1
+
+        Implementations:
+            1) count the number of each n-gram in y_true and y_pred
+            2) calculate the number of n-gram overlap between y_true and y_pred
+            3) calculate the precision of n-gram
+              - apply the smoothing method for avoiding return zero value to bleu metric
+
+        """
+        score = 1
+        for n in range(1, n_size+1):
+            gen_ngram = [tuple(y_pred[i:i+n]) for i in range(len(y_pred) - n + 1)]
+            ref_ngram = [tuple(y_true[j:j+n]) for j in range(len(y_true) - n + 1)]
+
+            ref_counter = Counter(ref_ngram)
+            gen_count, ref_count = len(gen_ngram), 0
+            for gram in gen_ngram:
+                if ref_counter[gram] and ref_counter[gram] > 0:
+                    ref_counter[gram] -= 1
+                    ref_count += 1
+
+            score *= ref_count / gen_count
+        return score
+
+    def brevity_penalty() -> int:
+        """ calculate brevity penalty for BLEU-N
+
+        mathematical expression of this function is:
+            min(1, exp(1 - ref_len/gen_len))
+        """
+        return min(1, np.exp(1 - len(y_true) / len(y_pred)))
+
+    bleu_score = brevity_penalty() * calculate_ngram()**(1/n_size)
+    return round(bleu_score, 4)
+
+
