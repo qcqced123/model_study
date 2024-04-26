@@ -463,3 +463,4 @@ class SentimentAnalysis(nn.Module, AbstractTask):
         embedding = self.pooling(features, inputs['attention_mask'])
         logit = self.fc(embedding)
         return logit
+2

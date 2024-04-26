@@ -174,7 +174,7 @@ def ppl(loss: np.ndarray) -> float:
 
 
 def bleu(y_true: List[str], y_pred: List[str], n_size: int = 4, cfg: configuration.CFG = None) -> float:
-    """ calculate BLEU score for machine translation task
+    """ calculate BLEU score for machine translation, text generation task
 
     you must pass list of string for ground truth and prediction
     string must be tokenized by tokenizer such as 'mecab', 'sentencepiece', 'wordpiece' and so on,
@@ -214,7 +214,7 @@ def bleu(y_true: List[str], y_pred: List[str], n_size: int = 4, cfg: configurati
             1) count the number of each n-gram in y_true and y_pred
             2) calculate the number of n-gram overlap between y_true and y_pred
             3) calculate the precision of n-gram
-              - apply the smoothing method for avoiding return zero value to bleu metric
+              - apply the smoothing method for avoiding return zero value to bleu metric (x)
 
         """
         score = 1

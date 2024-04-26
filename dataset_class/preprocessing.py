@@ -594,6 +594,31 @@ def jsonl_to_json(jsonl_file: str, json_file: str) -> None:
         json.dump(json_data, f, ensure_ascii=False, indent=4)
 
 
+def jsonl_to_df(jsonl_file: str) -> pd.DataFrame:
+    """ Convert jsonl file to pd.DataFrame with removing duplicate ASIN Code in Amazon Dataset
+    for building ASIN DB, not Review Dataset, output of this function will be used to primary key in DB
+
+    Args:
+        jsonl_file: input jsonl file path
+
+    """
+    from collections import defaultdict
+
+    with open(jsonl_file, 'r', encoding='utf-8') as f:
+        jsonl_data = f.readlines()
+
+    desired_key = 'asin'
+    json_dict = defaultdict(set)
+
+    for line in jsonl_data:
+        json_obj = json.loads(line.strip())
+        if desired_key in json_obj:
+            json_dict[desired_key].add(json_obj[desired_key])
+
+    json_dict[desired_key] = list(json_dict[desired_key])
+    return pd.DataFrame.from_dict(json_dict)
+
+
 def unify_feature_name(df: pd.DataFrame, rule: Dict) -> pd.DataFrame:
     """ Unify feature name (column name) in dataframe with each fine-tune task
     Use dictionary to map the feature name to unified feature name for each task
