@@ -202,9 +202,10 @@ def bleu(y_true: List[str], y_pred: List[str], n_size: int = 4, cfg: configurati
     Reference:
         https://github.com/tensorflow/nmt/blob/master/nmt/scripts/bleu.py
         https://github.com/huggingface/datasets/blob/main/metrics/bleu/bleu.py
+
     """
 
-    def calculate_ngram() -> int:
+    def calculate_ngram() -> float:
         """ calculate n-gram score for BLEU-N
 
         mathematical expression of this function is:
@@ -232,7 +233,7 @@ def bleu(y_true: List[str], y_pred: List[str], n_size: int = 4, cfg: configurati
             score *= ref_count / gen_count
         return score
 
-    def brevity_penalty() -> int:
+    def brevity_penalty() -> float:
         """ calculate brevity penalty for BLEU-N
 
         mathematical expression of this function is:
@@ -244,3 +245,51 @@ def bleu(y_true: List[str], y_pred: List[str], n_size: int = 4, cfg: configurati
     return round(bleu_score, 4)
 
 
+def rouge(y_true: List[str], y_pred: List[str], n_size: int = 4, beta: float = 1, cfg: configuration.CFG = None) -> float:
+    """ calculate ROUGE score for text summarization task
+
+    recall is very important in text summarization task, because we need to generate important sentences in ref
+    so, this metric is very useful for evaluating text summarization model
+
+    you must pass list of string for ground truth and prediction
+    string must be tokenized by tokenizer such as 'mecab', 'sentencepiece', 'wordpiece' and so on,
+    also they must be decoded by tokenizer to string, not tensor
+
+
+    Input example:
+        prediction= "the the the the the the"
+        reference= "the cat is on the mat"
+
+
+    Args:
+        y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
+        y_pred: prediction, must be 2D Array for MLM Task (batch_size*sequence, vocab size)
+        n_size: int, default is 4, which is meaning of the maximum n-gram size
+        beta: float, default is 1, which is meaning of the weight of precision and recall
+        cfg: configuration file for the experiment, for setting BLEU-N, tokenizer
+
+    Math:
+        (original) ROUGE-N = {Common N-Gram in Gen & Ref} / {N-Gram in Ref}
+        (modified) ROUGE-N = F1-Score of (precision: no clipping precision of BLEU, recall: original ROUGE)
+        => we choose modified version of ROUGE-N, because it is more useful for text summarization task
+
+    Reference:
+        https://aclanthology.org/W04-1013.pdf
+
+    """
+
+    gen_ngram = [tuple(y_pred[i:i+n_size]) for i in range(len(y_pred) - n_size + 1)]
+    ref_ngram = [tuple(y_true[j:j+n_size]) for j in range(len(y_true) - n_size + 1)]
+
+    common_count = 0
+    ref_counter = Counter(ref_ngram)
+    for gram in gen_ngram:
+        if ref_counter[gram]:
+            common_count += 1
+
+    rouge_precision, rouge_recall = common_count / len(gen_ngram), common_count / len(ref_ngram)
+
+    numerator = (1 + beta ** 2) * rouge_precision * rouge_recall
+    denominator = (beta ** 2 * rouge_precision + rouge_recall)
+
+    return np.round(numerator / denominator, 4) if denominator else 0

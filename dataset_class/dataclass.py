@@ -75,8 +75,6 @@ class SentimentAnalysisDataset(Dataset):
 
 class TextGenerationDataset(Dataset):
     """ Pytorch Dataset Module for Text Generation Task in fine-tuning
-
-
     """
     def __init__(self) -> None:
         super().__init__()
@@ -105,6 +103,8 @@ class QuestionAnsweringDataset(Dataset):
 
 
 class TextSimilarityDataset(Dataset):
+    """ Pytorch Dataset Module for Text Similarity Task in fine-tuning
+    """
     def __init__(self) -> None:
         super().__init__()
         pass
@@ -116,7 +116,9 @@ class TextSimilarityDataset(Dataset):
         pass
 
 
-class TextSummationDataset(Dataset):
+class TextSummarizationDataset(Dataset):
+    """ Pytorch Dataset Module for Text Summarization Task in fine-tuning, such as CNN-DailyMail, XSum, ... etc
+    """
     def __init__(self) -> None:
         super().__init__()
         pass
