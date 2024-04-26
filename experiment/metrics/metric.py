@@ -255,12 +255,6 @@ def rouge(y_true: List[str], y_pred: List[str], n_size: int = 4, beta: float = 1
     string must be tokenized by tokenizer such as 'mecab', 'sentencepiece', 'wordpiece' and so on,
     also they must be decoded by tokenizer to string, not tensor
 
-
-    Input example:
-        prediction= "the the the the the the"
-        reference= "the cat is on the mat"
-
-
     Args:
         y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
         y_pred: prediction, must be 2D Array for MLM Task (batch_size*sequence, vocab size)
