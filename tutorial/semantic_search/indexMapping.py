@@ -2,35 +2,35 @@
 indexName = "all_products"
 
 indexMapping = {
-    "properties":{
-        "ProductID":{
-            "type":"long"
+    "properties": {
+        "ProductID": {
+            "type": "long"
         },
-        "ProductName":{
-            "type":"text"
+        "ProductName": {
+            "type": "text"
         },
-        "ProductBrand":{
-            "type":"text"
+        "ProductBrand": {
+            "type": "text"
         },
-        "Gender":{
-            "type":"text"
+        "Gender": {
+            "type": "text"
         },
-        "Price (INR)":{
-            "type":"long"
+        "Price (INR)": {
+            "type": "long"
         },
-        "NumImages":{
-            "type":"long"
+        "NumImages": {
+            "type": "long"
         },
-        "Description":{
-            "type":"text"
+        "Description": {
+            "type": "text"
         },
-        "PrimaryColor":{
-            "type":"text"
+        "PrimaryColor": {
+            "type": "text"
         },
-        "DescriptionVector":{
-            "type":"dense_vector",
+        "DescriptionVector": {
+            "type": "dense_vector",
             "dims": 384,
-            "index":True,
+            "index": True,
             "similarity": "cosine"
         }
 

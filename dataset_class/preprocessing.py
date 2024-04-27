@@ -594,7 +594,7 @@ def jsonl_to_json(jsonl_file: str, json_file: str) -> None:
         json.dump(json_data, f, ensure_ascii=False, indent=4)
 
 
-def jsonl_to_df(jsonl_file: str) -> pd.DataFrame:
+def jsonl_to_series(jsonl_file: str) -> pd.DataFrame:
     """ Convert jsonl file to pd.DataFrame with removing duplicate ASIN Code in Amazon Dataset
     for building ASIN DB, not Review Dataset, output of this function will be used to primary key in DB
 
@@ -617,6 +617,22 @@ def jsonl_to_df(jsonl_file: str) -> pd.DataFrame:
 
     json_dict[desired_key] = list(json_dict[desired_key])
     return pd.DataFrame.from_dict(json_dict)
+
+
+def jsonl_to_df(jsonl_file: str) -> pd.DataFrame:
+    """ Convert jsonl file to pd.DataFrame with removing duplicate ASIN Code in Amazon Dataset
+    for building ASIN DB, not Review Dataset, output of this function will be used to primary key in DB
+
+    Args:
+        jsonl_file: input jsonl file path
+
+    """
+    data = []
+    with open(jsonl_file, 'r', encoding='utf-8') as f:
+        for line in f:
+            json_obj = json.loads(line)
+            data.append(json_obj)
+    return pd.DataFrame(data)
 
 
 def unify_feature_name(df: pd.DataFrame, rule: Dict) -> pd.DataFrame:
