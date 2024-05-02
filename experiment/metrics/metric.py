@@ -245,10 +245,10 @@ def bleu(y_true: List[str], y_pred: List[str], n_size: int = 4, cfg: configurati
     return round(bleu_score, 4)
 
 
-def rouge(y_true: List[str], y_pred: List[str], n_size: int = 4, beta: float = 1, cfg: configuration.CFG = None) -> float:
-    """ calculate ROUGE score for text summarization task
+def rouge_n(y_true: List[str], y_pred: List[str], n_size: int = 4, beta: float = 1, cfg: configuration.CFG = None) -> float:
+    """ calculate ROUGE-N score for text summarization task (ROUGE N-Gram)
 
-    recall is very important in text summarization task, because we need to generate important sentences in ref
+    recall is very im portant in text summarization task, because we need to generate important sentences in ref
     so, this metric is very useful for evaluating text summarization model
 
     you must pass list of string for ground truth and prediction
@@ -287,3 +287,31 @@ def rouge(y_true: List[str], y_pred: List[str], n_size: int = 4, beta: float = 1
     denominator = (beta ** 2 * rouge_precision + rouge_recall)
 
     return np.round(numerator / denominator, 4) if denominator else 0
+
+
+def rouge_l():
+    """ calculate ROUGE-L score for text summarization task (ROUGE Longest Common Sequence)
+
+        recall is very im portant in text summarization task, because we need to generate important sentences in ref
+        so, this metric is very useful for evaluating text summarization model
+
+        you must pass list of string for ground truth and prediction
+        string must be tokenized by tokenizer such as 'mecab', 'sentencepiece', 'wordpiece' and so on,
+        also they must be decoded by tokenizer to string, not tensor
+
+        Args:
+            y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
+            y_pred: prediction, must be 2D Array for MLM Task (batch_size*sequence, vocab size)
+            n_size: int, default is 4, which is meaning of the maximum n-gram size
+            beta: float, default is 1, which is meaning of the weight of precision and recall
+            cfg: configuration file for the experiment, for setting BLEU-N, tokenizer
+
+        Math:
+            (original) ROUGE-N = {Common N-Gram in Gen & Ref} / {N-Gram in Ref}
+            (modified) ROUGE-N = F1-Score of (precision: no clipping precision of BLEU, recall: original ROUGE)
+            => we choose modified version of ROUGE-N, because it is more useful for text summarization task
+
+        Reference:
+            https://aclanthology.org/W04-1013.pdf
+
+        """

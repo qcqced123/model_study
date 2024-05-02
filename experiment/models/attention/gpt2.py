@@ -102,12 +102,15 @@ class MultiHeadAttention(nn.Module):
 
 class FeedForward(nn.Module):
     """ Class for Feed-Forward Network module in Transformer Encoder Block, this module for GPT2
+
     Args:
         dim_model: dimension of model's latent vector space, default 1024
         dim_ffn: dimension of FFN's hidden layer, default 4096 from official paper
         hidden_dropout_prob: dropout rate, default 0.1
+
     Math:
         FeedForward(x) = FeedForward(LN(x))+x
+
     Reference:
         https://arxiv.org/abs/1706.03762
         https://s3-us-west-2.amazonaws.com/openai-assets/research-covers/language-unsupervised/language_understanding_paper.pdf

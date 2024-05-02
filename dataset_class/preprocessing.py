@@ -12,7 +12,6 @@ from spellchecker import SpellChecker
 from tqdm.auto import tqdm
 from typing import List, Tuple, Dict, Callable, Any
 
-
 speller = Speller(lang='en')
 spellchecker = SpellChecker()
 

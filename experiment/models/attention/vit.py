@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 from einops.layers.torch import Rearrange
+import configuration as CFG
 
 
 def scaled_dot_product_attention(q: Tensor, k: Tensor, v: Tensor, dot_scale: Tensor) -> Tensor:
@@ -144,8 +145,7 @@ class VisionEncoderLayer(nn.Module):
 
 
 class VisionEncoder(nn.Module):
-    """
-    In this class, encode input sequence(Image) and then we stack N VisionEncoderLayer
+    """ In this class, encode input sequence(Image) and then we stack N VisionEncoderLayer
     This model is implemented by cls pooling method for classification
     First, we define "positional embedding" and then add to input embedding for making patch embedding
     Second, forward patch embedding to N EncoderLayer and then get output embedding
@@ -182,14 +182,26 @@ class VisionEncoder(nn.Module):
         return encoded_x, layer_output
 
 
-class VisionTransformer(nn.Module):
+class Embedding(nn.Module):
+    """ Patch flatten embedding module for ViT
     """
-    Main class for ViT of cls pooling, Pytorch implementation
-    We implement pure ViT, Not hybrid version which is using CNN for extracting patch embedding
+    def __init__(self, cfg: CFG) -> None:
+        super(Embedding, self).__init__()
+        self.cfg = cfg
+
+
+class VisionTransformer(nn.Module):
+    """ Main class for ViT of cls pooling, Pytorch implementation
+
+    We apply nn.Conv2d for making patches from original image, this method is much simpler than using nn.Linear logic
+    nn.Linear() logic must split and view original tensor in other ways. that method needs to too much hard work
+
     input must be [BS, CHANNEL, IMAGE_SIZE, IMAGE_SIZE]
     In NLP, input_sequence is always smaller than vocab size
+
     But in vision, input_sequence is always same as image size, not concept of vocab in vision
     So, ViT use nn.Linear instead of nn.Embedding for input_embedding
+
     Args:
         num_classes: number of classes for classification task
         image_size: size of input image, default 512
@@ -200,9 +212,11 @@ class VisionTransformer(nn.Module):
                     if you want to use mean pooling, set classifier='mean'
         mode: option for train type, default fine-tune, if you want pretrain, set mode='pretrain'
               In official paper & code by Google Research, they use different classifier head for pretrain, fine-tune
+
     Math:
         image2sequence: [batch, channel, image_size, image_size] -> [batch, patch, patch_size^2*channel]
         input_embedding: R^(P^2 ·C)×D
+
     Reference:
         https://arxiv.org/abs/2010.11929
         https://arxiv.org/abs/1706.03762
