@@ -289,7 +289,7 @@ def rouge_n(y_true: List[str], y_pred: List[str], n_size: int = 4, beta: float =
     return np.round(numerator / denominator, 4) if denominator else 0
 
 
-def rouge_l():
+def rouge_l(y_true: str, y_pred: str, cfg: configuration.CFG = None) -> float:
     """ calculate ROUGE-L score for text summarization task (ROUGE Longest Common Sequence)
 
         recall is very im portant in text summarization task, because we need to generate important sentences in ref
@@ -302,8 +302,6 @@ def rouge_l():
         Args:
             y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
             y_pred: prediction, must be 2D Array for MLM Task (batch_size*sequence, vocab size)
-            n_size: int, default is 4, which is meaning of the maximum n-gram size
-            beta: float, default is 1, which is meaning of the weight of precision and recall
             cfg: configuration file for the experiment, for setting BLEU-N, tokenizer
 
         Math:
@@ -313,5 +311,32 @@ def rouge_l():
 
         Reference:
             https://aclanthology.org/W04-1013.pdf
+    """
+    gen_ngram = y_pred.split(' ')
+    ref_ngram = y_true.split(' ')
 
-        """
+    def cal_longest_common_sequence() -> int:
+        """ calculating length of longest common sequence between generated text and reference text """
+        result = 0
+        rows, cols = len(gen_ngram) + 1, len(ref_ngram)+1
+
+        dp = [[0]*cols for _ in range(rows)]
+        for y in range(1, rows):
+            for x in range(1, cols):
+                if gen_ngram[y-1] == ref_ngram[x-1]:
+                    dp[y][x] = dp[y-1][x-1] + 1
+                    result = max(result, dp[y][x])
+                    continue
+
+                dp[y][x] = max(dp[y-1][x], dp[y][x-1])
+
+        return result
+
+    lcs = cal_longest_common_sequence()
+    rouge_precision, rouge_recall = lcs / len(gen_ngram), lcs / len(ref_ngram)
+
+    beta = rouge_precision/rouge_recall
+    numerator = (1 + beta ** 2) * rouge_precision * rouge_recall
+    denominator = (beta ** 2 * rouge_precision + rouge_recall)
+
+    return np.round(numerator / denominator, 4) if denominator else 0

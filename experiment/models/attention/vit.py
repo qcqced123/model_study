@@ -1,193 +1,284 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch import Tensor
-from einops.layers.torch import Rearrange
 import configuration as CFG
 
+from typing import Tuple
+from torch import Tensor
+from einops.layers.torch import Rearrange
+from experiment.models.abstract_model import AbstractModel
 
-def scaled_dot_product_attention(q: Tensor, k: Tensor, v: Tensor, dot_scale: Tensor) -> Tensor:
-    """
-    Scaled Dot-Product attention
+
+def scaled_dot_product_attention(
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    dot_scale: Tensor,
+    attention_dropout: nn.Dropout,
+    padding_mask: Tensor = None,
+    attention_mask: Tensor = None
+) -> Tensor:
+    """ Scaled Dot-Product attention with Masking for padding mask, parallel version for Multi-Head Attention
+
     Args:
         q: query matrix, shape (batch_size, seq_len, dim_head)
         k: key matrix, shape (batch_size, seq_len, dim_head)
         v: value matrix, shape (batch_size, seq_len, dim_head)
-        dot_scale: scale factor for Q•K^T result, same as pure transformer
+        dot_scale: scale factor for Q•K^T result
+        attention_dropout: dropout for attention matrix, default rate is 0.1 from official paper
+        padding_mask: mask for attention matrix for MLM, you must check whether or not padding token is 1
+        attention_mask: mask for attention matrix for CLM
+
     Math:
         A = softmax(q•k^t/sqrt(D_h)), SA(z) = Av
+
+    Reference:
+        https://arxiv.org/abs/1706.03762
+        https://arxiv.org/pdf/1810.04805.pdf
+        https://arxiv.org/abs/2010.11929
+
     """
-    attention_dist = F.softmax(
-        torch.matmul(q, k.transpose(-1, -2)) / dot_scale,
-        dim=-1
+    BS, NUM_HEADS, SEQ_LEN, DIM_HEADS = q.shape
+    attention_matrix = torch.matmul(q, k.permute(0, 2, 3, 1).contiguous()) / dot_scale
+    if padding_mask is not None:
+        padding_mask = padding_mask.unsqueeze(1).unsqueeze(2)  # for broadcasting: shape (BS, 1, 1, SEQ_LEN)
+        attention_matrix = attention_matrix.masked_fill(padding_mask == 1, float('-inf'))
+
+    attention_dist = attention_dropout(
+        F.softmax(attention_matrix, dim=-1)
     )
-    attention_matrix = torch.matmul(attention_dist, v)
+    attention_matrix = torch.matmul(attention_dist, v).permute(0, 2, 1, 3).reshape(-1, SEQ_LEN, NUM_HEADS*DIM_HEADS).contiguous()
     return attention_matrix
 
 
-class AttentionHead(nn.Module):
-    """
-    In this class, we implement workflow of single attention head
-    Args:
-        dim_model: dimension of model's latent vector space, default 1024 from official paper
-        dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
-        dropout: dropout rate, default 0.1
-    Math:
-        [q,k,v]=z•U_qkv, A = softmax(q•k^t/sqrt(D_h)), SA(z) = Av
-    """
-    def __init__(self, dim_model: int =  1024, dim_head: int = 64, dropout: float = 0.1) -> None:
-        super(AttentionHead, self).__init__()
-        self.dim_model = dim_model
-        self.dim_head = dim_head
-        self.dropout = dropout
-        self.dot_scale = torch.sqrt(torch.tensor(self.dim_head))
-        self.fc_q = nn.Linear(self.dim_model, self.dim_head)
-        self.fc_k = nn.Linear(self.dim_model, self.dim_head)
-        self.fc_v = nn.Linear(self.dim_model, self.dim_head)
-
-    def forward(self, x: Tensor) -> Tensor:
-        attention_matrix = scaled_dot_product_attention(
-            self.fc_q(x),
-            self.fc_k(x),
-            self.fc_v(x),
-            self.dot_scale
-        )
-        return attention_matrix
-
-
 class MultiHeadAttention(nn.Module):
-    """
-    In this class, we implement workflow of Multi-Head Self-attention
+    """ In this class, we implement workflow of Multi-Head Self-attention for BERT
+    This class has same role as Module "BertAttention" in official Repo (bert.py)
+    In official repo, they use post-layer norm, but we use pre-layer norm which is more stable & efficient for training
+
     Args:
         dim_model: dimension of model's latent vector space, default 1024 from official paper
-        num_heads: number of heads in MHSA, default 16 from official paper for ViT-Large
+        num_attention_heads: number of heads in MHSA, default 16 from official paper for Transformer
         dim_head: dimension of each attention head, default 64 from official paper (1024 / 16)
-        dropout: dropout rate, default 0.1
+        attention_dropout_prob: dropout rate, default 0.1
+
     Math:
-        MSA(z) = [SA1(z); SA2(z); · · · ; SAk(z)]•Umsa
+        A = softmax(attention Matrix/sqrt(3*D_h)), SA(z) = Av
+
     Reference:
-        https://arxiv.org/abs/2010.11929
         https://arxiv.org/abs/1706.03762
+        https://arxiv.org/pdf/1810.04805.pdf
+        https://arxiv.org/abs/2010.11929
+
     """
-    def __init__(self, dim_model: int = 1024, num_heads: int = 8, dim_head: int = 64, dropout: float = 0.1) -> None:
+    def __init__(self, dim_model: int = 1024, num_attention_heads: int = 16, dim_head: int = 64, attention_dropout_prob: float = 0.1) -> None:
         super(MultiHeadAttention, self).__init__()
         self.dim_model = dim_model
-        self.num_heads = num_heads
+        self.num_attention_heads = num_attention_heads
         self.dim_head = dim_head
-        self.dropout = dropout
-        self.attention_heads = nn.ModuleList(
-            [AttentionHead(self.dim_model, self.dim_head, self.dropout) for _ in range(self.num_heads)]
-        )
+        self.fc_q = nn.Linear(self.dim_model, self.dim_model)
+        self.fc_k = nn.Linear(self.dim_model, self.dim_model)
+        self.fc_v = nn.Linear(self.dim_model, self.dim_model)
         self.fc_concat = nn.Linear(self.dim_model, self.dim_model)
+        self.attention = scaled_dot_product_attention
+        self.dot_scale = torch.sqrt(torch.tensor(self.dim_head)).to('cuda')
+        self.attention_dropout = nn.Dropout(p=attention_dropout_prob)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
         """ x is already passed nn.Layernorm """
         assert x.ndim == 3, f'Expected (batch, seq, hidden) got {x.shape}'
-        attention_output = self.fc_concat(
-            torch.cat([head(x) for head in self.attention_heads], dim=-1)  # concat all dim_head = num_heads * dim_head
+
+        # size: bs, seq, nums head, dim head, linear projection
+        q = self.fc_q(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 1, 3).contiguous()
+        k = self.fc_k(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+        v = self.fc_v(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 1, 3).contiguous()
+
+        attention_matrix = self.attention(
+            q,
+            k,
+            v,
+            self.dot_scale,
+            self.attention_dropout,
+            padding_mask,
+            attention_mask
         )
+        attention_output = self.fc_concat(attention_matrix)
         return attention_output
 
 
-class MLP(nn.Module):
-    """
-    Class for MLP module in ViT-Large
+class FeedForward(nn.Module):
+    """ Class for Feed-Forward Network module in Transformer Encoder Block, this module for ViT
+    Same Role as "MLP" in official paper and Repo
+
     Args:
-        dim_model: dimension of model's latent vector space, default 512
-        dim_mlp: dimension of FFN's hidden layer, default 2048 from official paper
-        dropout: dropout rate, default 0.1
+        dim_model: dimension of model's latent vector space, default 1024
+        dim_ffn: dimension of FFN's hidden layer, default 4096 from official paper
+        hidden_dropout_prob: dropout rate, default 0.1
+
     Math:
-        MLP(x) = MLP(LN(x))+x
+        FeedForward(x) = FeedForward(LN(x))+x
+
+    References:
+        https://arxiv.org/abs/2010.11929
+
     """
-    def __init__(self, dim_model: int = 1024, dim_mlp: int = 4096, dropout: float = 0.1) -> None:
-        super(MLP, self).__init__()
-        self.mlp = nn.Sequential(
-            nn.Linear(dim_model, dim_mlp),
+    def __init__(self, dim_model: int = 1024, dim_ffn: int = 4096, hidden_dropout_prob: float = 0.1) -> None:
+        super(FeedForward, self).__init__()
+        self.ffn = nn.Sequential(
+            nn.Linear(dim_model, dim_ffn),
             nn.GELU(),
-            nn.Dropout(p=dropout),
-            nn.Linear(dim_mlp, dim_model),
-            nn.Dropout(p=dropout),
+            nn.Dropout(p=hidden_dropout_prob),
+            nn.Linear(dim_ffn, dim_model),
+            nn.Dropout(p=hidden_dropout_prob),
         )
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.mlp(x)
+        return self.ffn(x)
 
 
 class VisionEncoderLayer(nn.Module):
+    """ Abstract Module for single ViT encoder layer, We apply Pre-Layernorm and activation for gradient flow stability
+
     """
-    Class for encoder_model module in ViT-Large
-    In this class, we stack each encoder_model module (Multi-Head attention, Residual-Connection, Layer Normalization, MLP)
-    """
-    def __init__(self, dim_model: int = 1024, num_heads: int = 16, dim_mlp: int = 4096, dropout: float = 0.1) -> None:
+    def __init__(
+        self,
+        dim_model: int = 1024,
+        num_attention_heads: int = 16,
+        dim_mlp: int = 4096,
+        layer_norm_eps: float = 0.02,
+        attention_dropout_prob: float = 0.1,
+        hidden_dropout_prob: float = 0.1
+    ) -> None:
         super(VisionEncoderLayer, self).__init__()
         self.self_attention = MultiHeadAttention(
             dim_model,
-            num_heads,
-            int(dim_model / num_heads),
-            dropout,
+            num_attention_heads,
+            int(dim_model / num_attention_heads),
+            attention_dropout_prob,
         )
-        self.layer_norm1 = nn.LayerNorm(dim_model)
-        self.layer_norm2 = nn.LayerNorm(dim_model)
-        self.dropout = nn.Dropout(p=dropout)
-        self.mlp = MLP(
+        self.self_attention = MultiHeadAttention(
+            dim_model,
+            num_attention_heads,
+            int(dim_model / num_attention_heads),
+            attention_dropout_prob,
+        )
+        self.layer_norm1 = nn.LayerNorm(dim_model, eps=layer_norm_eps)
+        self.layer_norm2 = nn.LayerNorm(dim_model, eps=layer_norm_eps)
+        self.hidden_dropout = nn.Dropout(p=hidden_dropout_prob)
+        self.mlp = FeedForward(
             dim_model,
             dim_mlp,
-            dropout,
+            hidden_dropout_prob,
         )
 
     def forward(self, x: Tensor) -> Tensor:
         ln_x = self.layer_norm1(x)
-        residual_x = self.dropout(self.self_attention(ln_x)) + x
+        residual_x = self.hidden_dropout(self.self_attention(ln_x)) + x
 
         ln_x = self.layer_norm2(residual_x)
         fx = self.mlp(ln_x) + residual_x  # from official paper & code by Google Research
         return fx
 
 
-class VisionEncoder(nn.Module):
+class VisionEncoder(nn.Module, AbstractModel):
     """ In this class, encode input sequence(Image) and then we stack N VisionEncoderLayer
+
     This model is implemented by cls pooling method for classification
+
     First, we define "positional embedding" and then add to input embedding for making patch embedding
     Second, forward patch embedding to N EncoderLayer and then get output embedding
+
     Args:
         num_patches: number of patches in input image => (image_size / patch_size)**2
-        N: number of EncoderLayer, default 24 for large model
+        num_layers: number of EncoderLayer, default 24 for large model
     """
 
-    def __init__(self, num_patches: int, N: int = 24, dim_model: int = 1024, num_heads: int = 16, dim_mlp: int = 4096, dropout: float = 0.1) -> None:
+    def __init__(
+        self,
+        cfg: CFG,
+        num_patches: int,
+        patch_size: int,
+        num_layers: int = 24,
+        num_attention_heads: int = 16,
+        dim_model: int = 1024,
+        dim_mlp: int = 4096,
+        layer_norm_eps: float = 0.02,
+        hidden_dropout_prob: float = 0.1,
+        attention_dropout_prob: float = 0.1,
+        gradient_checkpointing: bool = False
+    ) -> None:
         super(VisionEncoder, self).__init__()
+        self.cfg = cfg
         self.num_patches = num_patches
-        self.positional_embedding = nn.Embedding((self.num_patches + 1), dim_model)  # add 1 for cls token
-        self.num_layers = N
+        self.patch_size = patch_size
+        self.num_layers = num_layers
+        self.num_heads = num_attention_heads
         self.dim_model = dim_model
-        self.num_heads = num_heads
         self.dim_mlp = dim_mlp
-        self.dropout = nn.Dropout(p=dropout)
-        self.encoder_layers = nn.ModuleList(
-            [VisionEncoderLayer(dim_model, num_heads, dim_mlp, dropout) for _ in range(self.num_layers)]
+        self.hidden_dropout = nn.Dropout(p=hidden_dropout_prob)  # dropout is not learnable
+        self.layer = nn.ModuleList(
+            [VisionEncoderLayer(dim_model, num_attention_heads, dim_mlp, layer_norm_eps, attention_dropout_prob, hidden_dropout_prob) for _ in range(self.num_layers)]
         )
-        self.layer_norm = nn.LayerNorm(dim_model)
+        self.layer_norm = nn.LayerNorm(dim_model, eps=layer_norm_eps)  # for final-Encoder output
+        self.gradient_checkpointing = gradient_checkpointing
 
-    def forward(self, inputs: Tensor) -> tuple[Tensor, Tensor]:
+    def forward(self, inputs: Tensor, abs_pos_emb: Tensor) -> Tuple[Tensor, Tensor]:
+        """
+        Args:
+            inputs: embedding from input sequence
+            abs_pos_emb: absolute position embedding
+        """
         layer_output = []
-        pos_x = torch.arange(self.num_patches + 1).repeat(inputs.shape[0]).to(inputs)
-        x = self.dropout(
-            inputs + self.positional_embedding(pos_x)
-        )
-        for layer in self.encoder_layers:
-            x = layer(x)
+        x = inputs + abs_pos_emb  # add absolute position embedding with word embedding
+        for layer in self.layer:
+            if self.gradient_checkpointing and self.cfg.train:
+                x = self._gradient_checkpointing_func(
+                    layer.__call__,
+                    x,
+                )
+            else:
+                x = layer(
+                    x,
+                )
             layer_output.append(x)
-        encoded_x = self.layer_norm(x)  # from official paper & code by Google Research
-        layer_output = torch.stack(layer_output, dim=0).to(x.device)  # For Weighted Layer Pool: [N, BS, SEQ_LEN, DIM]
-        return encoded_x, layer_output
+        last_hidden_state = self.layer_norm(x)  # because of applying pre-layer norm
+        hidden_states = torch.stack(layer_output, dim=0).to(x.device)  # shape: [num_layers, BS, SEQ_LEN, DIM_Model]
+        return last_hidden_state, hidden_states
 
 
 class Embedding(nn.Module):
-    """ Patch flatten embedding module for ViT
+    """ ViT Embedding Module class
+
+    This Module set & initialize 2 Embedding Layers:
+        1) Flatten Patch Embedding
+        2) Absolute Positional Embedding
+
+    Args:
+        cfg: configuration.py
     """
     def __init__(self, cfg: CFG) -> None:
         super(Embedding, self).__init__()
         self.cfg = cfg
+        self.max_seq = cfg.num_patches + 1
+        self.image_slicer = nn.Conv2d(cfg.channels, cfg.dim_model, cfg.patch_size, cfg.patch_size)
+        self.patch_emb = nn.Linear(cfg.patch_size**2 * cfg.channels, cfg.dim_model)
+        self.abs_pos_emb = nn.Linear(self.max_seq, cfg.dim_model)  # add 1 for cls token
+        self.layer_norm1 = nn.LayerNorm(cfg.dim_model, eps=cfg.layer_norm_eps)  # for word embedding
+        self.layer_norm2 = nn.LayerNorm(cfg.dim_model, eps=cfg.layer_norm_eps)  # for word embedding
+        self.hidden_dropout = nn.Dropout(p=cfg.hidden_dropout_prob)
+
+    def forward(self, inputs: Tensor) -> Tuple[nn.Linear, nn.Linear]:
+        assert inputs.ndim != 4, f"Input shape should be [BS, CHANNEL, IMAGE_SIZE, IMAGE_SIZE], but got {inputs.shape}"
+
+        patch_x = self.image_slicer(inputs)
+        patch_emb = self.hidden_dropout(
+            self.layer_norm1(self.patch_emb(patch_x))
+        )
+        abs_pos_emb = self.hidden_dropout(
+            self.layer_norm2(self.abs_pos_emb(
+                torch.arange(self.max_seq, device="cuda").repeat(inputs.shape[0]).view(inputs.shape[0], -1)))
+        )
+        return patch_emb, abs_pos_emb
 
 
 class VisionTransformer(nn.Module):
@@ -222,90 +313,50 @@ class VisionTransformer(nn.Module):
         https://arxiv.org/abs/1706.03762
         https://github.com/google-research/vision_transformer/blob/main/vit_jax/models_vit.py#L184
     """
-    def __init__(
-            self,
-            num_classes: int,
-            channels: int = 3,
-            image_size: int = 512,
-            patch_size: int = 16,
-            num_layers: int = 24,
-            dim_model: int = 1024,
-            num_heads: int = 16,
-            dim_mlp: int = 4096,
-            dropout: float = 0.1,
-            extractor: str = 'base',
-            classifier: str = 'token',
-            mode: str = 'fine_tune',
-    ) -> None:
+    def __init__(self, cfg: CFG, num_layers: int = 12) -> None:
         super(VisionTransformer, self).__init__()
-        self.num_patches = int(image_size / patch_size)**2
+        self.cfg = cfg
+        self.num_patches = cfg.num_patches
+        self.patch_size = cfg.patch_size
         self.num_layers = num_layers
-        self.patch_size = patch_size
-        self.dim_model = dim_model
-        self.num_heads = num_heads
-        self.dim_mlp = dim_mlp
-        self.dropout = nn.Dropout(p=dropout)
+        self.num_attention_heads = cfg.num_attention_heads
+        self.dim_model = cfg.dim_model
+        self.dim_mlp = cfg.dim_mlp
+        self.layer_norm_eps = cfg.layer_norm_eps
+        self.hidden_dropout_prob = cfg.hidden_dropout_prob
+        self.attention_dropout_prob = cfg.attention_probs_dropout_prob
+        self.gradient_checkpointing = cfg.gradient_checkpoint
 
-        # Input Embedding
-        self.extractor = extractor
-        self.input_embedding = nn.Linear((channels * patch_size**2), dim_model)
-        self.conv = nn.Conv2d(
-            in_channels=channels,
-            out_channels=self.dim_model,
-            kernel_size=self.patch_size,
-            stride=self.patch_size
-        )
+        # Input Embedding Layer
+        self.embeddings = Embedding(cfg)
 
         # Encoder Multi-Head Self-attention
         self.encoder = VisionEncoder(
+            self.cfg,
             self.num_patches,
+            self.patch_size,
             self.num_layers,
+            self.num_attention_heads,
             self.dim_model,
-            self.num_heads,
             self.dim_mlp,
-            dropout,
+            self.layer_norm_eps,
+            self.hidden_dropout_prob,
+            self.attention_dropout_prob,
+            self.gradient_checkpointing,
         )
-
-        """
-        Classification Head Init Part
-        pretrain_classifier:
-            In official code, they use "representation_size" for output dim of pretrain classifier
-            But, we can't find meaning of "representation_size" and it's real size in official paper & code
-            So, we use dim_model for output dim of pretrain classifier
-        fine_tune_classifier:
-            In official code, they use ONLY single MLP layer for fine-tune classifier
-        """
-        self.classifier = classifier
         self.pretrain_classifier = nn.Sequential(
             nn.Linear(self.dim_model, self.dim_model),
             nn.Tanh(),
         )
-        self.fine_tune_classifier = nn.Linear(self.dim_model, num_classes)
-        self.mode = mode
 
-    def forward(self, inputs: Tensor) -> any:
+    def forward(self, inputs: Tensor) -> Tuple[Tensor, Tensor]:
         """ For cls pooling """
         assert inputs.ndim != 4, f"Input shape should be [BS, CHANNEL, IMAGE_SIZE, IMAGE_SIZE], but got {inputs.shape}"
-        x = inputs
+        patch_emb, abs_pos_emb = self.embeddings(inputs)
 
-        if self.extractor == 'cnn':
-            # self.conv(x).shape == [batch, dim, image_size/patch_size, image_size/patch_size]
-            x = self.conv(x).reshape(x.shape[0], self.dim_model, self.num_patches**2).transpose(-1, -2)
-        else:
-            # self.extractor == 'base':
-            x = self.input_embedding(
-                x.reshape(x.shape[0], self.num_patches, (self.patch_size**2 * x.shape[1]))
-            )
-        cls_token = torch.zeros(x.shape[0], 1, x.shape[2])  # can change init method
-        x = torch.cat([cls_token, x], dim=1)
+        last_hidden_state, hidden_states = self.encoder(
+            patch_emb,
+            abs_pos_emb,
+        )
+        return last_hidden_state, hidden_states
 
-        x, layer_output = self.encoder(x)  # output
-
-        # classification
-        x = x[:, 0, :]  # select cls token, which is position 0 in sequence
-        if self.mode == 'fine_tune':
-            x = self.fine_tune_classifier(x)
-
-        if self.mode == 'pretrain':
-            x = self.fine_tune_classifier(self.pretrain_classifier(x))
-        return x

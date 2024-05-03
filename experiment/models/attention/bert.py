@@ -134,13 +134,13 @@ class BERTEncoderLayer(nn.Module):
     In official repo, they use post-layer norm, but we use pre-layer norm which is more stable & efficient for training
     """
     def __init__(
-            self,
-            dim_model: int = 1024,
-            num_attention_heads: int = 16,
-            dim_ffn: int = 4096,
-            layer_norm_eps: float = 0.02,
-            attention_dropout_prob: float = 0.1,
-            hidden_dropout_prob: float = 0.1
+        self,
+        dim_model: int = 1024,
+        num_attention_heads: int = 16,
+        dim_ffn: int = 4096,
+        layer_norm_eps: float = 0.02,
+        attention_dropout_prob: float = 0.1,
+        hidden_dropout_prob: float = 0.1
     ) -> None:
         super(BERTEncoderLayer, self).__init__()
         self.self_attention = MultiHeadAttention(
@@ -160,9 +160,7 @@ class BERTEncoderLayer(nn.Module):
 
     def forward(self, x: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
         ln_x = self.layer_norm1(x)
-        residual_x = self.hidden_dropout(
-            self.self_attention(ln_x, padding_mask, attention_mask)
-        ) + x
+        residual_x = self.hidden_dropout(self.self_attention(ln_x, padding_mask, attention_mask)) + x
 
         ln_x = self.layer_norm2(residual_x)
         fx = self.ffn(ln_x) + residual_x
@@ -180,17 +178,17 @@ class BERTEncoder(nn.Module, AbstractModel):
         num_layers: number of EncoderLayer, default 6 for base model
     """
     def __init__(
-            self,
-            cfg: CFG,
-            max_seq: int = 512,
-            num_layers: int = 12,
-            dim_model: int = 768,
-            num_attention_heads: int = 12,
-            dim_ffn: int = 3072,
-            layer_norm_eps: float = 0.02,
-            attention_dropout_prob: float = 0.1,
-            hidden_dropout_prob: float = 0.1,
-            gradient_checkpointing: bool = False
+        self,
+        cfg: CFG,
+        max_seq: int = 512,
+        num_layers: int = 12,
+        dim_model: int = 768,
+        num_attention_heads: int = 12,
+        dim_ffn: int = 3072,
+        layer_norm_eps: float = 0.02,
+        attention_dropout_prob: float = 0.1,
+        hidden_dropout_prob: float = 0.1,
+        gradient_checkpointing: bool = False
     ) -> None:
         super(BERTEncoder, self).__init__()
         self.cfg = cfg
