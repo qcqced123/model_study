@@ -371,8 +371,6 @@ class QuestionAnswering(nn.Module, AbstractTask):
 class TextGeneration(nn.Module, AbstractTask):
     """ Fine-Tune Task Module for Text Generation Task, same as language modeling task (causal language modeling)
     you can select any backbone model as GPT, T5, BART ... etc from huggingface hub or my own model hub
-
-
     """
     def __init__(self, cfg: CFG) -> None:
         super(TextGeneration, self).__init__()
@@ -461,5 +459,63 @@ class SentimentAnalysis(nn.Module, AbstractTask):
             features = h.hidden_states
 
         embedding = self.pooling(features, inputs['attention_mask'])
+        logit = self.fc(embedding)
+        return logit
+
+
+class ImageClassification(nn.Module, AbstractTask):
+    """ Task module for image classification
+
+    Unlike NLP, this module can be used in pre-train or fine-tune. It can be used in both cases.
+
+    When you use fine-tune stage for this module, you can choose the using cls token or rest of token pooling method
+    Also, you can choose the number of layers to freeze or re-initialize
+
+    But, when you pre-training this module, you should use cls token pooling method by following the original paper
+    and do not freeze or re-initialize the model
+    """
+    def __init__(self, cfg: CFG) -> None:
+        super(ImageClassification, self).__init__()
+        self.cfg = cfg
+        self.model = self.select_model(cfg.num_layers)
+
+        # I don't know if we apply universal approximation theorem in hidden dimension for this layer
+        self.fc = None
+        self.pooling = None
+        if cfg.train_type == 'pretrain':
+            self.fc = nn.Sequential(
+                nn.Linear(self.dim_model, self.dim_model),
+                nn.Tanh(),
+                nn.Linear(self.dim_model, self.num_classes),
+            )
+            self._init_weights(self.model)
+            self._init_weights(self.fc)
+
+        else:
+            self.pooling = getattr(pooling, self.cfg.pooling)(self.cfg)
+            self.fc = nn.Linear(self.dim_model, self.cfg.num_classes)
+            self._init_weights(self.mlm_head)
+
+            if self.cfg.freeze:
+                freeze(self.model.embeddings)
+                freeze(self.model.encoder.layer[:self.cfg.num_freeze])
+
+            if self.cfg.reinit:
+                reinit_topk(self.model, self.cfg.num_reinit)
+
+        if self.cfg.gradient_checkpoint:
+            self.model.gradient_checkpointing_enable()
+
+    def feature(self, inputs: Tensor) -> Tensor:
+        outputs = self.model(inputs)
+        return outputs
+
+    def forward(self, inputs: Tensor) -> List[Tensor]:
+        last_hidden_states, _ = self.feature(inputs)
+        embedding = last_hidden_states[:, 0, :]  # [bs, seq, dim_model]
+
+        if self.pooling is not None:
+            embedding = self.pooling(last_hidden_states)
+
         logit = self.fc(embedding)
         return logit

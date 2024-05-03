@@ -281,7 +281,7 @@ class Embedding(nn.Module):
         return patch_emb, abs_pos_emb
 
 
-class VisionTransformer(nn.Module):
+class VisionTransformer(nn.Module, AbstractModel):
     """ Main class for ViT of cls pooling, Pytorch implementation
 
     We apply nn.Conv2d for making patches from original image, this method is much simpler than using nn.Linear logic
@@ -292,17 +292,6 @@ class VisionTransformer(nn.Module):
 
     But in vision, input_sequence is always same as image size, not concept of vocab in vision
     So, ViT use nn.Linear instead of nn.Embedding for input_embedding
-
-    Args:
-        num_classes: number of classes for classification task
-        image_size: size of input image, default 512
-        patch_size: size of patch, default 16 from official paper for ViT-Large
-        extractor: option for feature extractor, default 'base' which is crop & just flatten with Linear Projection
-                   if you want to use convolution for feature extractor, set extractor='cnn' named hybrid ver in paper
-        classifier: option for pooling method, default token meaning that do cls pooling
-                    if you want to use mean pooling, set classifier='mean'
-        mode: option for train type, default fine-tune, if you want pretrain, set mode='pretrain'
-              In official paper & code by Google Research, they use different classifier head for pretrain, fine-tune
 
     Math:
         image2sequence: [batch, channel, image_size, image_size] -> [batch, patch, patch_size^2*channel]
@@ -343,10 +332,6 @@ class VisionTransformer(nn.Module):
             self.hidden_dropout_prob,
             self.attention_dropout_prob,
             self.gradient_checkpointing,
-        )
-        self.pretrain_classifier = nn.Sequential(
-            nn.Linear(self.dim_model, self.dim_model),
-            nn.Tanh(),
         )
 
     def forward(self, inputs: Tensor) -> Tuple[Tensor, Tensor]:
