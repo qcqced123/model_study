@@ -371,6 +371,7 @@ class QuestionAnswering(nn.Module, AbstractTask):
 class TextGeneration(nn.Module, AbstractTask):
     """ Fine-Tune Task Module for Text Generation Task, same as language modeling task (causal language modeling)
     you can select any backbone model as GPT, T5, BART ... etc from huggingface hub or my own model hub
+
     """
     def __init__(self, cfg: CFG) -> None:
         super(TextGeneration, self).__init__()
@@ -398,11 +399,11 @@ class TextGeneration(nn.Module, AbstractTask):
         if self.cfg.gradient_checkpoint:
             self.model.gradient_checkpointing_enable()
 
-    def feature(self, inputs: dict):
+    def generate(self, inputs: Dict[str: Tensor, str: Tensor]):
         outputs = self.model(**inputs)
         return outputs
 
-    def forward(self):
+    def forward(self, inputs: Dict[str: Tensor, str: Tensor]):
         pass
 
 
@@ -419,6 +420,7 @@ class SentimentAnalysis(nn.Module, AbstractTask):
             - ASAP, We make normalizing function for target labels range 1 to 5 rating
     """
     def __init__(self, cfg: CFG) -> None:
+
         super(SentimentAnalysis, self).__init__()
         self.cfg = cfg
         self.components = self.select_pt_model()

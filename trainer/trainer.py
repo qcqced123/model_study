@@ -1547,4 +1547,18 @@ class SequenceClassificationTuner:
 class TextGenerationTuner:
     """ Fine-tune class for Text Generation, Summarization
     """
-    pass
+    def __init__(self):
+        pass
+
+    def make_batch(self):
+        pass
+
+    def model_setting(self):
+        pass
+
+    def train_val_fn(self):
+        pass
+
+    def valid_fn(self):
+        pass
+
