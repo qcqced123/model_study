@@ -198,22 +198,12 @@ class MultiHeadAttention(nn.Module):
         self.fc_k = nn.Linear(self.dim_model, self.dim_model)
         self.fc_v = nn.Linear(self.dim_model, self.dim_model)
         self.fc_concat = nn.Linear(self.dim_model, self.dim_model)  # same as W_O in original paper
-        self.apply_rope = apply_rotary_position_embeddings
+        self.apply_rope = apply_rotary_position_embeddingsㅋ
         self.attention = scaled_dot_product_attention if kernel == 'softmax' else linear_attention
         self.attention_dropout = nn.Dropout(p=attention_dropout_prob)
         self.dot_scale = torch.sqrt(torch.tensor(self.dim_head, dtype=torch.float32))
         self.kernel = kernel
         self.eps = 1e-6
-
-    # @staticmethod
-    # def apply_rotary_position_embeddings(word: Tensor, rotary_pos: Tensor) -> Tensor:
-    #     """ Very Un-Optimized way to apply rotary position encoding to word embedding
-    #     Notes:
-    #          ASAP, we will implement more optimized way to apply rotary position encoding to word embedding
-    #     """
-    #     BATCH_SIZE, SEQ_LEN, DIM_MODEL = word.shape
-    #     result = torch.vstack([torch.bmm(rotary_pos, word[i].unsqueeze(-1)).squeeze(-1).view(SEQ_LEN, DIM_MODEL) for i in range(BATCH_SIZE)]).view(BATCH_SIZE, SEQ_LEN, DIM_MODEL)
-    #     return result
 
     def forward(self, x: Tensor, rotary_pos_enc: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
         """ x is already passed nn.Layernorm, already multiplied with rotary position encoding """
