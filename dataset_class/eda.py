@@ -1,10 +1,8 @@
-import nltk
 import warnings
 import numpy as np
 import pandas as pd
 import seaborn as sns
 
-import matplotlib as matp
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from wordcloud import WordCloud
@@ -108,7 +106,7 @@ def plot_distribution(df: pd.DataFrame, col_name: str, mode: str = 'kde') -> Non
 
 
 def plot_categorical_count(df: pd.DataFrame, x_col: str, hue: str) -> None:
-    """Helper function for plotting the distribution of specific feature (from argument)
+    """ Helper function for plotting the distribution of specific feature (from argument)
 
     Args:
         df: pd.DataFrame
@@ -127,6 +125,13 @@ def plot_categorical_count(df: pd.DataFrame, x_col: str, hue: str) -> None:
 
 
 def plot_bar(df: pd.DataFrame, y_col: str, x_col: str) -> None:
+    """ Helper function for plotting the bar plot
+
+    Args:
+        df: pd.DataFrame
+        y_col: default str, col name which will be setting on y-axis on bar plot graph
+        x_col: default str, col name which will be setting on x-axis on bar plot graph
+    """
     sns.set_style(style='dark')
     plt.figure(figsize=(15, 10))
     sns.barplot(
