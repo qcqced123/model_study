@@ -3,8 +3,6 @@ import arxiv
 import pandas as pd
 
 from tqdm.auto import tqdm
-from multiprocessing import Pool
-from collections import Counter, defaultdict
 
 
 def set_sorting(sorting: str = 'relevance') -> object:
