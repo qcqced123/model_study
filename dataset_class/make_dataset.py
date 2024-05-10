@@ -3,12 +3,11 @@ import openai
 import google.generativeai as genai
 import pandas as pd
 
-from dotenv import load_dotenv
 from typing import List
-from langchain_core.documents import Document
+from dotenv import load_dotenv
 from langchain_community.document_loaders import UnstructuredPDFLoader
 from langchain_community.document_loaders.image import UnstructuredImageLoader
-
+from preprocessing import cleaning_words
 
 load_dotenv()
 
@@ -21,7 +20,7 @@ def image2doc(image_path: str) -> str:
     return output
 
 
-def pdf2doc(pdf_path: str) -> Document:
+def pdf2doc(pdf_path: str) -> str:
     """ Convert pdf to text document by using Langchain Community
     """
     pdf_loader = UnstructuredPDFLoader(file_path=pdf_path)
@@ -43,7 +42,9 @@ def openai_gpt3_api(script: str, foundation_model: str = 'gpt-3.5-turbo-16k', te
         ingredient_data: list of food ingredients from the given text
 
     References:
-
+        https://arxiv.org/abs/2005.14165
+        https://d4mucfpksywv.cloudfront.net/better-language-models/language_models_are_unsupervised_multitask_learners.pdf
+        https://platform.openai.com/docs/guides/text-generation
     """
     OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
     openai.api_key = OPENAI_API_KEY
@@ -56,6 +57,7 @@ def openai_gpt3_api(script: str, foundation_model: str = 'gpt-3.5-turbo-16k', te
                  "When compiling the 'Food Ingredient List' from the given [script], ensure that it is written in 'English'." \
                  "Additionally, exclude non-food items and focus soely on 'edible ingredients'." \
                  "For example: - Egg, - Cheese, - Tomato, - Salt, - Sugar"
+
         response = openai.ChatCompletion.create(
             model=foundation_model,
             messages=[
@@ -71,15 +73,16 @@ def openai_gpt3_api(script: str, foundation_model: str = 'gpt-3.5-turbo-16k', te
     return ingredient_data
 
 
-def google_gemini_api(paper_link: str, example: str, foundation_model: str = 'gemini-pro', temperature: float = 1) -> List:
+def google_gemini_api(paper_link: str, foundation_model: str = 'gemini-pro', temperature: float = 0) -> str:
     """ make Arxiv Questioning & Answering dataset function with Google AI Gemini API
 
     As you run this function before, you must set up the your own Google API key for the Gemini API.
     you can use the gemini-pro-api for free with the Google API key.
 
+    we will use the Zero-Shot Learning for generating the QA dataset from the given paper link.
+
     Args:
         paper_link (str): the paper link for QA dataset
-        example (str): the example dataset for QA dataset and 1-shot learning
         foundation_model (str): The foundation model for extracting food ingredients from the given text,
                                 default is 'gemini-pro'
         temperature (float): default 0.0, the temperature value for the diversity of the output text
@@ -99,20 +102,22 @@ def google_gemini_api(paper_link: str, example: str, foundation_model: str = 'ge
         candidate_count=1,
         temperature=temperature
     )
-    context = pdf2doc(paper_link)
-    datasets = []
+    # context = pdf2doc(paper_link)
+    datasets = ''
     try:
-        prompt = f"[context] {context}"\
-                 f"[example] {example}." \
+        prompt = f"[context] {paper_link}"\
                  f"Please make some questions and answers from [context]." \
-                 f"When creating your questions and answers, use the format and intent of the [example] questions and answers as a guide."
+                 f"When creating your questions and answers from [context]," \
+                 f"please generate much longer and detailed information into questions and answers" \
+                 f"And also, make output shape as below: " \
+                 f"Questions: 1., 2., 3. ... 10., Answers: 1., 2., 3. ... 10." \
+                 f"Don't use bold, italic, or underline text in the questions and answers."
 
         response = model.generate_content(
             contents=prompt,
             generation_config=generation_config,
         )
-        dataset = response.text
-        print(dataset)
+        datasets = response.text
 
     except Exception as e:
         print(e)
@@ -134,41 +139,44 @@ def get_paper_from_list(base_path: str) -> None:
     return
 
 
+def remove_garbage(text: str) -> str:
+    """ remove garbage text from arxiv paper
+    """
+    text = text[text.find("v i X r a\n\n"):]
+    return text
+
+
+def build_qa_dataset(text: str) -> pd.DataFrame:
+    """ build QA dataset from the given paper link
+
+    Args:
+        text (str): the text (Question and Answering from Open Ai GPT-3.5 API or Google AI Gemini API)
+    """
+    questions_text = text.split("Questions:")[1].split("Answers:")[0].strip()
+    answers_text = text.split("Questions:")[1].split("Answers:")[1].strip()
+
+    questions = [q.strip() for q in questions_text.split("\n") if q.strip()]
+    answers = [a.strip() for a in answers_text.split("\n") if a.strip()]
+    df = pd.DataFrame({"Questions": questions, "Answers": answers})
+    return df
+
+
 if __name__ == '__main__':
-    link = './deberta.pdf'
-    example = """Question 1. What is the central research question or hypothesis that this paper addresses? 
-    Answer 1. Based on my reading, the central research question this paper addresses is: 
-    Given an encoding or representation of an image produced by a model like SIFT, HOG, or a convolutional neural network (CNN), to what extent is it possible to reconstruct or invert the original image?
-    The authors propose a general framework for inverting image representations by posing it as an optimization problem - finding an image that best matches the target representation while conforming to natural image priors.
-    They apply this technique to study and visualize the information captured by different representations, especially the layers of deep CNNs trained on ImageNet.
-    In summary, the main hypothesis is that by inverting image representations, they can gain insights into the invariances captured by the representation as well as understand what visual information is preserved in models like CNNs. 
-    The reconstructions allow them to analyze and visualize the encoding learned by the models.
-    """
+    link = 'p_tuning.pdf'
+    test = pdf2doc(f'./data_folder/arxiv_qa/papers/{link}')
 
-    example2 = """
-    Q1. What is the main challenge addressed in this paper regarding image representations?    
-    A1. The paper tackles the challenge of understanding the information encoded within image representations, particularly those generated by deep Convolutional Neural Networks (CNNs). Traditionally, it's difficult to grasp what specific visual features these representations capture.
-    
-    Q2. How do the authors propose to analyze image representations?
-    A2. The authors introduce a novel approach: inverting the image representation. They formulate it as an optimization problem. The goal is to find an image that best matches the target representation (produced by models like SIFT, HOG, or CNNs) while also adhering to natural image properties (like smoothness and texture). By reconstructing the image from its representation, they can analyze the encoded information.
-    
-    Q3. What types of image representations are investigated in the paper?
-    A3. The paper explores inverting various image representations, including:
-    Shallow representations: Techniques like SIFT (Scale-Invariant Feature Transform) and HOG (Histogram of Oriented Gradients).
-    Deep representations: The focus is on inverting representations learned by deep CNNs trained on large datasets like ImageNet.
-    
-    Q4. What is the key finding regarding information encoded by deeper CNN layers?
-    A4. The study reveals that as you go deeper within a CNN architecture, the reconstructed images exhibit increasing invariance to details. In simpler terms, deeper layers become less sensitive to minor variations in the original image, while still retaining the semantic content (like the object depicted).
-    
-    Q5. How do the authors analyze the information distribution within CNN neurons?
-    A5. They achieve this by inverting representations derived from subsets of CNN neurons. This analysis sheds light on the locality and specialization of information encoded across different channels and layers within the network.
-    
-    Q6. What is the overall benefit of inverting image representations, particularly for deep CNNs?
-    A6. Inverting these representations provides valuable insights into two key aspects:
-    Invariances: It helps understand what kind of variations the model disregards when encoding an image.
-    Information Content: It reveals what visual information (like shapes, textures, or colors) is captured and preserved within the CNN's encoding.
-    By analyzing the reconstructions, researchers gain a deeper understanding of how these models process and represent visual information.
-    """
+    test = remove_garbage(test)
+    clean_text = cleaning_words(test)  # remove all of trash text such as this papers pid
+    print(test)
 
-    # google_gemini_api(link, example)
-    get_paper_from_list('./data_folder/arxiv_qa/papers/')
+    text = google_gemini_api(clean_text)
+    print(text)
+
+    df = build_qa_dataset(text)
+    print(df)
+
+    df.to_csv('p_tuning.csv', index=False)
+
+
+
+
