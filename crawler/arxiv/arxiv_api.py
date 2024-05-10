@@ -3,6 +3,7 @@ import arxiv
 import pandas as pd
 
 from tqdm.auto import tqdm
+from multiprocessing import Pool
 
 
 def set_sorting(sorting: str = 'relevance') -> object:
@@ -60,9 +61,10 @@ def main_loop(query: str, max_results: int = 10, sorting=arxiv.SortCriterion.Rel
     paper_list = []
     for paper in tqdm(result):
         paper_list.append(paper)
-        title = paper.title
+        title = paper.title.replace('/', '_')
+
         paper.download_pdf(
-            dirpath='./download/',
+            dirpath='./download/train/',
             filename=f'{title}.pdf'
         )
 
@@ -71,14 +73,17 @@ def main_loop(query: str, max_results: int = 10, sorting=arxiv.SortCriterion.Rel
 
 
 if __name__ == '__main__':
-    q = sys.stdin.readline().rstrip()
-    return_results = int(sys.stdin.readline())
-    standard = sys.stdin.readline().rstrip()
+    # q = sys.stdin.readline().rstrip()
+    # return_results = int(sys.stdin.readline())
+    # standard = sys.stdin.readline().rstrip()
+    standard = 'relevance'
     values = set_sorting(sorting=standard)
 
-    df = main_loop(
-        query=q,
-        max_results=return_results,
-        sorting=values
-    )
-    df.to_csv(f'{q}_arxiv.csv', index=False)
+    query = pd.read_csv('paper_id_list.csv').paper_id.tolist()
+
+    with Pool(processes=6) as pool:
+        results = pool.map(main_loop, query[45:])
+
+    # for q in tqdm(query[60:]):
+    #     df = main_loop(query=q, max_results=return_results, sorting=values)
+        # df.to_csv(f'{q}_arxiv.csv', index=False)

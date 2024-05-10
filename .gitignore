@@ -1,4 +1,5 @@
 # 디폴트 무시된 파일
+.pdf
 .env
 /shelf/
 /workspace.xml
@@ -421,3 +422,4 @@ tutorial/semantic_search/product_search_tutorial/myntra2.parquet
 !/dataset_class/EDA.ipynb
 /dataset_class
 !/dataset_class/downloading_dataset.ipynb
+/crawler/arxiv/download/
