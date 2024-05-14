@@ -7,6 +7,7 @@ from typing import List
 from dotenv import load_dotenv
 from langchain_community.document_loaders import UnstructuredPDFLoader
 from langchain_community.document_loaders.image import UnstructuredImageLoader
+from transformers import AutoTokenizer
 from preprocessing import cleaning_words
 
 load_dotenv()
@@ -80,7 +81,6 @@ def google_gemini_api(paper_link: str, foundation_model: str = 'gemini-pro', tem
     you can use the gemini-pro-api for free with the Google API key.
 
     we will use the Zero-Shot Learning for generating the QA dataset from the given paper link.
-
     Args:
         paper_link (str): the paper link for QA dataset
         foundation_model (str): The foundation model for extracting food ingredients from the given text,
@@ -91,6 +91,7 @@ def google_gemini_api(paper_link: str, foundation_model: str = 'gemini-pro', tem
 
     References:
         https://colab.research.google.com/github/google/generative-ai-docs/blob/main/site/en/tutorials/quickstart_colab.ipynb?hl=ko#scrollTo=HTiaTu6O1LRC
+        https://ai.google.dev/gemini-api/docs/models/gemini?hl=ko
         https://ai.google.dev/gemini-api/docs/get-started/python?hl=ko&_gl=1*7ufqxk*_up*MQ..*_ga*MTk2ODk3NDQyNi4xNzE0OTIwMjcw*_ga_P1DBVKWT6V*MTcxNDkyMDI2OS4xLjAuMTcxNDkyMDI2OS4wLjAuOTQwNDMwMTE.
         https://ai.google.dev/gemini-api/docs/quickstart?hl=ko&_gl=1*12k4ofq*_up*MQ..*_ga*MTk2ODk3NDQyNi4xNzE0OTIwMjcw*_ga_P1DBVKWT6V*MTcxNDkyMDI2OS4xLjAuMTcxNDkyMDI2OS4wLjAuOTQwNDMwMTE.
         https://ai.google.dev/api/python/google/generativeai/GenerativeModel?_gl=1*1ajz3qu*_up*MQ..*_ga*MTk2ODk3NDQyNi4xNzE0OTIwMjcw*_ga_P1DBVKWT6V*MTcxNDkyNDAyOC4yLjAuMTcxNDkyNDAyOC4wLjAuMTkwOTQyMjU0#generate_content
@@ -105,13 +106,28 @@ def google_gemini_api(paper_link: str, foundation_model: str = 'gemini-pro', tem
     # context = pdf2doc(paper_link)
     datasets = ''
     try:
-        prompt = f"[context] {paper_link}"\
-                 f"Please make some questions and answers from [context]." \
-                 f"When creating your questions and answers from [context]," \
-                 f"please generate much longer and detailed information into questions and answers" \
-                 f"And also, make output shape as below: " \
-                 f"Questions: 1., 2., 3. ... 10., Answers: 1., 2., 3. ... 10." \
-                 f"Don't use bold, italic, or underline text in the questions and answers."
+        prompt = f"""[context] {paper_link}
+        Please make some questions and answers from [context].
+        When creating your questions and answers from [context],
+        please generate much longer and detailed information into questions and answers
+        When creating content for a single question and answer, you must do not line breaks
+        Also, don't use bold, italic, or underline text in the questions and answers and make output shape as below:
+
+        Questions:
+        1.
+        2.
+        3.
+        ...
+        10.
+
+        Answers:
+        1.
+        2.
+        3.
+        ...
+        10.
+
+        """
 
         response = model.generate_content(
             contents=prompt,
@@ -146,6 +162,10 @@ def remove_garbage(text: str) -> str:
     return text
 
 
+def cal_token_length(text: str) -> int:
+    return len(AutoTokenizer.from_pretrained('google-bert/bert-base-uncased').encode(text))
+
+
 def build_qa_dataset(text: str) -> pd.DataFrame:
     """ build QA dataset from the given paper link
 
@@ -155,27 +175,30 @@ def build_qa_dataset(text: str) -> pd.DataFrame:
     questions_text = text.split("Questions:")[1].split("Answers:")[0].strip()
     answers_text = text.split("Questions:")[1].split("Answers:")[1].strip()
 
-    questions = [q.strip() for q in questions_text.split("\n") if q.strip()]
-    answers = [a.strip() for a in answers_text.split("\n") if a.strip()]
+    questions = [q[q.find('. ') + len('. '):].strip() for q in questions_text.split("\n") if q.strip()]
+    answers = [a[a.find('. ') + len('. '):].strip() for a in answers_text.split("\n") if a.strip()]
     df = pd.DataFrame({"Questions": questions, "Answers": answers})
     return df
 
 
 if __name__ == '__main__':
-    link = 'p_tuning.pdf'
+    """ length problem: if you input too much longer pdf, the google gemini api will return 500 ERROR
+    you can input your own pdf until then 25 pages (30720 tokens)
+    """
+    link = 'bigbird.pdf'
     test = pdf2doc(f'./data_folder/arxiv_qa/papers/{link}')
 
     test = remove_garbage(test)
     clean_text = cleaning_words(test)  # remove all of trash text such as this papers pid
-    print(test)
+    print(cal_token_length(clean_text))
 
-    text = google_gemini_api(clean_text)
+    text = google_gemini_api(clean_text[:25000])
     print(text)
 
     df = build_qa_dataset(text)
     print(df)
 
-    df.to_csv('p_tuning.csv', index=False)
+    df.to_csv('bigbird.csv', index=False)
 
 
 
