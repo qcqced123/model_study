@@ -1,7 +1,8 @@
-import os, sys
+import os
+import pandas as pd
 import openai
 import google.generativeai as genai
-import pandas as pd
+
 
 from typing import List
 from dotenv import load_dotenv
@@ -185,20 +186,27 @@ if __name__ == '__main__':
     """ length problem: if you input too much longer pdf, the google gemini api will return 500 ERROR
     you can input your own pdf until then 25 pages (30720 tokens)
     """
-    link = 'bigbird.pdf'
-    test = pdf2doc(f'./data_folder/arxiv_qa/papers/{link}')
+    chunk_size, eps = 2, 500
+    BASE_URL = '../crawler/arxiv/download/test'
+    paper_list = os.listdir(BASE_URL)
 
-    test = remove_garbage(test)
-    clean_text = cleaning_words(test)  # remove all of trash text such as this papers pid
-    print(cal_token_length(clean_text))
+    for link in paper_list:
+        unstructured_text = pdf2doc(f"{BASE_URL}/{link}")
+        text = remove_garbage(unstructured_text)
+        clean_text = cleaning_words(text)  # remove all of trash text such as this papers pid
+        token_list = clean_text.split(' ')
 
-    text = google_gemini_api(clean_text[:25000])
-    print(text)
+        print(f"Current Paper's Token Length by Python inherited split() method: {len(token_list)}")
+        print(f"Current Paper's Token Length by Huggingface Tokenizer: {cal_token_length(clean_text)}")
 
-    df = build_qa_dataset(text)
-    print(df)
+        """ save the cleaned text to the file """
+        df = pd.DataFrame(columns=['Questions', 'Answers'])
+        for sub_text in [token_list[0:len(token_list) // chunk_size + eps], token_list[len(token_list) // chunk_size - eps:]]:
+            text = google_gemini_api(''.join(sub_text))
+            pd.concat([df, build_qa_dataset(text)], axis=0, ignore_index=True)
 
-    df.to_csv('bigbird.csv', index=False)
+        print(f"Generated Questions and Answers: {df}")
+        df.to_csv('./data_folder/arxiv_qa/.csv', index=False)
 
 
 
