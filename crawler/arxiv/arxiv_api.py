@@ -31,11 +31,10 @@ def set_sorting(sorting: str = 'relevance') -> object:
         return arxiv.SortCriterion.LastUpdatedDate
 
 
-def main_loop(query: str, max_results: int = 10, sorting=arxiv.SortCriterion.Relevance):
+def main_loop(query: str, data_type: str = 'train', max_results: int = 10, sorting=arxiv.SortCriterion.Relevance):
     """ main loop function for downloading query output from arxiv
 
     this function will download the paper named change 2110.03353v1 into it's title
-
     Usage:
         query: 'iclr2020', 'ELECTRA', 'NLP', 'Transformer' ...
         max_results: 10, 20, 30, 40, 50 ...
@@ -46,6 +45,7 @@ def main_loop(query: str, max_results: int = 10, sorting=arxiv.SortCriterion.Rel
 
     Args:
         query: str, query string for searching the arxiv database
+        data_type: 'train', 'test' args for determining the download file's name and path
         max_results: int, maximum number of results to return
         sorting: object, sorting criterion for the search results
 
@@ -61,11 +61,13 @@ def main_loop(query: str, max_results: int = 10, sorting=arxiv.SortCriterion.Rel
     paper_list = []
     for paper in tqdm(result):
         paper_list.append(paper)
+        url = paper.entry_id
         title = paper.title.replace('/', '_')
-
+        pid = query if data_type == 'train' else url[url.find('abs/') + len('abs/'):][:-2]
+        filename = f"{pid}_{title}.pdf"
         paper.download_pdf(
             dirpath='./download/train/',
-            filename=f'{title}.pdf'
+            filename=filename
         )
 
     arxiv_df = pd.DataFrame([vars(paper) for paper in paper_list])
@@ -82,7 +84,7 @@ if __name__ == '__main__':
     query = pd.read_csv('paper_id_list.csv').paper_id.tolist()
 
     with Pool(processes=6) as pool:
-        results = pool.map(main_loop, query[45:])
+        results = pool.map(main_loop, query[:100])
 
     # for q in tqdm(query[60:]):
     #     df = main_loop(query=q, max_results=return_results, sorting=values)
