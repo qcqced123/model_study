@@ -206,8 +206,8 @@ def build_train_dataframe() -> pd.DataFrame:
             print(f"Error occurred in the paper: {pid, title}")
 
         data.append([pid, title, clean_text])
-    
-    df = pd.DataFrame(data, columns=['pid', 'title' 'text'])
+
+    df = pd.DataFrame(data, columns=['pid', 'title', 'text'])
     output_path = f'./data_folder/arxiv_qa/paper_meta_db.csv'
     df.to_csv(output_path, index=False)
     return df
