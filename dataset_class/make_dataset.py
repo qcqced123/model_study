@@ -160,7 +160,7 @@ def get_paper_from_list(base_path: str) -> None:
 def remove_garbage(text: str) -> str:
     """ remove garbage text from arxiv paper
     """
-    text = text[text.find("v i X r a\n\n"):]
+    text = text[text.find("v i X r a\n\n") + len("v i X r a\n\n"):]
     return text
 
 
