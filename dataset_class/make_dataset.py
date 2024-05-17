@@ -197,7 +197,7 @@ def build_train_dataframe() -> pd.DataFrame:
         clean_text = ''
         pid, title = paper.split('_')[0], paper.split('_')[1][:-4]
         try:
-            unstructured_text = pdf2doc(paper)
+            unstructured_text = pdf2doc(BASE_URL + paper)
             text = remove_garbage(unstructured_text)
             clean_text = cleaning_words(text)  # remove all of trash text such as this papers pid
 
@@ -206,7 +206,7 @@ def build_train_dataframe() -> pd.DataFrame:
             print(f"Error occurred in the paper: {pid, title}")
 
         data.append([pid, title, clean_text])
-
+    
     df = pd.DataFrame(data, columns=['pid', 'title' 'text'])
     output_path = f'./data_folder/arxiv_qa/paper_meta_db.csv'
     df.to_csv(output_path, index=False)
