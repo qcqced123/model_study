@@ -218,6 +218,7 @@ def build_train_text() -> Dict[str, List[Tensor]]:
     """ build the text inputs for the casual language modeling for the arxiv paper (Generative QA Task)
     """
     df = pd.read_csv('./data_folder/arxiv_qa/paper_meta_db.csv')
+    df.dropna(subset=['text'], inplace=True)
     contexts = ''.join(df['text'].tolist())
     tokenizer = AutoTokenizer.from_pretrained('meta-llama/Llama-2-7b-hf')
 
@@ -226,7 +227,7 @@ def build_train_text() -> Dict[str, List[Tensor]]:
     for k in inputs.keys():
         instance = {}
 
-        for data in split_longer_text_with_sliding_window(inputs[k], 4096, 1024):
+        for data in tqdm(split_longer_text_with_sliding_window(inputs[k], 4096, 1024)):
             instance[k] = data
 
         result.update(instance)
