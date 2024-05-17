@@ -43,8 +43,8 @@ class PreTrainTuner:
     def make_batch(self) -> Tuple[DataLoader, DataLoader, int]:
         """ Function for making batch instance
         """
-        train = load_all_types_dataset(f'./dataset_class/data_folder/{self.cfg.datafolder}/min_384_train.pkl')
-        valid = load_all_types_dataset(f'./dataset_class/data_folder/{self.cfg.datafolder}/min_384_valid.pkl')
+        train = load_all_types_dataset(f'./dataset_class/data_folder/{self.cfg.datafolder}/train_text.pkl')
+        valid = load_all_types_dataset(f'./dataset_class/data_folder/{self.cfg.datafolder}/train_text.pkl')
 
         # 1) Custom Datasets
         train_dataset = getattr(dataset_class, self.cfg.dataset)(train)
