@@ -230,11 +230,11 @@ def build_train_text() -> List[Dict[Any, List[List[int]]]]:
         contexts = ''.join(texts[i:i+step])
         inputs = tokenizer(contexts, padding=False, truncation=False)
         for k in inputs.keys():
-            instance = {}
             for data in tqdm(split_longer_text_with_sliding_window(inputs[k], 4096, 1024)):
                 token.append(data) if k == 'input_ids' else attention_mask.append(data)
 
-            result.append(instance)
+        instance = [{'input_ids': i, 'attention_mask': j} for i, j in zip(token, attention_mask)]
+        result.extend(instance)
 
     return result
 
