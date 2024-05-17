@@ -73,6 +73,20 @@ class SentimentAnalysisDataset(Dataset):
         return inputs
 
 
+class ArxivPretrainDataset(Dataset):
+    """ Pytorch dataset module for Arxiv Pretraining Task for Arxiv QA Modeling
+    """
+    def __init__(self, cfg: configuration.CFG, df: pd.DataFrame):
+        super().__init__()
+        pass
+
+    def __len__(self) -> int:
+        return len(self.df)
+
+    def __getitem__(self, item: int) -> Dict:
+        pass
+
+
 class TextGenerationDataset(Dataset):
     """ Pytorch Dataset Module for Text Generation Task in fine-tuning
     """
