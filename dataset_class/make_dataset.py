@@ -266,9 +266,4 @@ if __name__ == '__main__':
     #     df.to_csv('./data_folder/arxiv_qa/.csv', index=False)
     #
     data = build_train_text()
-    print(len(data))
     save_pkl(data, './data_folder/arxiv_qa/train_text')
-    for d in load_pkl('./data_folder/arxiv_qa/train_text.pkl'):
-        for k, v in d.items():
-            print(k, v)
-            print(len(v))
