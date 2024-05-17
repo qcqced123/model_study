@@ -7,8 +7,8 @@
         "task": "SentimentAnalysis",
         "domain": "commerce/amazon/",
         "dataset": "SentimentAnalysisDataset",
-        "model_name": "meta-llama/Llama-2-7b-chat-hf",
-        "tokenizer_name": "meta-llama/Llama-2-7b-chat-hf",
+        "model_name": "meta-llama/Llama-2-7b-hf",
+        "tokenizer_name": "meta-llama/Llama-2-7b-hf",
         "resume": false,
         "checkpoint_dir": "./saved/"
     },

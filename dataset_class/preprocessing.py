@@ -418,31 +418,22 @@ def cleaning_words(text: str) -> str:
 def split_token(inputs: str) -> List:
     """ Convert mal form list (ex. string list in pd.DataFrame) to Python List object & elementwise type casting
     """
-    inputs = cleaning_words(inputs)
     tmp = inputs.split()
     result = list(map(int, tmp))
     return result
 
 
-def split_list(inputs: List, max_length: int) -> List[List]:
+def split_list(inputs: List, max_length: int, instance_max: int) -> List[List]:
     """ Split List into sub shorter list, which is longer than max_length
     """
-    result = [inputs[i:i + max_length] for i in range(0, len(inputs), max_length)]
+    result = [inputs[i:i + max_length] for i in range(0, len(inputs), instance_max)]
     return result
 
 
-def flatten_sublist(inputs: List[List], max_length: int = 512) -> List[List]:
+def split_longer_text_with_sliding_window(inputs: List[List], max_length: int = 512, window_size: int = 500) -> List[
+    List[List[int]]]:
     """ Flatten Nested List to 1D-List """
-    result = []
-    for instance in tqdm(inputs):
-        tmp = split_token(instance)
-        if len(tmp) > max_length:
-            tmp = split_list(tmp, max_length)
-            for i in range(len(tmp)):
-                result.append(tmp[i])
-        else:
-            result.append(tmp)
-    return result
+    return [inputs[i:i + max_length] for i in range(0, len(inputs), max_length-window_size)]
 
 
 def preprocess4tokenizer(input_ids: List, token_type_ids: List, attention_mask: List):

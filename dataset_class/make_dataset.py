@@ -4,13 +4,14 @@ import openai
 import google.generativeai as genai
 
 
-from typing import List
+from torch import Tensor
+from typing import List, Dict
 from tqdm.auto import tqdm
 from dotenv import load_dotenv
+from transformers import AutoTokenizer
+from preprocessing import cleaning_words, split_longer_text_with_sliding_window
 from langchain_community.document_loaders import UnstructuredPDFLoader
 from langchain_community.document_loaders.image import UnstructuredImageLoader
-from transformers import AutoTokenizer
-from preprocessing import cleaning_words
 
 load_dotenv()
 
@@ -213,6 +214,26 @@ def build_train_dataframe() -> pd.DataFrame:
     return df
 
 
+def build_train_text() -> Dict[str, List[Tensor]]:
+    """ build the text inputs for the casual language modeling for the arxiv paper (Generative QA Task)
+    """
+    df = pd.read_csv('./data_folder/arxiv_qa/paper_meta_db.csv')
+    contexts = ''.join(df['text'].tolist())
+    tokenizer = AutoTokenizer.from_pretrained('meta-llama/Llama-2-7b-hf')
+
+    inputs = tokenizer(contexts, padding=False, truncation=False)
+    result = {}
+    for k in inputs.keys():
+        instance = {}
+
+        for data in split_longer_text_with_sliding_window(inputs[k], 4096, 1024):
+            instance[k] = data
+
+        result.update(instance)
+
+    return result
+
+
 if __name__ == '__main__':
     """ length problem: if you input too much longer pdf, the google gemini api will return 500 ERROR
     you can input your own pdf until then 25 pages (30720 tokens)
@@ -239,6 +260,6 @@ if __name__ == '__main__':
     #     print(f"Generated Questions and Answers: {df}")
     #     df.to_csv('./data_folder/arxiv_qa/.csv', index=False)
     #
-    build_train_dataframe()
+    print(build_train_text())
 
 

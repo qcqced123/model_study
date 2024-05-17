@@ -12,6 +12,12 @@ from .preprocessing import subsequent_tokenizing, adjust_sequences
 class PretrainDataset(Dataset):
     """ Custom Dataset for Pretraining Task in NLP, such as MLM, CLM, ... etc
 
+    if you select clm, dataset will be very long sequence of text, so this module will deal the text from the sliding window of the text
+    you can use this module for generative model's pretrain task
+
+    Also you must pass the input, which is already tokenized by tokenizer with cutting by model's max_length
+    We recommend to use the full max_length inputs for the better performance like roberta, gpt2, gpt3 ...
+
     Args:
         inputs: inputs from tokenizing by tokenizer, which is a dictionary of input_ids, attention_mask, token_type_ids
     """
@@ -71,20 +77,6 @@ class SentimentAnalysisDataset(Dataset):
         inputs = tokenizing(self.cfg, prompt, False, False)
         inputs['labels'] = torch.as_tensor(self.ratings[item] - 1)  # 1 ~ 5 -> 0 ~ 4
         return inputs
-
-
-class ArxivPretrainDataset(Dataset):
-    """ Pytorch dataset module for Arxiv Pretraining Task for Arxiv QA Modeling
-    """
-    def __init__(self, cfg: configuration.CFG, df: pd.DataFrame):
-        super().__init__()
-        pass
-
-    def __len__(self) -> int:
-        return len(self.df)
-
-    def __getitem__(self, item: int) -> Dict:
-        pass
 
 
 class TextGenerationDataset(Dataset):
