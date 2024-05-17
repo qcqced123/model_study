@@ -9,7 +9,7 @@ from typing import List, Dict, Any
 from tqdm.auto import tqdm
 from dotenv import load_dotenv
 from transformers import AutoTokenizer
-from preprocessing import cleaning_words, split_longer_text_with_sliding_window, save_pkl
+from preprocessing import cleaning_words, split_longer_text_with_sliding_window, save_pkl, load_pkl
 from langchain_community.document_loaders import UnstructuredPDFLoader
 from langchain_community.document_loaders.image import UnstructuredImageLoader
 
@@ -226,12 +226,13 @@ def build_train_text() -> List[Dict[Any, List[List[int]]]]:
     step = 10
     result = []
     for i in tqdm(range(0, len(texts), step)):
+        token, attention_mask = [], []
         contexts = ''.join(texts[i:i+step])
         inputs = tokenizer(contexts, padding=False, truncation=False)
         for k in inputs.keys():
             instance = {}
             for data in tqdm(split_longer_text_with_sliding_window(inputs[k], 4096, 1024)):
-                instance[k] = data
+                token.append(data) if k == 'input_ids' else attention_mask.append(data)
 
             result.append(instance)
 
@@ -266,5 +267,8 @@ if __name__ == '__main__':
     #
     data = build_train_text()
     print(len(data))
-    save_pkl(data, './data_folder/arxiv_qa/train_text.pkl')
-
+    save_pkl(data, './data_folder/arxiv_qa/train_text')
+    for d in load_pkl('./data_folder/arxiv_qa/train_text.pkl'):
+        for k, v in d.items():
+            print(k, v)
+            print(len(v))
