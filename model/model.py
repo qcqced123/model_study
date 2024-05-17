@@ -404,11 +404,11 @@ class TextGeneration(nn.Module, AbstractTask):
         if self.cfg.gradient_checkpoint:
             self.model.gradient_checkpointing_enable()
 
-    def generate(self, inputs: Dict[str: Tensor, str: Tensor]):
+    def generate(self, inputs):
         outputs = self.model(**inputs)
         return outputs
 
-    def forward(self, inputs: Dict[str: Tensor, str: Tensor]):
+    def forward(self, inputs):
         pass
 
 

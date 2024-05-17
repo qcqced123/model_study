@@ -2,13 +2,16 @@ import os
 import torch
 import argparse
 import warnings
+import trainer.train_loop as train_loop
+
 from omegaconf import OmegaConf
 from configuration import CFG
-import trainer.train_loop as train_loop
+from dotenv import load_dotenv
 from utils.helper import check_library, all_type_seed
 from utils.util import sync_config
 from huggingface_hub import login
 
+load_dotenv()
 warnings.filterwarnings('ignore')
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = 'true'
@@ -40,8 +43,8 @@ all_type_seed(CFG, True)
 torch.cuda.empty_cache()
 
 
-def main(cfg: CFG, train_type: str, model_config: str, hf_login_token: str) -> None:
-    login(hf_login_token)  # login to huggingface hub
+def main(cfg: CFG, train_type: str, model_config: str) -> None:
+    login(os.environ.get("HUGGINGFACE_API_KEY"))  # login to huggingface hub
     config_path = f'config/{train_type}/{model_config}.json'
     sync_config(cfg, OmegaConf.load(config_path))
 
@@ -61,7 +64,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Train Script")
     parser.add_argument("train_type", type=str, help="Train Type Selection")
     parser.add_argument("model_config", type=str, help="Model config Selection")
-    parser.add_argument("hf_login_token", type=str, help="Huggingface Token")
     args = parser.parse_args()
 
-    main(config, args.train_type, args.model_config, args.hf_login_token)
+    main(config, args.train_type, args.model_config)
