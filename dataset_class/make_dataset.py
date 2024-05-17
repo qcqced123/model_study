@@ -5,11 +5,11 @@ import google.generativeai as genai
 
 
 from torch import Tensor
-from typing import List, Dict
+from typing import List, Dict, Any
 from tqdm.auto import tqdm
 from dotenv import load_dotenv
 from transformers import AutoTokenizer
-from preprocessing import cleaning_words, split_longer_text_with_sliding_window
+from preprocessing import cleaning_words, split_longer_text_with_sliding_window, save_pkl
 from langchain_community.document_loaders import UnstructuredPDFLoader
 from langchain_community.document_loaders.image import UnstructuredImageLoader
 
@@ -214,23 +214,26 @@ def build_train_dataframe() -> pd.DataFrame:
     return df
 
 
-def build_train_text() -> Dict[str, List[Tensor]]:
+def build_train_text() -> List[Dict[Any, List[List[int]]]]:
     """ build the text inputs for the casual language modeling for the arxiv paper (Generative QA Task)
     """
-    df = pd.read_csv('./data_folder/arxiv_qa/paper_meta_db.csv')
-    df.dropna(subset=['text'], inplace=True)
-    contexts = ''.join(df['text'].tolist())
     tokenizer = AutoTokenizer.from_pretrained('meta-llama/Llama-2-7b-hf')
 
-    inputs = tokenizer(contexts, padding=False, truncation=False)
-    result = {}
-    for k in inputs.keys():
-        instance = {}
+    df = pd.read_csv('./data_folder/arxiv_qa/paper_meta_db.csv')
+    df.dropna(subset=['text'], inplace=True)
+    texts = df['text'].tolist()
 
-        for data in tqdm(split_longer_text_with_sliding_window(inputs[k], 4096, 1024)):
-            instance[k] = data
+    step = 10
+    result = []
+    for i in tqdm(range(0, len(texts), step)):
+        contexts = ''.join(texts[i:i+step])
+        inputs = tokenizer(contexts, padding=False, truncation=False)
+        for k in inputs.keys():
+            instance = {}
+            for data in tqdm(split_longer_text_with_sliding_window(inputs[k], 4096, 1024)):
+                instance[k] = data
 
-        result.update(instance)
+            result.append(instance)
 
     return result
 
@@ -261,6 +264,7 @@ if __name__ == '__main__':
     #     print(f"Generated Questions and Answers: {df}")
     #     df.to_csv('./data_folder/arxiv_qa/.csv', index=False)
     #
-    print(build_train_text())
-
+    data = build_train_text()
+    print(len(data))
+    save_pkl(data, './data_folder/arxiv_qa/train_text.pkl')
 
