@@ -183,17 +183,21 @@ def build_qa_dataset(text: str) -> pd.DataFrame:
     return df
 
 
-def build_dataframe() -> pd.DataFrame:
-    """ build the paper meta data from the arxiv paper list """
-    BASE_URL = '../crawler/arxiv/download/train'
+def build_train_dataframe() -> pd.DataFrame:
+    """ build the paper meta data from the arxiv paper list for train dataset
+
+    url example: 'https://arxiv.org/pdf/2006.03654'
+
+    """
+    BASE_URL = '../crawler/arxiv/download/train/'
     paper_list = os.listdir(BASE_URL)
 
     data = []
-    for link in tqdm(paper_list):
+    for paper in tqdm(paper_list):
         clean_text = ''
-        pid, title = link.split('_')[0], link.split('_')[1][:-4]
+        pid, title = paper.split('_')[0], paper.split('_')[1][:-4]
         try:
-            unstructured_text = pdf2doc(f"{BASE_URL}/{link}")
+            unstructured_text = pdf2doc(paper)
             text = remove_garbage(unstructured_text)
             clean_text = cleaning_words(text)  # remove all of trash text such as this papers pid
 
@@ -235,6 +239,6 @@ if __name__ == '__main__':
     #     print(f"Generated Questions and Answers: {df}")
     #     df.to_csv('./data_folder/arxiv_qa/.csv', index=False)
     #
-    build_dataframe()
+    build_train_dataframe()
 
 
