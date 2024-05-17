@@ -163,6 +163,7 @@ class CFG:
     alpha_cosine = 0.5
 
     """ Fine-Tuning Option """
+    use_pretrained = False
     hub = "huggingface"
     lora = True
     qlora = False

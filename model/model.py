@@ -74,7 +74,12 @@ class CasualLanguageModel(nn.Module, AbstractTask):
         self.model = self.select_model(cfg.num_layers)
         self.lm_head = CLMHead(cfg)
 
-        self._init_weights(self.model)
+        if self.cfg.use_pretrained:
+            self.components = self.select_pt_model()
+            self.auto_cfg = self.components['plm_config']
+            self.model = self.components['plm']
+
+        self._init_weights(self.model) if not self.cfg.use_pretrained else None
         self._init_weights(self.lm_head)
 
         if self.cfg.load_pretrained:
