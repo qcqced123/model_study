@@ -2,13 +2,13 @@
     "pipeline_setting": {
         "type": "train",
         "name": "ArxivCasualLanguageModeling",
-        "trainer": "PreTrainTuner",
+        "trainer": "CLMTuner",
         "loop": "train_loop",
         "task": "CasualLanguageModel",
         "domain": "commerce/amazon",
         "dataset": "PretrainDataset",
-        "model_name": "meta-llama/Llama-2-7b",
-        "tokenizer_name": "meta-llama/Llama-2-7b",
+        "model_name": "meta-llama/Llama-2-7b-hf",
+        "tokenizer_name": "meta-llama/Llama-2-7b-hf",
         "resume": false,
         "checkpoint_dir": "./saved/"
     },
@@ -16,13 +16,13 @@
     "fine_tune_options": {
         "use_pretrained": true,
         "hub": "huggingface",
-        "lora": true,
-        "qlora": false,
+        "lora": false,
+        "qlora": true,
         "lora_rank": 8,
         "lora_alpha": 32,
         "lora_dropout": 0.1,
-        "task_type": false,
-        "prompt_tuning": true,
+        "task_type": "None",
+        "prompt_tuning": false,
         "prompt_tuning_type": "P-TUNING",
         "encoder_reparameterization_type": "LSTM",
         "num_virtual_tokens": 2,
@@ -37,10 +37,11 @@
     },
 
     "data_settings": {
+        "datafolder": "arxiv_qa",
         "batching": "random",
         "epochs": 20,
-        "batch_size": 8,
-        "val_batch_size": 24,
+        "batch_size": 32,
+        "val_batch_size": 32,
         "val_check": 999999,
         "num_labels": 5
     },

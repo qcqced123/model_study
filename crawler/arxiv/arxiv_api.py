@@ -84,7 +84,7 @@ if __name__ == '__main__':
     query = pd.read_csv('paper_id_list.csv').paper_id.tolist()
 
     with Pool(processes=6) as pool:
-        results = pool.map(main_loop, query[:100])
+        results = pool.map(main_loop, query[:4000])
 
     # for q in tqdm(query[60:]):
     #     df = main_loop(query=q, max_results=return_results, sorting=values)

@@ -4,7 +4,7 @@ import openai
 import google.generativeai as genai
 
 
-from torch import Tensor
+from collections import defaultdict
 from typing import List, Dict, Any
 from tqdm.auto import tqdm
 from dotenv import load_dotenv
@@ -214,7 +214,7 @@ def build_train_dataframe() -> pd.DataFrame:
     return df
 
 
-def build_train_text() -> List[Dict[Any, List[List[int]]]]:
+def build_train_text() -> Dict[str, List[List[int]]]:
     """ build the text inputs for the casual language modeling for the arxiv paper (Generative QA Task)
     """
     tokenizer = AutoTokenizer.from_pretrained('meta-llama/Llama-2-7b-hf')
@@ -224,7 +224,7 @@ def build_train_text() -> List[Dict[Any, List[List[int]]]]:
     texts = df['text'].tolist()
 
     step = 10
-    result = []
+    result = defaultdict(list)
     for i in tqdm(range(0, len(texts), step)):
         token, attention_mask = [], []
         contexts = ''.join(texts[i:i+step])
@@ -233,8 +233,8 @@ def build_train_text() -> List[Dict[Any, List[List[int]]]]:
             for data in tqdm(split_longer_text_with_sliding_window(inputs[k], 4096, 1024)):
                 token.append(data) if k == 'input_ids' else attention_mask.append(data)
 
-        instance = [{'input_ids': i, 'attention_mask': j} for i, j in zip(token, attention_mask)]
-        result.extend(instance)
+        result['input_ids'].extend(token)
+        result['attention_mask'].extend(attention_mask)
 
     return result
 
