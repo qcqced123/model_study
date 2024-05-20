@@ -228,7 +228,7 @@ def build_train_dataframe() -> pd.DataFrame:
     paper_list = os.listdir(BASE_URL)
 
     data = []
-    for paper in tqdm(paper_list[:2900]):
+    for paper in tqdm(paper_list):
         clean_text = ''
         pid, title = paper.split('_')[0], paper.split('_')[1][:-4]
         try:
@@ -248,24 +248,27 @@ def build_train_dataframe() -> pd.DataFrame:
     return df
 
 
-def build_train_dataframe_for_multiprocessing(paper: str) -> List[str]:
+def build_train_dataframe_for_multiprocessing(paper_list: List[str]) -> List[List[str]]:
     """ build the paper meta data from the arxiv paper list for train dataset
 
     url example: 'https://arxiv.org/pdf/2006.03654'
     """
-    global BASE_URL
-    clean_text = ''
-    pid, title = paper.split('_')[0], paper.split('_')[1][:-4]
-    try:
-        unstructured_text = pdf2doc(BASE_URL + paper)
-        text = remove_garbage(unstructured_text)
-        clean_text = cleaning_words(text)  # remove all of trash text such as this papers pid
+    data = []
+    for paper in tqdm(paper_list):
+        clean_text = ''
+        pid, title = paper.split('_')[0], paper.split('_')[1][:-4]
+        try:
+            unstructured_text = pdf2doc(BASE_URL + paper)
+            text = remove_garbage(unstructured_text)
+            clean_text = cleaning_words(text)  # remove all of trash text such as this papers pid
 
-    except Exception as e:
-        print(e)
-        print(f"Error occurred in the paper: {pid, title}")
+        except Exception as e:
+            print(e)
+            print(f"Error occurred in the paper: {pid, title}")
 
-    return [pid, title, clean_text]
+        data.append([pid, title, clean_text])
+
+    return data
 
 
 def build_train_text() -> Dict[str, List[List[int]]]:
@@ -299,10 +302,12 @@ if __name__ == '__main__':
     """
     # build_qa_dataset()
     # build_train_dataframe()
-    chunked = [paper_list[i:i + 100] for i in range(0, len(paper_list), 100))
-    with Pool(processes=6) as pool:
-        data = pool.map(build_train_dataframe_for_multiprocessing, paper_list[0:2900])
+    n_jobs = 5
+    chunked = [paper_list[i:i + 2900//n_jobs] for i in range(0, 2900, 2900//n_jobs)]
+    with Pool(processes=n_jobs) as pool:
+        data = pool.map(build_train_dataframe_for_multiprocessing, chunked)
 
+    data = [item for sublist in data for item in sublist]
     df = pd.DataFrame(data, columns=['pid', 'title', 'text'])
     output_path = f'./data_folder/arxiv_qa/paper_meta_db.csv'
     df.to_csv(output_path, index=False)
