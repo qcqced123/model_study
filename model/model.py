@@ -71,20 +71,20 @@ class CasualLanguageModel(nn.Module, AbstractTask):
     def __init__(self, cfg: CFG) -> None:
         super(CasualLanguageModel, self).__init__()
         self.cfg = cfg
-        self.lm_head = CLMHead(cfg)
 
         # select model from local non-trained model or pretrained-model from huggingface hub
         if self.cfg.use_pretrained:
             self.components = self.select_pt_model()
             self.auto_cfg = self.components['plm_config']
             self.model = self.components['plm']
+            self.lm_head = CLMHead(cfg, self.auto_cfg)
 
         else:
             self.model = self.select_model(cfg.num_layers)
+            self.lm_head = CLMHead(cfg)
             self._init_weights(self.model)
 
         self._init_weights(self.lm_head)
-
         if self.cfg.load_pretrained:
             self.model.load_state_dict(
                 torch.load(cfg.checkpoint_dir + cfg.state_dict),

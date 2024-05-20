@@ -63,9 +63,10 @@ class CLMHead(nn.Module):
         https://huggingface.co/docs/transformers/main/tasks/language_modeling.html
     """
 
-    def __init__(self, cfg: CFG) -> None:
+    def __init__(self, cfg: CFG, pretrained_cfg = None) -> None:
         super(CLMHead, self).__init__()
         self.cfg = cfg
+        self.dim_model = cfg.dim_model if self.cfg.use_pretrained else pretrained_cfg.hidden_size
         self.decoder = nn.Linear(cfg.dim_model, cfg.vocab_size, bias=False)
 
     def forward(self, hidden_states: Tensor) -> Tensor:
