@@ -9,11 +9,14 @@ from typing import List, Dict, Any
 from tqdm.auto import tqdm
 from dotenv import load_dotenv
 from transformers import AutoTokenizer
+from multiprocessing import Pool
 from preprocessing import cleaning_words, split_longer_text_with_sliding_window, save_pkl, load_pkl
 from langchain_community.document_loaders import UnstructuredPDFLoader
 from langchain_community.document_loaders.image import UnstructuredImageLoader
 
 load_dotenv()
+BASE_URL = '../crawler/arxiv/download/train/'
+paper_list = os.listdir(BASE_URL)
 
 
 def image2doc(image_path: str) -> str:
@@ -225,7 +228,7 @@ def build_train_dataframe() -> pd.DataFrame:
     paper_list = os.listdir(BASE_URL)
 
     data = []
-    for paper in tqdm(paper_list):
+    for paper in tqdm(paper_list[:2900]):
         clean_text = ''
         pid, title = paper.split('_')[0], paper.split('_')[1][:-4]
         try:
@@ -243,6 +246,26 @@ def build_train_dataframe() -> pd.DataFrame:
     output_path = f'./data_folder/arxiv_qa/paper_meta_db.csv'
     df.to_csv(output_path, index=False)
     return df
+
+
+def build_train_dataframe_for_multiprocessing(paper: str) -> List[str]:
+    """ build the paper meta data from the arxiv paper list for train dataset
+
+    url example: 'https://arxiv.org/pdf/2006.03654'
+    """
+    global BASE_URL
+    clean_text = ''
+    pid, title = paper.split('_')[0], paper.split('_')[1][:-4]
+    try:
+        unstructured_text = pdf2doc(BASE_URL + paper)
+        text = remove_garbage(unstructured_text)
+        clean_text = cleaning_words(text)  # remove all of trash text such as this papers pid
+
+    except Exception as e:
+        print(e)
+        print(f"Error occurred in the paper: {pid, title}")
+
+    return [pid, title, clean_text]
 
 
 def build_train_text() -> Dict[str, List[List[int]]]:
@@ -275,6 +298,14 @@ if __name__ == '__main__':
     you can input your own pdf until then 25 pages (30720 tokens)
     """
     # build_qa_dataset()
-    build_train_dataframe()
+    # build_train_dataframe()
+    chunked = [paper_list[i:i + 100] for i in range(0, len(paper_list), 100))
+    with Pool(processes=6) as pool:
+        data = pool.map(build_train_dataframe_for_multiprocessing, paper_list[0:2900])
+
+    df = pd.DataFrame(data, columns=['pid', 'title', 'text'])
+    output_path = f'./data_folder/arxiv_qa/paper_meta_db.csv'
+    df.to_csv(output_path, index=False)
+
     data = build_train_text()
-    save_pkl(data, './data_folder/arxiv_qa/valid_text')
+    save_pkl(data, './data_folder/arxiv_qa/train_text2')
