@@ -169,7 +169,7 @@ def cal_token_length(text: str) -> int:
     return len(AutoTokenizer.from_pretrained('google-bert/bert-base-uncased').encode(text))
 
 
-def build_qa_dataset(text: str) -> pd.DataFrame:
+def build_qa_dataframe(text: str) -> pd.DataFrame:
     """ build QA dataset from the given paper link
 
     Args:
@@ -181,6 +181,37 @@ def build_qa_dataset(text: str) -> pd.DataFrame:
     questions = [q[q.find('. ') + len('. '):].strip() for q in questions_text.split("\n") if q.strip()]
     answers = [a[a.find('. ') + len('. '):].strip() for a in answers_text.split("\n") if a.strip()]
     df = pd.DataFrame({"Questions": questions, "Answers": answers})
+    return df
+
+
+def build_qa_dataset(chunk_size: int = 2, eps: int = 500) -> pd.DataFrame:
+    """ build the QA dataset from the arxiv paper list
+
+    Args:
+        chunk_size (int): the chunk size for the splitting the long text
+        eps (int): the epsilon value for the splitting the text, duplicate area of current whole text
+                   for using sliding window
+    """
+    BASE_URL = '../crawler/arxiv/download/test'
+    paper_list = os.listdir(BASE_URL)
+    for link in paper_list:
+        unstructured_text = pdf2doc(f"{BASE_URL}/{link}")
+        text = remove_garbage(unstructured_text)
+        clean_text = cleaning_words(text)  # remove all of trash text such as this papers pid
+        token_list = clean_text.split(' ')
+
+        print(f"Current Paper's Token Length by Python inherited split() method: {len(token_list)}")
+        print(f"Current Paper's Token Length by Huggingface Tokenizer: {cal_token_length(clean_text)}")
+
+        """ save the cleaned text to the file """
+        df = pd.DataFrame(columns=['Questions', 'Answers'])
+        for sub_text in [token_list[0:len(token_list) // chunk_size + eps], token_list[len(token_list) // chunk_size - eps:]]:
+            text = google_gemini_api(''.join(sub_text))
+            pd.concat([df, build_qa_dataframe(text)], axis=0, ignore_index=True)
+
+        print(f"Generated Questions and Answers: {df}")
+        df.to_csv('./data_folder/arxiv_qa/.csv', index=False)
+
     return df
 
 
@@ -243,28 +274,7 @@ if __name__ == '__main__':
     """ length problem: if you input too much longer pdf, the google gemini api will return 500 ERROR
     you can input your own pdf until then 25 pages (30720 tokens)
     """
-    # chunk_size, eps = 2, 500
-    # BASE_URL = '../crawler/arxiv/download/test'
-    # paper_list = os.listdir(BASE_URL)
-    #
-    # for link in paper_list:
-    #     unstructured_text = pdf2doc(f"{BASE_URL}/{link}")
-    #     text = remove_garbage(unstructured_text)
-    #     clean_text = cleaning_words(text)  # remove all of trash text such as this papers pid
-    #     token_list = clean_text.split(' ')
-    #
-    #     print(f"Current Paper's Token Length by Python inherited split() method: {len(token_list)}")
-    #     print(f"Current Paper's Token Length by Huggingface Tokenizer: {cal_token_length(clean_text)}")
-    #
-    #     """ save the cleaned text to the file """
-    #     df = pd.DataFrame(columns=['Questions', 'Answers'])
-    #     for sub_text in [token_list[0:len(token_list) // chunk_size + eps], token_list[len(token_list) // chunk_size - eps:]]:
-    #         text = google_gemini_api(''.join(sub_text))
-    #         pd.concat([df, build_qa_dataset(text)], axis=0, ignore_index=True)
-    #
-    #     print(f"Generated Questions and Answers: {df}")
-    #     df.to_csv('./data_folder/arxiv_qa/.csv', index=False)
-    #
+    # build_qa_dataset()
     build_train_dataframe()
     data = build_train_text()
     save_pkl(data, './data_folder/arxiv_qa/train_text')
