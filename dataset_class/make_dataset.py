@@ -312,5 +312,10 @@ if __name__ == '__main__':
     output_path = f'./data_folder/arxiv_qa/paper_meta_db.csv'
     df.to_csv(output_path, index=False)
 
+    # data1 = build_train_text()
+    # save_pkl(data1, './data_folder/arxiv_qa/train_text2')
+    #
+    # data2 = load_pkl('./data_folder/arxiv_qa/train_text1.pkl')
+    # data = {k: v.extend(data2[k]) for k, v in data1.items()}
     data = build_train_text()
-    save_pkl(data, './data_folder/arxiv_qa/train_text2')
+    save_pkl(data, './data_folder/arxiv_qa/train_text')

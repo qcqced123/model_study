@@ -44,7 +44,7 @@ class PreTrainTuner:
         """ Function for making batch instance
         """
         train = load_all_types_dataset(f'./dataset_class/data_folder/{self.cfg.datafolder}/train_text.pkl')
-        valid = load_all_types_dataset(f'./dataset_class/data_folder/{self.cfg.datafolder}/train_text.pkl')
+        valid = load_all_types_dataset(f'./dataset_class/data_folder/{self.cfg.datafolder}/valid_text.pkl')
 
         # 1) Custom Datasets
         train_dataset = getattr(dataset_class, self.cfg.dataset)(train)
@@ -367,8 +367,8 @@ class CLMTuner(PreTrainTuner):
         swa_scheduler=None
     ) -> Tuple[Any, Union[float, ndarray, ndarray]]:
         """ function for train loop with validation for each batch*N Steps """
-        scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
         losses = AverageMeter()
+        scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.amp_scaler)
 
         model.train()
         for step, batch in enumerate(tqdm(loader_train)):
@@ -445,12 +445,11 @@ class CLMTuner(PreTrainTuner):
         model.eval()
         with torch.no_grad():
             for step, batch in enumerate(tqdm(loader_valid)):
-                inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
+                inputs = {k: v.to(self.cfg.device, non_blocking=True) for k, v in batch.items() if k != 'labels'}
                 labels = batch['labels'].to(self.cfg.device, non_blocking=True)
-                attention_mask = batch['attention_mask'].to(self.cfg.device, non_blocking=True)
-                batch_size = inputs.size(0)
+                batch_size = labels.size(0)
 
-                logit = model(inputs, attention_mask)
+                logit = model(inputs)
                 flat_logit, flat_labels = logit.view(-1, self.cfg.vocab_size), labels.view(-1)
 
                 loss = val_criterion(flat_logit, flat_labels)
