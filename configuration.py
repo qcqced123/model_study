@@ -92,7 +92,7 @@ class CFG:
     warmup_ratio = 0.1  # if you select per step, you should consider size of epoch
 
     """ SWA Options """
-    swa = True
+    swa = False
     swa_start = 2
     swa_lr = 1e-4
     anneal_epochs = 4
