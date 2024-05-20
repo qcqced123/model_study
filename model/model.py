@@ -103,6 +103,8 @@ class CasualLanguageModel(nn.Module, AbstractTask):
     #     return logit
 
     def feature(self, inputs: Dict) -> Tensor:
+        print(f"input_ids: shape {inputs['input_ids'].shape}")
+        print(f"attention_mask: shape {inputs['attention_mask'].shape}")
         outputs = self.model(**inputs)
         return outputs
 
