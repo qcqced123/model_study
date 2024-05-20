@@ -106,7 +106,7 @@ class CasualLanguageModel(nn.Module, AbstractTask):
         outputs = self.model(**inputs)
         return outputs
 
-    def forward(self, inputs: Tensor) -> List[Tensor]:
+    def forward(self, inputs: Dict) -> List[Tensor]:
         last_hidden_states, _ = self.feature(inputs)
         logit = self.lm_head(last_hidden_states)
         return logit
