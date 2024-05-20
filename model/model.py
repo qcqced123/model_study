@@ -93,19 +93,11 @@ class CasualLanguageModel(nn.Module, AbstractTask):
         if self.cfg.gradient_checkpoint:
             self.model.gradient_checkpointing_enable()
 
-    # def feature(self, inputs: Tensor, attention_mask: Tensor) -> Tensor:
-    #     outputs = self.model(inputs, attention_mask)
-    #     return outputs
-    #
-    # def forward(self, inputs: Tensor, attention_mask: Tensor) -> List[Tensor]:
-    #     last_hidden_states, _ = self.feature(inputs, attention_mask)
-    #     logit = self.lm_head(last_hidden_states)
-    #     return logit
-
     def feature(self, inputs: Dict) -> Tensor:
-        print(f"input_ids: shape {inputs['input_ids'].shape}")
-        print(f"attention_mask: shape {inputs['attention_mask'].shape}")
-        outputs = self.model(**inputs)
+        outputs = self.model(
+            input_ids=inputs['input_ids'],
+            attention_mask=inputs['attention_mask']
+        )
         return outputs
 
     def forward(self, inputs: Dict) -> List[Tensor]:

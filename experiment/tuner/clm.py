@@ -41,7 +41,8 @@ class CLMCollator(WholeWordMaskingCollator):
         input_ids = pad_sequence(input_ids, batch_first=True, padding_value=0)
         labels = input_ids.clone().roll(shifts=-1, dims=-1)
         labels[:, -1] = -100  # for blocking predicting last token such as SEP, EOS
-        attention_mask = self.get_mask_tokens(input_ids, padding_mask)
+
+        attention_mask = self.get_mask_tokens(input_ids, padding_mask) if not self.cfg.use_pretrained else pad_sequence([x["attention_mask"] for x in batched], batch_first=True, padding_value=0)
         return {
             "input_ids": input_ids,
             "labels": labels,

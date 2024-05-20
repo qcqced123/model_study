@@ -373,27 +373,9 @@ class CLMTuner(PreTrainTuner):
         model.train()
         for step, batch in enumerate(tqdm(loader_train)):
             optimizer.zero_grad(set_to_none=True)
-            # inputs = batch['input_ids'].to(self.cfg.device, non_blocking=True)
-            # labels = batch['labels'].to(self.cfg.device, non_blocking=True)
-            # attention_mask = batch['attention_mask'].to(self.cfg.device, non_blocking=True)
             inputs = {k: v.to(self.cfg.device, non_blocking=True) for k, v in batch.items() if k != 'labels'}
             labels = batch['labels'].to(self.cfg.device, non_blocking=True)
             batch_size = labels.size(0)
-
-            # with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
-            #     logit = model(inputs, attention_mask)
-            #     loss = criterion(logit.view(-1, self.cfg.vocab_size), labels.view(-1))  # cross entropy loss
-            #
-            # if self.cfg.n_gradient_accumulation_steps > 1:
-            #     loss = loss / self.cfg.n_gradient_accumulation_steps
-            #
-            # scaler.scale(loss).backward()
-            # losses.update(loss.item(), batch_size)  # Must do detach() for avoid memory leak
-            #
-            # if self.cfg.awp and epoch >= self.cfg.nth_awp_start_epoch:
-            #     adv_loss = awp.attack_backward(inputs, attention_mask, labels)
-            #     scaler.scale(adv_loss).backward()
-            #     awp._restore()
 
             with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
                 logit = model(inputs)
@@ -405,6 +387,10 @@ class CLMTuner(PreTrainTuner):
             scaler.scale(loss).backward()
             losses.update(loss.item(), batch_size)  # Must do detach() for avoid memory leak
 
+            if self.cfg.awp and epoch >= self.cfg.nth_awp_start_epoch:
+                adv_loss = awp.attack_backward(inputs['input_ids'], inputs['attention_mask'], labels)
+                scaler.scale(adv_loss).backward()
+                awp._restore()
 
             if self.cfg.clipping_grad and (step + 1) % self.cfg.n_gradient_accumulation_steps == 0 or self.cfg.n_gradient_accumulation_steps == 1:
                 scaler.unscale_(optimizer)
