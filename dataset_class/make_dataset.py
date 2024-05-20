@@ -277,4 +277,4 @@ if __name__ == '__main__':
     # build_qa_dataset()
     build_train_dataframe()
     data = build_train_text()
-    save_pkl(data, './data_folder/arxiv_qa/train_text')
+    save_pkl(data, './data_folder/arxiv_qa/valid_text')

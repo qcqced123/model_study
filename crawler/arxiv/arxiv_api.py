@@ -1,4 +1,3 @@
-import sys
 import arxiv
 import pandas as pd
 
@@ -84,8 +83,4 @@ if __name__ == '__main__':
     query = pd.read_csv('paper_id_list.csv').paper_id.tolist()
 
     with Pool(processes=6) as pool:
-        results = pool.map(main_loop, query[:4000])
-
-    # for q in tqdm(query[60:]):
-    #     df = main_loop(query=q, max_results=return_results, sorting=values)
-        # df.to_csv(f'{q}_arxiv.csv', index=False)
+        results = pool.map(main_loop, query[8000:])  # 0~8000 for train, 8000~ for test
