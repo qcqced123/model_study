@@ -265,5 +265,6 @@ if __name__ == '__main__':
     #     print(f"Generated Questions and Answers: {df}")
     #     df.to_csv('./data_folder/arxiv_qa/.csv', index=False)
     #
+    build_train_dataframe()
     data = build_train_text()
     save_pkl(data, './data_folder/arxiv_qa/train_text')
