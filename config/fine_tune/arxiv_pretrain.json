@@ -40,8 +40,8 @@
         "datafolder": "arxiv_qa",
         "batching": "random",
         "epochs": 20,
-        "batch_size": 24,
-        "val_batch_size": 24,
+        "batch_size": 16,
+        "val_batch_size": 16,
         "val_check": 999999,
         "num_labels": 5
     },
