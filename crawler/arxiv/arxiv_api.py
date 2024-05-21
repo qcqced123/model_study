@@ -83,4 +83,4 @@ if __name__ == '__main__':
     query = pd.read_csv('paper_id_list.csv').paper_id.tolist()
 
     with Pool(processes=6) as pool:
-        results = pool.map(main_loop, query[4000:8000])  # 0~8000 for train, 8000~ for test
+        results = pool.map(main_loop, query[0:4000])  # 0~8000 for train, 8000~ for test

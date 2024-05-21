@@ -302,20 +302,19 @@ if __name__ == '__main__':
     """
     # build_qa_dataset()
     # build_train_dataframe()
-    n_jobs = 5
-    chunked = [paper_list[i:i + 2900//n_jobs] for i in range(0, 2900, 2900//n_jobs)]
-    with Pool(processes=n_jobs) as pool:
-        data = pool.map(build_train_dataframe_for_multiprocessing, chunked)
-
-    data = [item for sublist in data for item in sublist]
-    df = pd.DataFrame(data, columns=['pid', 'title', 'text'])
-    output_path = f'./data_folder/arxiv_qa/paper_meta_db.csv'
-    df.to_csv(output_path, index=False)
-
-    # data1 = build_train_text()
-    # save_pkl(data1, './data_folder/arxiv_qa/train_text2')
+    # n_jobs = 5
+    # chunked = [paper_list[i:i + len(paper_list)//n_jobs] for i in range(0, len(paper_list), len(paper_list)//n_jobs)]
+    # with Pool(processes=n_jobs) as pool:
+    #     data = pool.map(build_train_dataframe_for_multiprocessing, chunked)
     #
-    # data2 = load_pkl('./data_folder/arxiv_qa/train_text1.pkl')
-    # data = {k: v.extend(data2[k]) for k, v in data1.items()}
-    data = build_train_text()
+    # data = [item for sublist in data for item in sublist]
+    # df = pd.DataFrame(data, columns=['pid', 'title', 'text'])
+    # output_path = f'./data_folder/arxiv_qa/paper_meta_db.csv'
+    # df.to_csv(output_path, index=False)
+
+    data1 = build_train_text()
+    save_pkl(data1, './data_folder/arxiv_qa/train_text1')
+
+    data2 = load_pkl('./data_folder/arxiv_qa/train_text2.pkl')
+    data = {k: v + data2[k] for k, v in data1.items()}
     save_pkl(data, './data_folder/arxiv_qa/train_text')
