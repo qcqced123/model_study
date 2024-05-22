@@ -20,11 +20,13 @@ class PretrainDataset(Dataset):
 
     Args:
         inputs: inputs from tokenizing by tokenizer, which is a dictionary of input_ids, attention_mask, token_type_ids
+        is_valid: if you want to use this dataset for validation, you can set this as True, default is False
     """
-    def __init__(self, inputs: Dict) -> None:
+    def __init__(self, inputs: Dict, is_valid: bool = False) -> None:
         super().__init__()
         self.inputs = inputs
         self.input_ids = inputs['input_ids']
+        self.is_valid = is_valid
 
     def __len__(self) -> int:
         return len(self.input_ids)
@@ -32,7 +34,8 @@ class PretrainDataset(Dataset):
     def __getitem__(self, item: int) -> Dict[str, Tensor]:
         batch_inputs = {}
         for k, v in self.inputs.items():
-            batch_inputs[k] = torch.as_tensor(v[item])  # reduce memory usage by defending copying tensor
+            # reduce memory usage by defending copying tensor
+            batch_inputs[k] = torch.as_tensor(v[item]) if not self.is_valid else torch.as_tensor(v[item][0:2048])
         return batch_inputs
 
 

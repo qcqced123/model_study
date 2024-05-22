@@ -1,3 +1,5 @@
+import gc
+
 import wandb
 import numpy as np
 import transformers
@@ -48,7 +50,7 @@ class PreTrainTuner:
 
         # 1) Custom Datasets
         train_dataset = getattr(dataset_class, self.cfg.dataset)(train)
-        valid_dataset = getattr(dataset_class, self.cfg.dataset)(valid)
+        valid_dataset = getattr(dataset_class, self.cfg.dataset)(valid, is_valid=True)
 
         # 2) selecting custom masking method for each task
         collate_fn = None
@@ -392,12 +394,13 @@ class CLMTuner(PreTrainTuner):
                 scaler.scale(adv_loss).backward()
                 awp._restore()
 
+            grad_norm = None
             if self.cfg.clipping_grad and (step + 1) % self.cfg.n_gradient_accumulation_steps == 0 or self.cfg.n_gradient_accumulation_steps == 1:
                 scaler.unscale_(optimizer)
                 grad_norm = torch.nn.utils.clip_grad_norm(
                     model.parameters(),
                     self.cfg.max_grad_norm * self.cfg.n_gradient_accumulation_steps
-                )
+                ).item()
                 # Stochastic Weight Averaging
                 if self.cfg.swa and epoch >= int(swa_start):
                     swa_model.update_parameters(model)
@@ -409,11 +412,9 @@ class CLMTuner(PreTrainTuner):
 
             # logging train loss, gradient norm, lr to wandb
             lr = scheduler.get_lr()[0]
-            grad_norm = grad_norm.detach().cpu().numpy()
-
             wandb.log({
                 '<Per Step> Train Loss': losses.avg,
-                '<Per Step> Gradient Norm': grad_norm,
+                '<Per Step> Gradient Norm': grad_norm if grad_norm is not None else 0,
                 '<Per Step> lr': lr,
             })
 
@@ -449,10 +450,11 @@ class CLMTuner(PreTrainTuner):
                 labels = batch['labels'].to(self.cfg.device, non_blocking=True)
                 batch_size = labels.size(0)
 
-                logit = model(inputs)
-                flat_logit, flat_labels = logit.view(-1, self.cfg.vocab_size), labels.view(-1)
+                with torch.cuda.amp.autocast(enabled=self.cfg.amp_scaler):
+                    logit = model(inputs)
+                    flat_logit, flat_labels = logit.view(-1, self.cfg.vocab_size), labels.view(-1)
+                    loss = val_criterion(flat_logit, flat_labels)
 
-                loss = val_criterion(flat_logit, flat_labels)
                 valid_losses.update(loss.item(), batch_size)
 
                 wandb.log({

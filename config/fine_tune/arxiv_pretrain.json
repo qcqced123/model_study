@@ -40,15 +40,15 @@
         "batching": "random",
         "epochs": 1,
         "batch_size": 8,
-        "val_batch_size": 4,
+        "val_batch_size": 8,
         "encoder_reparameterization_type": "LSTM",
-        "val_check": 10
+        "val_check": 9999999
     },
 
     "optimizer_options": {
         "optimizer": "AdamW",
         "llrd": false,
-        "lr": 2e-4,
+        "lr": 4e-4,
         "weight_decay": 1e-2,
         "adam_epsilon": 1e-6,
         "use_bertadam": false,
