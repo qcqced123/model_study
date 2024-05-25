@@ -31,7 +31,6 @@ except ConnectionError as e:
 
 
 def search(input_query: str):
-
     model = SentenceTransformer('sentence-transformers/paraphrase-MiniLM-L6-v2')
     h = model.encode(input_query)
     query = {
