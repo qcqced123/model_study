@@ -8,6 +8,14 @@ from einops.layers.torch import Rearrange
 from configuration import CFG
 
 
+def global_attention():
+    pass
+
+
+def sliding_window_attention():
+    pass
+
+
 def dilated_sliding_window_attention(
     q: Tensor,
     k: Tensor,
