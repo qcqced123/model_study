@@ -8,32 +8,46 @@ from einops.layers.torch import Rearrange
 from configuration import CFG
 
 
-def generalised_attention(
-    q: Tensor,
-    k: Tensor,
-    v: Tensor,
-    dot_scale: Tensor,
-    attention_dropout: nn.Dropout,
-    padding_mask: Tensor = None,
-    attention_mask: Tensor = None
-) -> Tensor:
-    """ generalised_attention from bigbird (google research)
+def global_attention():
+    """ function for full attention, applying selected index of token (Task-specific special tokens)
+    such as [CLS], [SEP] ...
 
-    Generalised Attention = Random Attention + Window Attention + Global Attention
+    this function have same idea with longformer global attention
 
     Args:
-        q: query matrix, shape (batch_size, seq_len, dim_head)
-        k: key matrix, shape (batch_size, seq_len, dim_head)
-        v: value matrix, shape (batch_size, seq_len, dim_head)
-        dot_scale: scale factor for Q•K^T result
-        attention_dropout: dropout for attention matrix, default rate is 0.1 from official paper
-        padding_mask: mask for attention matrix for MLM, you must check whether or not padding token is 1
-        attention_mask: mask for attention matrix for CLM
 
-    Math:
-        ATTND(X)i =xi +XσQh(xi)Kh(XN(i))T·Vh(XN(i))
+    Returns:
 
-    References:
+    Reference:
 
     """
     pass
+
+
+def sliding_window_attention():
+    """ function for sliding window (convolution) attention
+
+    this function have same idea with longformer sliding window attention too
+
+    Args:
+
+    Returns:
+
+    Reference:
+
+    """
+    pass
+
+
+def random_attention():
+    """ function for random attention, which is used in bigbird from google research
+
+    Args:
+
+    Returns:
+
+    Reference:
+
+    """
+    pass
+
