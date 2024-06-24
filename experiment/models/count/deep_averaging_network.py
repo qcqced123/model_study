@@ -1,9 +1,6 @@
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from torch import Tensor
-from typing import List, Tuple
 
 
 def average_sequence_embedding(x: Tensor, mask: Tensor) -> Tensor:
