@@ -37,8 +37,11 @@ def scaled_dot_product_attention(
     """
     BS, NUM_HEADS, SEQ_LEN, DIM_HEADS = q.shape
     attention_matrix = torch.matmul(q, k.permute(0, 2, 3, 1).contiguous()) / dot_scale
+
+    # apply the attention mask for restricting the using future information
+    # for broadcasting to attention matrix, shape: (BS, 1, SEQ_LEN, SEQ_LEN)
     if attention_mask is not None:
-        attention_mask = attention_mask.unsqueeze(1)  # for broacasting to attention matrix, shape: (BS, 1, SEQ_LEN, SEQ_LEN)
+        attention_mask = attention_mask.unsqueeze(1)
         attention_matrix = attention_matrix.masked_fill(attention_mask == 1, float('-inf'))
 
     attention_dist = attention_dropout(
@@ -256,6 +259,7 @@ class Embedding(nn.Module):
 class GPT2(nn.Module, AbstractModel):
     """ Main class for gpt2, which is same model architecture from vanilla transformers decoder, gpt1
     but this version of gpt model has two major change from gpt 1
+
     1) Pre-Layer Normalization is used instead of Post-Layer Normalization (layernorm module is used before attention and ffn)
     2) Use different Tokenizer: BPE to BBPE (Byte-Pair Encoding to Byte-Level Byte-Pair Encoding)
 

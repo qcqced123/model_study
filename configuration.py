@@ -129,7 +129,7 @@ class CFG:
     mlm_masking = 'SubWordMasking'
     mlm_probability = 0.15
 
-    # 2) RTD Option
+    # 2) RTD(replace token detection) options
     rtd_masking = 'SubWordMasking'
     generator = 'DeBERTa'
     discriminator = 'DeBERTa'
@@ -143,14 +143,14 @@ class CFG:
     generator_num_layers = 6
     discriminator_num_layers = 12
 
-    # 3) SBO Option
+    # 3) SBO(span boundary object) options
     span_encoder_name = 'DeBERTa'
     masking_budget = 0.15
     span_probability = 0.2
     max_span_length = 10
     is_concatenate = True
 
-    # 4) Distillation Knowledge Option
+    # 4) distillation knowledge options
     teacher_num_layers = 12
     student_num_layers = 6
     is_teacher_resume = False
@@ -161,6 +161,10 @@ class CFG:
     alpha_distillation = 0.5
     alpha_student = 0.5
     alpha_cosine = 0.5
+
+    # 5) sliding window attention (local context attention) options
+    window_size = 512
+    window_overlap = 256
 
     """ Fine-Tuning Option """
     use_pretrained = False

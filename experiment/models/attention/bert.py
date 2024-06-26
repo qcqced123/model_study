@@ -192,11 +192,6 @@ class BERTEncoder(nn.Module, AbstractModel):
     ) -> None:
         super(BERTEncoder, self).__init__()
         self.cfg = cfg
-        self.max_seq = max_seq
-        self.num_layers = num_layers
-        self.dim_model = dim_model
-        self.num_attention_heads = num_attention_heads
-        self.dim_ffn = dim_ffn
         self.hidden_dropout = nn.Dropout(p=hidden_dropout_prob)  # dropout is not learnable
         self.layer = nn.ModuleList(
             [BERTEncoderLayer(dim_model, num_attention_heads, dim_ffn, layer_norm_eps, attention_dropout_prob, hidden_dropout_prob) for _ in range(self.num_layers)]
