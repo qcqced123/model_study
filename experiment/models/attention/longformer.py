@@ -1,7 +1,3 @@
-"""ASAP, we must select the dot_scale for the attention module, because the dot_scale is the important hyperparameter
-"""
-
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -572,11 +568,12 @@ class LongformerMultiHeadAttention(nn.Module):
 
         # linear projection for query, key, value (both local and global)
         # each tensor shape: [batch, seq_len, heads, dim_head]
-        local_q = self.local_q_proj(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+        # apply dot scale for the query tensor, reference from the huggingface implementation of longformer
+        local_q = self.local_q_proj(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head) / self.dot_scale
         local_k = self.local_q_proj(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
         local_v = self.local_q_proj(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
 
-        global_q = self.global_q_proj(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
+        global_q = self.global_q_proj(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head) / self.dot_scale
         global_k = self.global_q_proj(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
         global_v = self.global_q_proj(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head)
 
@@ -783,7 +780,7 @@ class Embedding(nn.Module):
                 self.layer_norm1(self.word_embedding(inputs))
             )
         abs_pos_emb = self.hidden_dropout(
-            self.layer_norm2(self.abs_pos_emb(torch.arange(inputs.shape[1], device="cuda").repeat(inputs.shape[0]).view(inputs.shape[0], -1)))
+            self.layer_norm2(self.abs_pos_emb(torch.arange(inputs.shape[1], device=self.cfg.device).repeat(inputs.shape[0]).view(inputs.shape[0], -1)))
         )
         return word_embeddings, abs_pos_emb
 

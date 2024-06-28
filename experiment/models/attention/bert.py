@@ -267,7 +267,7 @@ class Embedding(nn.Module):
                 self.layer_norm1(self.word_embedding(inputs))
             )
         abs_pos_emb = self.hidden_dropout(
-            self.layer_norm2(self.abs_pos_emb(torch.arange(inputs.shape[1], device="cuda").repeat(inputs.shape[0]).view(inputs.shape[0], -1)))
+            self.layer_norm2(self.abs_pos_emb(torch.arange(inputs.shape[1], device=self.cfg.device).repeat(inputs.shape[0]).view(inputs.shape[0], -1)))
         )
         return word_embeddings, abs_pos_emb
 
