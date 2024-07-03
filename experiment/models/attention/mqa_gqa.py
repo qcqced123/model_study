@@ -3,8 +3,6 @@ You can choose the head types as 'mha', 'mqa', 'gqa' for the attention head type
 GQA is the grouped multi-query attention, which is the optimized version of the multi-query attention
 applying to Llama2, Phi3 ... (modern LLM)
 """
-
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -36,56 +34,43 @@ class AttentionHeads(nn.Module):
         super(AttentionHeads, self).__init__()
         self.head_types = cfg.head_types
         self.dim_model = cfg.dim_model
-        self.q_heads = cfg.q_heads
-        self.kv_heads = cfg.q_heads
         self.dim_heads = self.dim_model // self.q_heads
+        self.dot_scale = torch.sqrt(torch.tensor(self.dim_heads))
+        self.dropout = nn.Dropout(0.1)
+        self.fc_o = nn.Linear(self.dim_model, self.dim_model)
 
         # set the dimension size of the projection matrix
-        self.dim_proj = None
-        if self.head_types == "mha":
-            self.dim_proj = self.dim_model
+        self.q_heads = cfg.q_heads
+        self.kv_heads = self.q_heads if self.head_types != "gqa" else self.q_heads // 8
+        self.dim_proj = self.dim_model if self.head_types == "mha" else self.dim_heads
 
-        elif self.head_types == "mqa":
-            self.dim_proj = self.dim_heads
-
-        elif self.head_types == "gqa":
-            self.kv_heads = self.q_heads // 8
-            self.dim_proj = self.dim_heads
-
+        # initialize the projection layer
         self.proj_q = nn.Linear(self.dim_model, self.dim_model)
         self.proj_k = nn.Linear(self.dim_model, self.dim_proj)
         self.proj_v = nn.Linear(self.dim_model, self.dim_proj)
 
-        self.dot_scale = torch.sqrt(torch.tensor(self.dim_heads))
-        self.dropout = nn.Dropout(0.1)
-
-        self.fc_o = nn.Linear(self.dim_model, self.dim_model)
-
     def get_proj_matrix(self, x: Tensor, projector: nn.Linear) -> Tensor:
+        """ class method for projecting the input tensor to key, value matrix
+
+        Args:
+            x: input tensor, shape will be different from initial setting for self.head_types of class instance
+            projector: projection layer for key, value matrix
+
+        """
         # aliasing the tensor dimension
-        y = None
+        # project the input tensor to key, value matrix
         batch_size, seq_len, _ = x.shape
+        y = projector(x).reshape(batch_size, seq_len, self.dim_proj)
+
         if self.head_types == "mha":
-            y = projector(x).reshape(
-                batch_size,
-                seq_len,
-                self.q_heads,
-                self.dim_heads
-            ).permute(0, 2, 1, 3).contiguous()
+            y = y.reshape(batch_size, seq_len, self.q_heads, self.dim_heads).permute(0, 2, 1, 3).contiguous()
 
         elif self.head_types == "mqa":
-            y = projector(x).reshape(
-                batch_size,
-                seq_len,
-                self.dim_proj
-            ).unsqueeze(1)
+            y = y.unsqueeze(1)
 
         elif self.head_types == "gqa":
-            y = projector(x).reshape(
-                batch_size,
-                seq_len,
-                self.dim_proj
-            ).unsqueeze(1).expand(-1, self.kv_heads, -1, -1)
+            y = y.unsqueeze(1).expand(-1, self.kv_heads, -1, -1)
+
         return y
 
     def scaled_dot_product_attention(
@@ -116,12 +101,14 @@ class AttentionHeads(nn.Module):
             https://arxiv.org/abs/1706.03762
             https://arxiv.org/pdf/1810.04805.pdf
         """
-
+        batch_size, q_heads, seq_len, dim_proj = q.shape
         if self.head_types == "gqa":
-            batch_size, q_heads, seq_len, dim_proj = q.shape
             q = q.reshape(batch_size, q_heads // self.kv_heads, self.kv_heads, seq_len, dim_proj)
             k = k.unsqueeze(1)
 
+        # Q•K^T
+        # if self.head_types is 'gqa',
+        # recover the original shape of the attention matrix for applying attention(padding) mask
         attention_matrix = torch.matmul(q, k.transpose(-1, -2)) / dot_scale
         if self.head_types == "gqa":
             attention_matrix = attention_matrix.reshape(batch_size, q_heads, seq_len, seq_len)
@@ -138,7 +125,6 @@ class AttentionHeads(nn.Module):
         _, q_heads, _, _ = attention_dist.shape
         batch_size, _, seq_len, dim_proj = v.shape
 
-        attention_score = None
         if self.head_types == "gqa":
             attention_dist = attention_dist.reshape(
                 batch_size,
@@ -148,10 +134,7 @@ class AttentionHeads(nn.Module):
                 seq_len
             )
             v = v.unsqueeze(1)
-            attention_score = torch.matmul(attention_dist, v).reshape(batch_size, q_heads, seq_len, dim_proj).permute(0,
-                                                                                                                      2,
-                                                                                                                      1,
-                                                                                                                      3).reshape(
+            attention_score = torch.matmul(attention_dist, v).reshape(batch_size, q_heads, seq_len, dim_proj).permute(0, 2, 1, 3).reshape(
                 batch_size,
                 seq_len,
                 q_heads * dim_proj,
