@@ -67,3 +67,20 @@ class AbstractModel:
         implementations are optional, so you can implement embedding share method above 2 options in your model
         """
         pass
+
+    def select_post_attention_design(self):
+        """method for design selecting between ffn(feed-forward network) or glu variants
+        """
+        pass
+
+    def select_normalization(self):
+        """method for normalization design selecting between several options
+        (batch-norm, layer-norm, rms-norm ...)
+        """
+        pass
+
+    def select_dropout(self):
+        """method for dropout design selecting between several options
+        (batch-norm, layer-norm, rms-norm ...)
+        """
+        pass
