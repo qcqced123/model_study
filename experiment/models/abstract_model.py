@@ -8,7 +8,10 @@ class AbstractModel:
     """ Abstract Model Class for all models in this project
     Each model should inherit this class for using common functionalities
     Functions:
-        1) Gradient Checkpointing
+        1) set gradient checking point option
+        2) set the post-attention layer design (ffn or glu)
+        3) set the normalization design (batch, layer, rms)
+        4) set the dropout design (dropout, mixed out ...)
     """
     def __init__(self):
         super(AbstractModel, self).__init__()
