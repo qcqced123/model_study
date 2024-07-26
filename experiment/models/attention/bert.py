@@ -128,7 +128,7 @@ class FeedForward(nn.Module):
         return self.ffn(x)
 
 
-class BERTEncoderLayer(nn.Module):
+class BERTEncoderLayer(nn.Module, AbstractModel):
     """ Class for encoder model module in BERT
     In this class, we stack each encoder_model module (Multi-Head attention, Residual-Connection, LayerNorm, FFN)
     This class has same role as Module "BertEncoder" in official Repo (bert.py)
@@ -153,11 +153,7 @@ class BERTEncoderLayer(nn.Module):
         self.layer_norm1 = nn.LayerNorm(dim_model, eps=layer_norm_eps)
         self.layer_norm2 = nn.LayerNorm(dim_model, eps=layer_norm_eps)
         self.hidden_dropout = nn.Dropout(p=hidden_dropout_prob)
-        self.ffn = FeedForward(
-            dim_model,
-            dim_ffn,
-            hidden_dropout_prob,
-        )
+        self.post_attn = FeedForward(dim_model, dim_ffn, hidden_dropout_prob) if self.cfg.post_attn_layer == "ffn" else self.select_post_attention_design(self.cfg)
 
     def forward(self, x: Tensor, padding_mask: Tensor, attention_mask: Tensor = None) -> Tensor:
         ln_x = self.layer_norm1(x)
