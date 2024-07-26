@@ -24,7 +24,7 @@
     },
 
     "model_size": {
-        "post_attn_layer": "ffn",
+        "post_attn_layer": "glu",
         "hidden_act": "gelu",
         "max_seq": 512,
         "num_layers": 6,

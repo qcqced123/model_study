@@ -1,5 +1,8 @@
 import functools
 import torch.nn as nn
+
+from configuration import CFG
+from experiment.activation import activation
 from torch.utils.checkpoint import checkpoint
 from typing import Dict, List, Tuple, Union, Callable
 
@@ -9,7 +12,7 @@ class AbstractModel:
     Each model should inherit this class for using common functionalities
     Functions:
         1) set gradient checking point option
-        2) set the post-attention layer design (ffn or glu)
+        2) set the post-attention layer design (ffn or glu) with hidden activation function
         3) set the normalization design (batch, layer, rms)
         4) set the dropout design (dropout, mixed out ...)
     """
@@ -71,10 +74,22 @@ class AbstractModel:
         """
         pass
 
-    def select_post_attention_design(self):
-        """method for design selecting between ffn(feed-forward network) or glu variants
+    def select_post_attention_design(self, cfg: CFG):
+        """method for design selecting between ffn(feed-forward network) or glu variants with hidden activation function
+
+        this method will be called when user select the variants of glu
         """
-        pass
+        post_attn = None
+        if cfg.hidden_act == "gelu":
+            post_attn = "GEGLU"
+
+        elif cfg.hidden_act == "relu":
+            post_attn = "ReGLU"
+
+        elif cfg.hidden_act == "swish":
+            post_attn = "SwiGLUE"
+
+        return getattr(activation, post_attn)(cfg.dim_model, cfg.dim_ffn)
 
     def select_normalization(self):
         """method for normalization design selecting between several options

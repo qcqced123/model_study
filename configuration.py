@@ -107,8 +107,9 @@ class CFG:
     num_attention_heads = 12
     dim_model = 768
     dim_ffn = 3072
-    kernel = 'elu'
-    hidden_act = 'gelu'
+    kernel = "elu"
+    post_attn_layer = "ffn"  # options: ffn(feed-forward network), glu(gated linear unit)
+    hidden_act = 'gelu'  # options: gelu, relu, swish
     layer_norm_eps = 1e-7
     attention_probs_dropout_prob = 0.1
     hidden_dropout_prob = 0.1
