@@ -32,15 +32,16 @@ class AttentionHeads(nn.Module):
 
     def __init__(self, cfg) -> None:
         super(AttentionHeads, self).__init__()
-        self.head_types = cfg.head_types
+        self.q_heads = cfg.q_heads
         self.dim_model = cfg.dim_model
+        self.head_types = cfg.head_types
         self.dim_heads = self.dim_model // self.q_heads
         self.dot_scale = torch.sqrt(torch.tensor(self.dim_heads))
         self.dropout = nn.Dropout(0.1)
         self.fc_o = nn.Linear(self.dim_model, self.dim_model)
 
         # set the dimension size of the projection matrix
-        self.q_heads = cfg.q_heads
+
         self.kv_heads = self.q_heads if self.head_types != "gqa" else self.q_heads // 8
         self.dim_proj = self.dim_model if self.head_types == "mha" else self.dim_heads
 

@@ -13,11 +13,10 @@ from huggingface_hub import login
 
 load_dotenv()
 warnings.filterwarnings('ignore')
+os.environ["LRU_CACHE_CAPACITY"] = "4096"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = 'true'
-os.environ["LRU_CACHE_CAPACITY"] = "4096"
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "garbage_collection_threshold:0.8, expandable_segments:True"
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:32"
 
 
 # tokenizer type of each model architecture
