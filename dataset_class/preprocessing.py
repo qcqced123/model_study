@@ -80,6 +80,7 @@ def group_kfold(df: pd.DataFrame, cfg: configuration.CFG) -> pd.DataFrame:
     df['fold'] = -1
     for num, (tx, vx) in enumerate(fold.split(X=df, groups=df['prompt_id'])):
         df.loc[vx, "fold"] = int(num)
+
     return df
 
 
