@@ -1,3 +1,5 @@
+""" py module for implementing of rtd (replace token detection), originally from ELECTRA paper (google research)
+"""
 import torch
 import torch.nn as nn
 from torch import Tensor

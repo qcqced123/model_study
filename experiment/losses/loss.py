@@ -2,8 +2,11 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 from torch import Tensor
 from typing import Iterable, Dict
+from sentence_transformers.util import cos_sim
+from experiment.metrics.metric import cosine_similarity
 from experiment.losses.distance_metric import SelectDistances
 
 
@@ -253,8 +256,7 @@ class BatchDotProductContrastiveLoss(nn.Module):
     def forward(self, emb: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
         labels = self.elementwise_labels(labels)
         distance = self.distance.select_distance(emb, emb)
-        contrastive_loss = 0.5 * (labels.float() * torch.pow(distance, 2) +
-                                  (1 - labels.float()) * torch.pow(torch.clamp(self.margin - distance, min=0.0), 2))
+        contrastive_loss = 0.5 * (labels.float() * torch.pow(distance, 2) + (1 - labels.float()) * torch.pow(torch.clamp(self.margin - distance, min=0.0), 2))
         contrastive_loss = torch.sum(torch.triu(contrastive_loss, diagonal=1))
         return contrastive_loss / labels.shape[0]
 
@@ -296,3 +298,158 @@ class ArcFace(nn.Module):
         loss *= self.s
         return loss
 
+class BatchInfoNCELoss(nn.Module):
+    """ Batch InfoNCE (Information Noise-Contrastive Estimation) Loss for Self-Supervised Learning
+    This loss is implemented for microsoft E5 model, which is used for Text-Similarity tasks
+
+    Single instance shape in batch is the positive pair (query, document)
+    For the computational efficiency, we use the other instances in current batch as negative samples
+
+    Same index of two inputs as q_emb, p_emb are meaning of the positive pair, others are negative pairs
+    For the batch-wise calculation of InfoNCE, we slightly change the calculation algorithm from vanilla infoNCE
+
+    So, diagonal elements of return matrix from method "sim_matrix()" will be pos_score
+    non-diagonal elements of return matrix from method "sim_matrix()" will be neg_score
+
+    total pos_score will be calculated by torch.trace() (diagonal elements sum)
+    total neg_score will be calculated by torch.sum() - torch.trace()
+
+    Example:
+        q_emb: torch.size(6, 768)
+        p_emb: torch.size(6, 768)
+
+        result of sim_matrix: torch.size(6, 6)
+            [[ 0.6225,  0.5543, -0.0962,  0.6337,  0.1650, -0.6093],
+            [-0.0844, -0.6388,  0.0609, -0.1959,  0.0655,  0.2964],
+            [ 0.2681, -0.1342, -0.7908,  0.4721,  0.7680,  0.4268],
+            [ 0.2894,  0.3167, -0.5420,  0.4276,  0.4901,  0.0731],
+            [ 0.7118, -0.4730, -0.7930,  0.9062,  0.9460,  0.1827],
+            [-0.1477, -0.8213, -0.8121,  0.4299,  0.6379,  0.7616]]
+
+    Maths:
+        L = -(1/N) * log(exp(sim(Qi, Pi) / (exp(sim(Qi, Pi) + sum(exp(sim(Qi, Pij)))))
+
+        N = number of input batches
+        Qi = i-th query pooling output from MeanPooling
+        Pi = i-th positive pooling output from MeanPooling
+        Pij = j-th positive pooling output from MeanPooling
+
+    References:
+        https://arxiv.org/pdf/1206.6426
+        https://arxiv.org/pdf/1809.01812
+        https://arxiv.org/pdf/2212.03533
+        https://paperswithcode.com/method/infonce
+    """
+    def __init__(self) -> None:
+        super(BatchInfoNCELoss, self).__init__()
+        self.distance = self.sim_matrix
+
+    @staticmethod
+    def sim_matrix(a: Tensor, b: Tensor, eps=1e-8) -> Tensor:
+        """ method for calculating cosine similarity with batch-wise, added eps version for numerical stability
+        return matrix will be calculated by exponent ops, following for original paper's algorithm
+
+        Args:
+            a (torch.Tensor): input matrix for calculating, especially in this project this matrix will be query_embedding
+            b (torch.Tensor): input matrix for calculating, especially in this project this matrix will be document_embedding
+            eps (float): value for numerical stability
+        """
+        a_n, b_n = a.norm(dim=1)[:, None], b.norm(dim=1)[:, None]
+        a_norm = a / torch.clamp(a_n, min=eps)
+        b_norm = b / torch.clamp(b_n, min=eps)
+        sim_mt = torch.mm(a_norm, b_norm.transpose(0, 1))
+        return torch.exp(sim_mt)
+
+    def forward(self, q_emb: Tensor, p_emb: Tensor) -> Tensor:
+        score_matrix = self.distance(q_emb, p_emb)
+        pos_score = torch.trace(score_matrix)
+        neg_score = torch.sum(score_matrix) - pos_score
+        nce_loss = -1 * torch.log(pos_score / (pos_score + neg_score)).mean()
+        return nce_loss
+
+
+class InfoNCELoss(nn.Module):
+    """InfoNCE (Information Noise-Contrastive Estimation) Loss for Self-Supervised Learning
+    This loss is implemented for microsoft E5 model, which is used for Text-Similarity tasks
+
+    First index of passage embedding tensor(p_emb in source code) is the positive sample for query embedding,
+    Rest of indices of tensor is the negative sample for query embedding
+
+    Maths:
+        L = -(1/N) * log(exp(sim(Qi, Pi) / (exp(sim(Qi, Pi) + sum(exp(sim(Qi, Pij)))))
+
+        N = number of input batches
+        Qi = i-th query pooling output from MeanPooling
+        Pi = i-th positive pooling output from MeanPooling
+        Pij = j-th positive pooling output from MeanPooling
+
+    References:
+        https://arxiv.org/pdf/1809.01812
+        https://arxiv.org/pdf/2212.03533
+        https://paperswithcode.com/method/infonce
+    """
+    def __init__(self) -> None:
+        super(InfoNCELoss, self).__init__()
+        self.distance = cosine_similarity
+
+    def forward(self, q_emb: Tensor, p_emb: Tensor) -> Tensor:
+        pos_score = torch.exp(self.distance(q_emb, p_emb[:, 0, :]))
+        neg_score = torch.sum(torch.exp(self.distance(q_emb.unsqueeze(1), p_emb[:, 1:, :])), dim=1)
+        nce_loss = -1 * torch.log(pos_score / (pos_score + neg_score)).mean()
+        return nce_loss
+
+
+# Multiple Negative Ranking Loss, source code from UKPLab
+class MultipleNegativeRankingLoss(nn.Module):
+    """Multiple Negative Ranking Loss (MNRL) for Dictionary Wise Pipeline, This class has one change point
+    main concept is same as contrastive loss, but it can be useful when label data have only positive value
+    if you set more batch size, you can get more negative pairs for each anchor & positive pair
+
+    Change Point:
+        In original code & paper, they set label from range(len()), This mean that not needed to use label feature
+        But in our case, we need to use label feature, so we change label from range(len()) to give label feature
+
+    Args:
+        scale: output of similarity function is multiplied by this value
+        similarity_fct: standard of distance metrics, default cosine similarity
+
+    Example:
+        model = SentenceTransformer('distil-bert-base-uncased')
+        train_examples = [InputExample(texts=['Anchor 1', 'Positive 1']),
+        InputExample(texts=['Anchor 2', 'Positive 2'])]
+        train_dataloader = DataLoader(train_examples, shuffle=True, batch_size=32)
+        train_loss = losses.MultipleNegativesRankingLoss(model=model)
+
+    Reference:
+        https://arxiv.org/pdf/1705.00652.pdf
+        https://www.sbert.net/docs/package_reference/losses.html
+        https://github.com/UKPLab/sentence-transformers/blob/master/sentence_transformers/losses/MultipleNegativesRankingLoss.py
+        https://www.kaggle.com/code/nbroad/multiple-negatives-ranking-loss-lecr/notebook
+        https://github.com/KevinMusgrave/pytorch-metric-learning
+        https://www.youtube.com/watch?v=b_2v9Hpfnbw&ab_channel=NicholasBroad
+    """
+
+    def __init__(self, reduction: str = 'mean', scale: float = 20.0, similarity_fct=cos_sim) -> None:
+        super().__init__()
+        self.reduction = reduction
+        self.scale = scale
+        self.similarity_fct = similarity_fct
+        self.reduction = reduction
+        self.cross_entropy_loss = CrossEntropyLoss(self.reduction)
+
+    def forward(self, query_h: Tensor, context_h: Tensor, labels: Tensor = None) -> Tensor:
+        """ This Multiple Negative Ranking Loss (MNRL) is used for same embedding list,
+
+        Args:
+            query_h: hidden states of query sentences in single prompt input, separating by [SEP] token
+            context_h: hidden states of context sentences in single prompt input, separating by [SEP] token
+            labels: default is None, because label for mnrl is made at runtime in instance generated from this class
+        """
+        similarity_scores = self.similarity_fct(query_h, context_h) * self.scale
+        labels = torch.tensor(
+            range(len(similarity_scores)),
+            dtype=torch.long,
+            device=similarity_scores.device,
+        )
+        # labels = embeddings_a.T.type(torch.long).to(similarity_scores.device)
+        return self.cross_entropy_loss(similarity_scores, labels)

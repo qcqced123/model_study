@@ -1,3 +1,5 @@
+""" py module for implementing of span boundary objective task, orginally from spanBERT (Facebook Research)
+"""
 import random
 import torch
 import torch.nn as nn
