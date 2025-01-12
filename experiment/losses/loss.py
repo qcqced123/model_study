@@ -190,22 +190,25 @@ class CosineEmbeddingLoss(nn.Module):
 
 # Contrastive Loss for NLP Semantic Search
 class ContrastiveLoss(nn.Module):
-    """
-    Contrastive Loss which is basic method of Metric Learning
-    Closer distance between data points in intra-class, more longer distance between data points in inter-class
+    """ contrastive loss pytorch implementation
+    closer distance between data points in intra-class, more longer distance between data points in inter-class
     Distance:
         Euclidean Distance: sqrt(sum((x1 - x2)**2))
         Cosine Distance: 1 - torch.nn.function.cos_sim(x1, x2)
+
     Examples:
         model = SentenceTransformer('all-MiniLM-L6-v2')
         train_examples = [
             InputExample(texts=['This is a positive pair', 'Where the distance will be minimized'], label=1),
-            InputExample(texts=['This is a negative pair', 'Their distance will be increased'], label=0)]
+            InputExample(texts=['This is a negative pair', 'Their distance will be increased'], label=0)
+        ]
         train_dataloader = DataLoader(train_examples, shuffle=True, batch_size=2)
         train_loss = losses.ContrastiveLoss(model=model)
+
     Args:
         margin: margin value meaning for Area of intra class(positive area), default 1.0
         metric: standard of distance metrics, default cosine distance
+
     References:
         https://github.com/KevinMusgrave/pytorch-metric-learning
         https://github.com/UKPLab/sentence-transformers/blob/master/sentence_transformers/losses/ContrastiveLoss.py
@@ -332,6 +335,7 @@ class ArcFace(nn.Module):
         loss = (one_hot * z) + ((1.0 - one_hot) * cosine)
         loss *= self.s
         return loss
+
 
 class BatchInfoNCELoss(nn.Module):
     """ Batch InfoNCE (Information Noise-Contrastive Estimation) Loss for Self-Supervised Learning
