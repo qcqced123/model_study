@@ -10,7 +10,6 @@ from experiment.models.abstract_model import AbstractModel
 
 def build_relative_position(x_size: int) -> Tensor:
     """ Build Relative Position Matrix for Disentangled Self-attention in DeBERTa
-
     Args:
         x_size: sequence length of query matrix
 
@@ -24,17 +23,16 @@ def build_relative_position(x_size: int) -> Tensor:
 
 
 def disentangled_attention(
-        q: Tensor,
-        k: Tensor,
-        v: Tensor,
-        qr: Tensor,
-        kr: Tensor,
-        attention_dropout: torch.nn.Dropout,
-        padding_mask: Tensor = None,
-        attention_mask: Tensor = None
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    qr: Tensor,
+    kr: Tensor,
+    attention_dropout: torch.nn.Dropout,
+    padding_mask: Tensor = None,
+    attention_mask: Tensor = None
 ) -> Tensor:
     """ Disentangled Self-attention for DeBERTa, same role as Module "DisentangledSelfAttention" in official Repo
-
     Args:
         q: content query matrix, shape (batch_size, seq_len, dim_head)
         k: content key matrix, shape (batch_size, seq_len, dim_head)
@@ -116,8 +114,13 @@ class MultiHeadAttention(nn.Module):
         https://arxiv.org/abs/2006.03654
     """
 
-    def __init__(self, dim_model: int = 1024, num_attention_heads: int = 12, dim_head: int = 64,
-                 attention_dropout_prob: float = 0.1) -> None:
+    def __init__(
+        self,
+        dim_model: int = 1024,
+        num_attention_heads: int = 12,
+        dim_head: int = 64,
+        attention_dropout_prob: float = 0.1
+    ) -> None:
         super(MultiHeadAttention, self).__init__()
         self.dim_model = dim_model
         self.num_attention_heads = num_attention_heads
@@ -131,8 +134,14 @@ class MultiHeadAttention(nn.Module):
         self.attention = disentangled_attention
         self.attention_dropout = nn.Dropout(p=attention_dropout_prob)
 
-    def forward(self, x: Tensor, rel_pos_emb: Tensor, padding_mask: Tensor, attention_mask: Tensor = None,
-                emd: Tensor = None) -> Tensor:
+    def forward(
+        self,
+        x: Tensor,
+        rel_pos_emb: Tensor,
+        padding_mask: Tensor,
+        attention_mask: Tensor = None,
+        emd: Tensor = None
+    ) -> Tensor:
         """ x is already passed nn.Layernorm """
         assert x.ndim == 3, f'Expected (batch, seq, hidden) got {x.shape}'
 
