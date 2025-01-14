@@ -316,22 +316,17 @@ class DeBERTaEncoder(nn.Module, AbstractModel):
 
 
 class EnhancedMaskDecoder(nn.Module, AbstractModel):
-    """ Class for Enhanced Mask Decoder module in DeBERTa, which is used for Masked Language Model (Pretrain Task)
-    Word 'Decoder' means that denoise masked token by predicting masked token
+    """ class for enhanced mask decoder module in DeBERTa, word 'Decoder' means that denoise masked token by predicting masked token
 
     In official paper & repo, they might use 2 EMD layers for MLM Task
         1) First-EMD layer: query input == Absolute Position Embedding
         2) Second-EMD layer: query input == previous EMD layer's output
 
     And this layer's key & value input is output from last disentangled self-attention encoder layer,
-    Also, all of them can share parameters and this layer also do disentangled self-attention
+    also, all of them can share parameters and this layer also do disentangled self-attention
 
     In official repo, they implement this layer so hard coding that we can't understand directly & easily
     So, we implement this layer with our own style, as closely as possible to paper statement
-
-    Notes:
-        Also we temporarily implement only extract token embedding, not calculating logit, losses for MLM Task yet
-        MLM Task will be implemented ASAP
 
     Args:
         encoder: list of nn.ModuleList, which is (num_emd * last encoder layer) from DeBERTaEncoder
@@ -534,8 +529,19 @@ class DeBERTa(nn.Module, AbstractModel):
         assert inputs.ndim == 2, f'Expected (batch, sequence) got {inputs.shape}'
 
         word_embeddings, rel_pos_emb, abs_pos_emb = self.embeddings(inputs)
-        last_hidden_state, hidden_states = self.encoder(word_embeddings, rel_pos_emb, padding_mask, attention_mask)
+        last_hidden_state, hidden_states = self.encoder(
+            word_embeddings,
+            rel_pos_emb,
+            padding_mask,
+            attention_mask
+        )
 
         emd_hidden_states = hidden_states[-self.cfg.num_emd]
-        emd_last_hidden_state, emd_hidden_states = self.emd_encoder(emd_hidden_states, abs_pos_emb, rel_pos_emb, padding_mask, attention_mask)
+        emd_last_hidden_state, emd_hidden_states = self.emd_encoder(
+            emd_hidden_states,
+            abs_pos_emb,
+            rel_pos_emb,
+            padding_mask,
+            attention_mask
+        )
         return emd_last_hidden_state, emd_hidden_states

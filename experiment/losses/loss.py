@@ -168,8 +168,8 @@ class PearsonLoss(nn.Module):
 class CosineEmbeddingLoss(nn.Module):
     """ Cosine Embedding Loss for Metric Learning, same concept with Contrastive Loss
     but some setting is different, Cosine Embedding Loss is more range to [-1, 1]
-
     This Module is API Wrapper of nn.CosineEmbeddingLoss from pytorch
+
     Args:
         reduction: str, reduction method of losses
         margin: float, default = 0, margin value for cosine embedding loss
