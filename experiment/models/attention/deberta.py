@@ -9,7 +9,7 @@ from einops.layers.torch import Rearrange
 from experiment.models.abstract_model import AbstractModel
 
 def build_relative_position(x_size: int) -> Tensor:
-    """ Build Relative Position Matrix for Disentangled Self-attention in DeBERTa
+    """ func for building the relative position matrix for "dis-entangled self-attention" in DeBERTa
     Args:
         x_size: sequence length of query matrix
 
@@ -32,7 +32,7 @@ def disentangled_attention(
     padding_mask: Tensor = None,
     attention_mask: Tensor = None
 ) -> Tensor:
-    """ Disentangled Self-attention for DeBERTa, same role as Module "DisentangledSelfAttention" in official Repo
+    """ func for implementing the "dis-entangled self-attention" for DeBERTa, same role as Module "DisentangledSelfAttention" in official Repo
     Args:
         q: content query matrix, shape (batch_size, seq_len, dim_head)
         k: content key matrix, shape (batch_size, seq_len, dim_head)
@@ -95,9 +95,10 @@ def disentangled_attention(
 
 
 class MultiHeadAttention(nn.Module):
-    """ In this class, we implement workflow of Multi-Head Self-attention for DeBERTa-Large
-    This class has same role as Module "BertAttention" in official Repo (bert.py)
-    In official repo, they use post-layer norm, but we use pre-layer norm which is more stable & efficient for training
+    """ in this class, we implement workflow of Multi-Head Self-attention for DeBERTa-Large
+
+    this class has same role as Module "BertAttention" in official Repo (bert.py)
+    in official repo, they use post-layer norm, but we use pre-layer norm which is more stable & efficient for training
 
     Args:
         dim_model: dimension of model's latent vector space, default 1024 from official paper
@@ -169,8 +170,8 @@ class MultiHeadAttention(nn.Module):
 
 
 class FeedForward(nn.Module):
-    """ Class for Feed-Forward Network module in Transformer Encoder Block, this module for DeBERTa Series
-    Same role as Module "BertIntermediate" in official Repo (bert.py)
+    """ module of feed-forward network module in Transformer encoder block, this module for DeBERTa Series
+    same role as module "BertIntermediate" in official Repo (bert.py)
 
     Args:
         dim_model: dimension of model's latent vector space, default 1024
@@ -195,22 +196,23 @@ class FeedForward(nn.Module):
 
 
 class DeBERTaEncoderLayer(nn.Module):
-    """ Class for encoder model module in DeBERTa Series
-    In this class, we stack each encoder_model module (Multi-Head attention, Residual-Connection, LayerNorm, FFN)
-    This class has same role as Module "BertEncoder" in official Repo (bert.py)
-    In official repo, they use post-layer norm, but we use pre-layer norm which is more stable & efficient for training
+    """ module of DeBERTa's encoder layer,
+    in this class, we stack each encoder_model module (Multi-Head attention, Residual-Connection, LayerNorm, FFN)
+
+    this class has same role as Module "BertEncoder" in official Repo (bert.py)
+    in official repo, they use post-layer norm, but we use pre-layer norm which is more stable & efficient for training
 
     References:
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/bert.py
     """
     def __init__(
-            self,
-            dim_model: int = 1024,
-            num_attention_heads: int = 16,
-            dim_ffn: int = 4096,
-            layer_norm_eps: float = 0.02,
-            attention_dropout_prob: float = 0.1,
-            hidden_dropout_prob: float = 0.1
+        self,
+        dim_model: int = 1024,
+        num_attention_heads: int = 16,
+        dim_ffn: int = 4096,
+        layer_norm_eps: float = 0.02,
+        attention_dropout_prob: float = 0.1,
+        hidden_dropout_prob: float = 0.1
     ) -> None:
         super(DeBERTaEncoderLayer, self).__init__()
         self.self_attention = MultiHeadAttention(
@@ -238,13 +240,16 @@ class DeBERTaEncoderLayer(nn.Module):
 
 
 class DeBERTaEncoder(nn.Module, AbstractModel):
-    """ In this class, 1) encode input sequence, 2) make relative position embedding, 3) stack num_layers DeBERTaEncoderLayer
-    This class's forward output is not integrated with EMD Layer's output
+    """ interface of DeBERTa's encoder, in this interface module have workflow below:
+    1) encode input sequence
+    2) make relative position embedding
+    3) stack num_layers DeBERTaEncoderLayer
 
-    Output have ONLY result of disentangled self-attention
+    this class's forward output is not integrated with emd's output
+    output have ONLY result of disentangled self-attention
 
-    All ops order is from official paper & repo by microsoft, but ops operating is slightly different,
-    Because they use custom ops, e.g. XDropout, XSoftmax, ..., we just apply pure pytorch ops
+    all ops order is from official paper & repo by microsoft, but ops operating is slightly different,
+    because they use custom ops, e.g. XDropout, XSoftmax, ..., we just apply pure pytorch ops
 
     Args:
         max_seq: maximum sequence length, named "max_position_embedding" in official repo, default 512, in official paper, this value is called 'k'
@@ -257,17 +262,17 @@ class DeBERTaEncoder(nn.Module, AbstractModel):
         https://github.com/microsoft/DeBERTa/blob/master/DeBERTa/deberta/ops.py
     """
     def __init__(
-            self,
-            cfg: CFG,
-            max_seq: int = 512,
-            num_layers: int = 24,
-            dim_model: int = 1024,
-            num_attention_heads: int = 16,
-            dim_ffn: int = 4096,
-            layer_norm_eps: float = 0.02,
-            attention_dropout_prob: float = 0.1,
-            hidden_dropout_prob: float = 0.1,
-            gradient_checkpointing: bool = False
+        self,
+        cfg: CFG,
+        max_seq: int = 512,
+        num_layers: int = 24,
+        dim_model: int = 1024,
+        num_attention_heads: int = 16,
+        dim_ffn: int = 4096,
+        layer_norm_eps: float = 0.02,
+        attention_dropout_prob: float = 0.1,
+        hidden_dropout_prob: float = 0.1,
+        gradient_checkpointing: bool = False
     ) -> None:
         super(DeBERTaEncoder, self).__init__()
         self.cfg = cfg
@@ -316,17 +321,18 @@ class DeBERTaEncoder(nn.Module, AbstractModel):
 
 
 class EnhancedMaskDecoder(nn.Module, AbstractModel):
-    """ class for enhanced mask decoder module in DeBERTa, word 'Decoder' means that denoise masked token by predicting masked token
+    """ module of enhanced mask decoder in DeBERTa, word 'Decoder' means that denoise masked token by predicting masked token
+    for masked language modeling (MLM)
 
-    In official paper & repo, they might use 2 EMD layers for MLM Task
+    in official paper & repo, they might use 2 EMD layers for MLM Task
         1) First-EMD layer: query input == Absolute Position Embedding
         2) Second-EMD layer: query input == previous EMD layer's output
 
-    And this layer's key & value input is output from last disentangled self-attention encoder layer,
+    and this layer's key & value input is output from last disentangled self-attention encoder layer,
     also, all of them can share parameters and this layer also do disentangled self-attention
 
-    In official repo, they implement this layer so hard coding that we can't understand directly & easily
-    So, we implement this layer with our own style, as closely as possible to paper statement
+    in official repo, they implement this layer so hard coding that we can't understand directly & easily
+    so, we implement this layer with our own style, as closely as possible to paper statement
 
     Args:
         encoder: list of nn.ModuleList, which is (num_emd * last encoder layer) from DeBERTaEncoder
@@ -395,9 +401,10 @@ class EnhancedMaskDecoder(nn.Module, AbstractModel):
 
 
 class Embedding(nn.Module):
-    """ DeBERTa Embedding Module class
-    This Module set & initialize 3 Embedding Layers:
-        1) Word Embedding, 2) Relative Positional Embedding, 3) Absolute Positional Embedding
+    """ module of initializing DeBERTa's three embedding vector:
+    1) word embedding vector (content, context embedding vector)
+    2) relative position embedding vector (vector for projecting to query-position, key-position latent vector space)
+    3) absolute position embedding vector (vector for integrating with query latent matrix in enhanced mask decoder context)
 
     Args:
         cfg: configuration.py
@@ -444,9 +451,19 @@ class Embedding(nn.Module):
 
 
 class DeBERTa(nn.Module, AbstractModel):
-    """ Main class for DeBERTa, having all of sub-blocks & modules such as Disentangled Self-attention, DeBERTaEncoder, EMD
-    Init Scale of DeBERTa Hyper-Parameters, Embedding Layer, Encoder Blocks, EMD Blocks
-    And then make 3-types of Embedding Layer, Word Embedding, Absolute Position Embedding, Relative Position Embedding
+    """ interface(main class) for DeBERTa, having all of sub-blocks & modules such as dis-entangled self-attention, encoder, enhanced mask decoder
+    this model have two unique techniques:
+
+        1) dis-entangled self-attention
+            - separate the context vector embedding and relative position vector embedding
+            - attention query context and key context, query context and key position, query position and key context
+            - attention matrix = c2c + c2p + p2c
+
+        2) enhanced mask decoder
+            - integrate the absolute position vector embedding and relative position vector embedding
+            - last two encoder layer will be weight shared for enhanced mask decoder
+            - almost workflows are the same before encoder layer, but before the do self-attention,
+              absolute position vector embedding will be added to activation, projected to query latent space only
 
     Args:
         cfg: configuration.CFG
