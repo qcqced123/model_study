@@ -1,12 +1,13 @@
-import numpy as np
 import torch
+import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
-from experiment.models.abstract_model import AbstractModel
+
 from torch import Tensor
+from configuration import CFG
 from typing import Tuple, Optional
 from einops.layers.torch import Rearrange
-from configuration import CFG
+from experiment.models.abstract_model import AbstractModel
 
 
 def apply_rotary_position_embeddings(sinusoidal_pos: Tensor, query_layer: Tensor, key_layer: Tensor, value_layer: Tensor = None):
@@ -214,7 +215,7 @@ class MultiHeadAttention(nn.Module):
         k = self.fc_k(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 1, 3).contiguous()
         v = self.fc_v(x).reshape(-1, x.shape[1], self.num_attention_heads, self.dim_head).permute(0, 2, 1, 3).contiguous()
 
-        # multiple word embedding, rotary position encoding
+        # multiply word embedding, rotary position encoding
         rotary_q, rotary_k = self.apply_rope(rotary_pos_enc, q, k)
 
         attention_matrix = None

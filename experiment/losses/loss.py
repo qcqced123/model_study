@@ -492,3 +492,19 @@ class MultipleNegativeRankingLoss(nn.Module):
         )
         # labels = embeddings_a.T.type(torch.long).to(similarity_scores.device)
         return self.cross_entropy_loss(similarity_scores, labels)
+
+
+class NeuralMemoryLoss(nn.Module):
+    """ loss module of neural memory in long-term memory of Titans from Google Search
+
+    References:
+        - https://arxiv.org/pdf/2501.00663
+    """
+    def __init__(self):
+        super().__init__()
+        self.distance = "fro"
+        self.criterion = torch.norm
+
+    def forward(self, x: Tensor, v: Tensor) -> Tensor:
+        loss = self.criterion(x-v, p=self.distance)
+        return loss

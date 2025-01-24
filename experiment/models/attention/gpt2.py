@@ -136,13 +136,13 @@ class FeedForward(nn.Module):
 
 class GPTDecoderLayer(nn.Module):
     def __init__(
-            self,
-            dim_model: int = 1024,
-            num_attention_heads: int = 16,
-            dim_ffn: int = 4096,
-            layer_norm_eps: float = 0.02,
-            attention_dropout_prob: float = 0.1,
-            hidden_dropout_prob: float = 0.1
+        self,
+        dim_model: int = 1024,
+        num_attention_heads: int = 16,
+        dim_ffn: int = 4096,
+        layer_norm_eps: float = 0.02,
+        attention_dropout_prob: float = 0.1,
+        hidden_dropout_prob: float = 0.1
     ) -> None:
         super(GPTDecoderLayer, self).__init__()
         self.self_attention = MultiHeadAttention(
@@ -163,9 +163,7 @@ class GPTDecoderLayer(nn.Module):
     def forward(self, x: Tensor, attention_mask: Tensor = None) -> Tensor:
         """ rel_pos_emb is fixed for all layer in same forward pass time """
         ln_x = self.layer_norm1(x)
-        residual_x = self.hidden_dropout(
-            self.self_attention(ln_x, attention_mask)
-        ) + x
+        residual_x = self.hidden_dropout(self.self_attention(ln_x, attention_mask)) + x
 
         ln_x = self.layer_norm2(residual_x)
         fx = self.ffn(ln_x) + residual_x
