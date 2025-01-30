@@ -369,8 +369,8 @@ class PersistentMemory(nn.Module):
         return px
 
 
-class RoFormerSinusoidalPositionalEmbedding(nn.Embedding):
-    """ This module produces sinusoidal positional embeddings of any length
+class RotarySinusoidalPositionalEmbedding(nn.Embedding):
+    """ This module produces rotary sinusoidal positional embeddings of any length
     Original Source code from Huggingface's RoFormer model, which is the most optimized way to create positional embedding
 
     Args:
@@ -388,9 +388,8 @@ class RoFormerSinusoidalPositionalEmbedding(nn.Embedding):
 
     @staticmethod
     def _init_weight(out: nn.Parameter) -> nn.Parameter:
-        """
-        Identical to the XLM create_sinusoidal_embeddings except features are not interleaved. The cos features are in
-        the 2nd half of the vector. [dim // 2:]
+        """ identical to the XLM create_sinusoidal_embeddings except features are not interleaved.
+        The cos features are in the 2nd half of the vector. [dim // 2:].
         """
         n_pos, dim = out.shape
         position_enc = np.array(
@@ -431,7 +430,7 @@ class Embedding(nn.Module):
             len(cfg.tokenizer),
             cfg.dim_model
         )
-        self.rotary_pos_encoding = RoFormerSinusoidalPositionalEmbedding(
+        self.rotary_pos_encoding = RotarySinusoidalPositionalEmbedding(
             cfg.max_seq,
             cfg.dim_model // cfg.num_attention_heads
         )
@@ -465,6 +464,7 @@ class MACTitans(nn.Module, AbstractModel):
         - mlp layer: gated linear unit with silu for short-term memory, feedforward for long-term, persistent memory
 
     Args:
+        cfg: configuration module of initializing the current model
 
     Reference:
         https://arxiv.org/pdf/2501.00663
