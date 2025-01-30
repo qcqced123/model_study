@@ -15,6 +15,7 @@ from torch import Tensor
 from typing import Tuple, List
 from einops.layers.torch import Rearrange
 from transformers import AutoConfig, AutoTokenizer
+from experiment.losses.loss import NeuralMemoryLoss
 from experiment.activation.activation import SwiGLU
 from experiment.models.abstract_model import AbstractModel
 
@@ -313,6 +314,9 @@ class LongTermMemory(nn.Module):
         self.dim_ffn = dim_ffn
         self.dim_model = dim_model
         self.num_layers = num_layers
+        self.project_q = nn.Linear(self.dim_model, self.dim_model)  # for retrieve x
+        self.project_k = nn.Linear(self.dim_model, self.dim_model)  # for online updating
+        self.project_v = nn.Linear(self.dim_model, self.dim_model)  # for online updating
         self.layer = nn.Sequential(
             nn.Linear(self.dim_model, self.dim_ffn),
             nn.SiLU(),
@@ -328,16 +332,19 @@ class LongTermMemory(nn.Module):
             normalized_shape=dim_model,
             eps=layer_norm_eps
         )
+        self.criterion = NeuralMemoryLoss()  # for online meta-model
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tuple[Tensor, Tensor]:
         """Args:
             x (Tensor): input x of the current time "t"
         """
+        qx, kx, vx = self.project_q(x), self.project_k(x), self.project_v(x)
         for layer in self.neural_memory:
-            x = layer(x)
+            qx, kx = layer(qx), layer(kx)
 
-        y = self.layer_norm(x)
-        return y
+        cnt_y = self.layer_norm(qx)
+        cnt_loss = self.criterion(k=kx, v=vx)
+        return cnt_y, cnt_loss
 
 
 class PersistentMemory(nn.Module):
@@ -347,15 +354,17 @@ class PersistentMemory(nn.Module):
     this module have the similar architecture as feedforward network of transformer-base model, replacing the ReLU/GELU ... in fully connected layer to Softmax.
     in test/inference time, this module will be fixed.
 
+    we think this module has the similar role as prompt encoder in "prompt learning" method or learnable initial token from "streamingLLM"
+
     Args:
-        projector_k (nn.Linear):
-        projector_v (nn.Linear):
+        dim_model (int):
         hidden_dropout_prob (float):
     """
-    def __init__(self, projector_k: nn.Linear, projector_v: nn.Linear, hidden_dropout_prob: float = 0.1) -> None:
+
+    def __init__(self, dim_model: int, hidden_dropout_prob: float = 0.1) -> None:
         super(PersistentMemory, self).__init__()
-        self.projector_k = projector_k
-        self.projector_v = projector_v
+        self.projector_k = nn.Linear(dim_model, dim_model)
+        self.projector_v = nn.Linear(dim_model, dim_model)
         self.activation_func = nn.Softmax(dim=-1)
         self.ffn_dropout = nn.Dropout(p=hidden_dropout_prob)
 
@@ -363,8 +372,8 @@ class PersistentMemory(nn.Module):
         """Args:
             x (Tensor): input x in current time "t"
         """
-        x = self.projector_k(x)
-        hx = self.ffn_dropout(self.activation_func(x))
+        kx = self.projector_k(x)
+        hx = self.ffn_dropout(self.activation_func(kx))
         px = self.ffn_dropout(self.projector_v(hx))
         return px
 
@@ -505,16 +514,12 @@ class MACTitans(nn.Module, AbstractModel):
             layer_norm_eps=self.layer_norm_eps,
             hidden_dropout_prob=self.hidden_dropout_prob
         )
-        self.projector_q = self.short_term_memory.layer[0].attention_heads.fc_q
-        self.projector_k = self.short_term_memory.layer[0].attention_heads.fc_k
-        self.projector_v = self.short_term_memory.layer[0].attention_heads.fc_v
         self.persistent_memory = PersistentMemory(
-            projector_k=self.projector_k,
-            projector_v=self.projector_v,
+            dim_model=self.dim_model,
             hidden_dropout_prob=self.hidden_dropout_prob
         )
 
-    def forward(self, inputs: Tensor, attention_mask: Tensor = None) -> Tensor:
+    def forward(self, inputs: Tensor, attention_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
         """
         Args:
             inputs: input sequence, shape (batch_size, sequence)
@@ -523,15 +528,10 @@ class MACTitans(nn.Module, AbstractModel):
         assert inputs.ndim == 2, f'Expected (batch, sequence) got {inputs.shape}'
         # retrieve the persistent memory and long-term memory
         word_embeddings = self.embedding.pre_forward(inputs)
-        retrieve_x = self.projector_q(word_embeddings)
         meta_memory = self.persistent_memory(word_embeddings)
-        contextual_memory = self.long_term_memory(
-            retrieve_x
+        contextual_memory, long_term_loss = self.long_term_memory(
+            word_embeddings
         )
-
-        """
-        need to implement the training of neural memory(long-term) pipeline here
-        """
 
         # concatenate the persistent memory, long-term memory, short-term memory
         # get the rotary position embedding vector
@@ -546,7 +546,7 @@ class MACTitans(nn.Module, AbstractModel):
             short_term_y
         )
         last_hidden_state = torch.mul(short_term_y, long_term_y)
-        return last_hidden_state
+        return last_hidden_state, long_term_loss
 
 
 class MAGTitans(nn.Module):

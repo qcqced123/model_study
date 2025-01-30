@@ -733,22 +733,22 @@ class RTDTuner(PreTrainTuner):
         return model, criterion, val_criterion, val_metric_list, optimizer, lr_scheduler, awp, swa_model, swa_scheduler
 
     def train_val_fn(
-            self,
-            loader_train,
-            model: nn.Module,
-            criterion: nn.Module,
-            optimizer,
-            scheduler,
-            loader_valid,
-            val_criterion: nn.Module,
-            val_metric_list: List[Callable],
-            g_val_score_max: float,
-            d_val_score_max: float,
-            epoch: int,
-            awp: nn.Module = None,
-            swa_model: nn.Module = None,
-            swa_start: int = None,
-            swa_scheduler=None
+        self,
+        loader_train,
+        model: nn.Module,
+        criterion: nn.Module,
+        optimizer,
+        scheduler,
+        loader_valid,
+        val_criterion: nn.Module,
+        val_metric_list: List[Callable],
+        g_val_score_max: float,
+        d_val_score_max: float,
+        epoch: int,
+        awp: nn.Module = None,
+        swa_model: nn.Module = None,
+        swa_start: int = None,
+        swa_scheduler=None
     ) -> Tuple[Any, Union[float, Any]]:
         """ Function for train loop with validation for each batch*N Steps
         ELECTRA has two loss, one is generator loss, the other is discriminator loss Each of two losses are quite different,

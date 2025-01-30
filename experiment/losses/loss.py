@@ -505,6 +505,6 @@ class NeuralMemoryLoss(nn.Module):
         self.distance = "fro"
         self.criterion = torch.norm
 
-    def forward(self, x: Tensor, v: Tensor) -> Tensor:
-        loss = self.criterion(x-v, p=self.distance)
+    def forward(self, k: Tensor, v: Tensor) -> Tensor:
+        loss = self.criterion(k-v, p=self.distance)
         return loss
