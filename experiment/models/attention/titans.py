@@ -584,4 +584,7 @@ class Titans(nn.Module):
 
 
 if __name__ == '__main__':
-    pass
+    batch_size = 16
+    max_seq = 512
+    dim_model = 1024
+    x = torch.randn(batch_size, max_seq, dim_model)
