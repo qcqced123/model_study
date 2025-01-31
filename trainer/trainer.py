@@ -1,5 +1,3 @@
-import gc
-
 import wandb
 import numpy as np
 import transformers
@@ -1045,7 +1043,6 @@ class RTDTuner(PreTrainTuner):
                         f'<Val Step> Generator Valid {self.metric_list[i]}': g_valid_metrics[self.metric_list[i]].avg,
                         f'<Val Step> Discriminator Valid {self.metric_list[i]}': d_valid_metrics[self.metric_list[i]].avg,
                     })
-
         return valid_g_losses.avg, valid_d_losses.avg
 
 
@@ -1181,10 +1178,8 @@ class DistillKnowledgeTuner(PreTrainTuner):
                     mask=mask
                 )
                 d_loss = criterion["KLDivLoss"](soft_pred.log(), soft_target)  # nn.KLDIVLoss
-                s_loss = criterion["CrossEntropyLoss"](s_logit.view(-1, self.cfg.vocab_size),
-                                                       labels.view(-1))  # nn.CrossEntropyLoss
-                c_loss = criterion["CosineEmbeddingLoss"](s_hidden_state, t_hidden_state,
-                                                          c_labels)  # nn.CosineEmbeddingLoss
+                s_loss = criterion["CrossEntropyLoss"](s_logit.view(-1, self.cfg.vocab_size), labels.view(-1))  # nn.CrossEntropyLoss
+                c_loss = criterion["CosineEmbeddingLoss"](s_hidden_state, t_hidden_state, c_labels)  # nn.CosineEmbeddingLoss
                 loss = d_loss * self.cfg.alpha_distillation + s_loss * self.cfg.alpha_student + c_loss * self.cfg.alpha_cosine  # linear combination loss
 
             if self.cfg.n_gradient_accumulation_steps > 1:

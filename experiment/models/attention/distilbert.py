@@ -1,21 +1,22 @@
 import torch.nn as nn
-from experiment.models.abstract_model import AbstractModel
+
 from torch import Tensor
-from typing import Tuple, Callable
-from einops.layers.torch import Rearrange
-from experiment.tuner.mlm import MLMHead
 from configuration import CFG
+from typing import Tuple, Callable
+from experiment.tuner.mlm import MLMHead
+from einops.layers.torch import Rearrange
+from experiment.models.abstract_model import AbstractModel
 
 
 class DistilBERT(nn.Module, AbstractModel):
-    """ Main class for DistilBERT Style Model, Teacher-Student Framework
-    for Knowledge Distillation aim to lighter Large Scale LLM model. This model have 3 objective functions:
+    """ main class for DistilBERT style model, teacher-student architecture
+    for 'knowledge distillation' aim to lighter large scale LLM. This model have 3 objective functions:
 
-        1) distillation loss, calculated by soft targets & soft predictions
+        1) distillation loss, calculated by soft targets & soft predictions (aims to closer student logit to teachers'
             (nn.KLDIVLoss(reduction='batchmean'))
 
         2) student loss, calculated by hard targets & hard predictions
-            (nn.CrossEntropyLoss(reduction='mean')), same as pure MLM Loss
+            (nn.CrossEntropyLoss(reduction='mean')), same as pure mlm Loss
 
         3) cosine similarity loss, calculated by student & teacher logit similarity
             (nn.CosineEmbeddingLoss(reduction='mean')), similar as contrastive loss
