@@ -1,5 +1,4 @@
 """ py module of MoE (Mixture of Experts) implementation for transformer architecture
-
 """
 import torch
 import torch.nn as nn
@@ -54,7 +53,7 @@ class SparseMoELayer(nn.Module):
         return
 
 
-class MoE(nn.Module):
+class MoE(nn.Module, AbstractModel):
     """ interface module of MoE(Mixture of Experts) for transformer architecture
     Args:
 
@@ -62,8 +61,12 @@ class MoE(nn.Module):
         - https://huggingface.co/blog/moe
         - https://arxiv.org/pdf/2101.03961  # switch transformer paper
     """
-    def __init__(self):
+    def __init__(self, cfg):
         super(MoE, self).__init__()
+        self.cfg = cfg
+        self.dim_model = cfg.dim_model
+        self.num_layers = cfg.num_layers
+        self.num_experts = cfg.num_experts
 
     def forward(self):
         return
