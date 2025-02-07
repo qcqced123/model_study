@@ -1,9 +1,10 @@
 import numpy as np
 import torch.nn as nn
 import configuration as configuration
+
 from torch import Tensor
-from typing import Tuple, List, Dict
 from collections import Counter
+from typing import Tuple, List, Dict
 
 
 def accuracy(y_true: np.array, y_pred: np.array, cfg: configuration.CFG = None) -> float:
@@ -114,6 +115,44 @@ def recall(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG) -> fl
 
     return round(np.mean(score), 4)
 
+def specificity(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG) -> float:
+    """ calculate the specificity metrics for binary classification, multi-class classification
+
+    Args:
+        y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
+        y_pred: prediction, must be 2D Array for MLM Task (batch_size*sequence, vocab size)
+        cfg: configuration file for the experiment, for setting the mode of calculating recall
+
+    Math:
+        specificity = tn / (tn + fp)
+    """
+    y_pred = np.argmax(y_pred, axis=-1)
+
+    # for binary classification
+    if cfg.num_labels == 2:
+        tn = np.sum((y_true == 0) & (y_pred == 0))  # true positive
+        fp = np.sum((y_true == 0) & (y_pred == 1))  # false negative
+
+        # for exception handling division by zero
+        if tn + fp == 0:
+            score = 0
+        else:
+            score = tn / (tn + fp)
+
+    # for multi-class classification
+    else:
+        score, unique_classes = [], np.unique(y_true)
+        for class_ in unique_classes:
+            tn = np.sum((y_true != class_) & (y_pred != class_))
+            fp = np.sum((y_true != class_) & (y_pred == class_))
+
+            # for exception handling division by zero
+            if tn + fp == 0:
+                score.append(0.0)
+            else:
+                score.append(tn / (tn + fp))
+
+    return round(np.mean(score), 4)
 
 def f_beta(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG, beta: float = 1) -> float:
     """ calculate function for F_beta score in binary classification, multi-class classification
@@ -292,25 +331,25 @@ def rouge_n(y_true: List[str], y_pred: List[str], n_size: int = 4, beta: float =
 def rouge_l(y_true: str, y_pred: str, cfg: configuration.CFG = None) -> float:
     """ calculate ROUGE-L score for text summarization task (ROUGE Longest Common Sequence)
 
-        recall is very im portant in text summarization task, because we need to generate important sentences in ref
-        so, this metric is very useful for evaluating text summarization model
+    recall is very im portant in text summarization task, because we need to generate important sentences in ref
+    so, this metric is very useful for evaluating text summarization model
 
-        you must pass list of string for ground truth and prediction
-        string must be tokenized by tokenizer such as 'mecab', 'sentencepiece', 'wordpiece' and so on,
-        also they must be decoded by tokenizer to string, not tensor
+    you must pass list of string for ground truth and prediction
+    string must be tokenized by tokenizer such as 'mecab', 'sentencepiece', 'wordpiece' and so on,
+    also they must be decoded by tokenizer to string, not tensor
 
-        Args:
-            y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
-            y_pred: prediction, must be 2D Array for MLM Task (batch_size*sequence, vocab size)
-            cfg: configuration file for the experiment, for setting BLEU-N, tokenizer
+    Args:
+        y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
+        y_pred: prediction, must be 2D Array for MLM Task (batch_size*sequence, vocab size)
+        cfg: configuration file for the experiment, for setting BLEU-N, tokenizer
 
-        Math:
-            (original) ROUGE-N = {Common N-Gram in Gen & Ref} / {N-Gram in Ref}
-            (modified) ROUGE-N = F1-Score of (precision: no clipping precision of BLEU, recall: original ROUGE)
-            => we choose modified version of ROUGE-N, because it is more useful for text summarization task
+    Math:
+        (original) ROUGE-N = {Common N-Gram in Gen & Ref} / {N-Gram in Ref}
+        (modified) ROUGE-N = F1-Score of (precision: no clipping precision of BLEU, recall: original ROUGE)
+        => we choose modified version of ROUGE-N, because it is more useful for text summarization task
 
-        Reference:
-            https://aclanthology.org/W04-1013.pdf
+    Reference:
+        https://aclanthology.org/W04-1013.pdf
     """
     gen_ngram = y_pred.split(' ')
     ref_ngram = y_true.split(' ')
