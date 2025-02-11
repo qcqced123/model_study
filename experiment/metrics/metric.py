@@ -5,6 +5,7 @@ import configuration as configuration
 from torch import Tensor
 from collections import Counter
 from typing import Tuple, List, Dict
+from sklearn.metrics import roc_auc_score
 
 
 def accuracy(y_true: np.array, y_pred: np.array, cfg: configuration.CFG = None) -> float:
@@ -40,21 +41,23 @@ def pearson_score(y_true: np.array, y_pred: np.array) -> float:
     return corr
 
 
-def precision(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG) -> float:
+def precision(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG, threshold: float = 0.5) -> float:
     """ calculate recall metrics for binary classification
 
     Args:
         y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
         y_pred: prediction, must be 2D Array for MLM Task (batch_size*sequence, vocab size)
         cfg: configuration file for the experiment, for setting the mode of calculating precision
+        threshold: boundary value for separating negative and positive classes in binary classification situations
 
     Math:
         precision = tp / (tp + fp)
     """
-    y_pred = np.argmax(y_pred, axis=-1)
-
     # for binary classification
     if cfg.num_labels == 2:
+        y_pred = y_pred[..., 1]
+        y_pred = (y_pred >= threshold).astype(int)
+
         tp = np.sum((y_true == 1) & (y_pred == 1))  # true positive
         fp = np.sum((y_true == 0) & (y_pred == 1))  # false positive
         if tp + fp == 0:
@@ -64,6 +67,7 @@ def precision(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG) ->
 
     # for multi-class classification
     else:
+        y_pred = np.argmax(y_pred, axis=-1)
         score, unique_classes = [], np.unique(y_true)
         for class_ in unique_classes:
             tp = np.sum((y_true == class_) & (y_pred == class_))
@@ -78,21 +82,23 @@ def precision(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG) ->
     return round(np.mean(score), 4)
 
 
-def recall(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG) -> float:
+def recall(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG, threshold: float = 0.5) -> float:
     """ calculate recall metrics for binary classification, multi-class classification
 
     Args:
         y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
         y_pred: prediction, must be 2D Array for MLM Task (batch_size*sequence, vocab size)
         cfg: configuration file for the experiment, for setting the mode of calculating recall
+        threshold: boundary value for separating negative and positive classes in binary classification situations
 
     Math:
         recall = tp / (tp + fn)
     """
-    y_pred = np.argmax(y_pred, axis=-1)
-
     # for binary classification
     if cfg.num_labels == 2:
+        y_pred = y_pred[..., 1]
+        y_pred = (y_pred >= threshold).astype(int)
+
         tp = np.sum((y_true == 1) & (y_pred == 1))  # true positive
         fn = np.sum((y_true == 1) & (y_pred == 0))  # false negative
         if tp + fn == 0:
@@ -102,6 +108,7 @@ def recall(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG) -> fl
 
     # for multi-class classification
     else:
+        y_pred = np.argmax(y_pred, axis=-1)
         score, unique_classes = [], np.unique(y_true)
         for class_ in unique_classes:
             tp = np.sum((y_true == class_) & (y_pred == class_))
@@ -115,21 +122,23 @@ def recall(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG) -> fl
 
     return round(np.mean(score), 4)
 
-def specificity(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG) -> float:
+def specificity(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG, threshold: float = 0.5) -> float:
     """ calculate the specificity metrics for binary classification, multi-class classification
 
     Args:
         y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
         y_pred: prediction, must be 2D Array for MLM Task (batch_size*sequence, vocab size)
         cfg: configuration file for the experiment, for setting the mode of calculating recall
+        threshold: boundary value for separating negative and positive classes in binary classification situations
 
     Math:
         specificity = tn / (tn + fp)
     """
-    y_pred = np.argmax(y_pred, axis=-1)
-
     # for binary classification
     if cfg.num_labels == 2:
+        y_pred = y_pred[..., 1]
+        y_pred = (y_pred >= threshold).astype(int)
+
         tn = np.sum((y_true == 0) & (y_pred == 0))  # true positive
         fp = np.sum((y_true == 0) & (y_pred == 1))  # false negative
 
@@ -141,6 +150,7 @@ def specificity(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG) 
 
     # for multi-class classification
     else:
+        y_pred = np.argmax(y_pred, axis=-1)
         score, unique_classes = [], np.unique(y_true)
         for class_ in unique_classes:
             tn = np.sum((y_true != class_) & (y_pred != class_))
@@ -154,14 +164,15 @@ def specificity(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG) 
 
     return round(np.mean(score), 4)
 
-def f_beta(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG, beta: float = 1) -> float:
+def f_beta(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG, beta: float = 1, threshold: float = 0.5) -> float:
     """ calculate function for F_beta score in binary classification, multi-class classification
 
     Args:
         y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
         y_pred: prediction, must be 2D Array for MLM Task (batch_size*sequence, vocab size)
         cfg: configuration file for the experiment, for setting the mode of calculating F_beta
-        beta: float, default is 2
+        beta: float, default is 1
+        threshold: boundary value for separating negative and positive classes in binary classification situations
 
     Math:
         TP (true positive): pred == 1 && true == 1
@@ -174,7 +185,7 @@ def f_beta(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG, beta:
     Reference:
         https://blog.naver.com/PostView.naver?blogId=wideeyed&logNo=221531998840&parentCategoryNo=&categoryNo=2&
     """
-    f_precision, f_recall = precision(y_true, y_pred, cfg), recall(y_true, y_pred, cfg)
+    f_precision, f_recall = precision(y_true, y_pred, cfg, threshold), recall(y_true, y_pred, cfg, threshold)
     numerator, denominator = (1 + beta**2) * f_precision * f_recall, (beta**2 * f_precision + f_recall)
 
     if denominator == 0:
@@ -183,6 +194,46 @@ def f_beta(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG, beta:
         score = numerator / denominator
 
     return round(np.mean(score), 4)
+
+
+def roc_auc(y_true: np.ndarray, y_logit: np.ndarray, cfg: configuration.CFG):
+    """ calculate function for roc auc score in binary classification.
+
+    roc auc is the alias of "receiver operating characteristic".
+    x-axis of roc curve is meaning of "false negative rate", "1-specificity".
+    y-axis of roc curve is meaning of "true positive rate", "recall", "sensitive".
+
+    Args:
+        y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
+        y_logit: must be logit prediction, 2D Array for MLM Task (batch_size*sequence, vocab size)
+                (please do not pass the class-like prediction array for this metric calculation)
+        cfg: configuration file for the experiment, for setting the mode of calculating F_beta
+    """
+    # logic for binary classification
+    # get threshold array from model predictions
+    tpr_list, fpr_list = [], []
+    y_pred = y_logit[..., 1]  # result's shape must be: [0.6, 0.7, 0.7 ...]
+    thresholds = np.sort(y_pred)[::-1]
+
+    # calculate the tpr, fpr from each threshold for making the roc curve
+    for threshold in thresholds:
+        # get class-like prediction by using current threshold
+        tpr = recall(y_true=y_true, y_pred=y_logit, cfg=cfg, threshold=threshold)  # recall == sensitive == tpr
+        fpr = 1 - specificity(y_true=y_true, y_pred=y_logit, cfg=cfg, threshold=threshold)  # 1-specificity == fpr
+        tpr_list.append(tpr), fpr_list.append(fpr)
+
+    tpr_list = [0] + tpr_list + [1]
+    fpr_list = [0] + fpr_list + [1]
+
+    # calculate the auc (area of under the curve) of roc curve
+    auc = 0.0  # for avoiding the type cast
+    tpr = np.array(tpr_list)
+    fpr = np.array(fpr_list)
+    for i in range(len(tpr)-1):
+        width = fpr[i+1] - fpr[i]
+        height = (tpr[i+1] + tpr[i]) / 2
+        auc += (width * height)
+    return auc
 
 
 def cosine_similarity(a: Tensor, b: Tensor, eps=1e-8) -> np.ndarray:
