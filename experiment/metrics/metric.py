@@ -5,7 +5,6 @@ import configuration as configuration
 from torch import Tensor
 from collections import Counter
 from typing import Tuple, List, Dict
-from sklearn.metrics import roc_auc_score
 
 
 def accuracy(y_true: np.array, y_pred: np.array, cfg: configuration.CFG = None) -> float:
@@ -196,7 +195,7 @@ def f_beta(y_true: np.ndarray, y_pred: np.ndarray, cfg: configuration.CFG, beta:
     return round(np.mean(score), 4)
 
 
-def roc_auc(y_true: np.ndarray, y_logit: np.ndarray, cfg: configuration.CFG):
+def roc_auc(y_true: np.ndarray, y_logit: np.ndarray, cfg: configuration.CFG) -> float:
     """ calculate function for roc auc score in binary classification.
 
     roc auc is the alias of "receiver operating characteristic".
@@ -233,6 +232,47 @@ def roc_auc(y_true: np.ndarray, y_logit: np.ndarray, cfg: configuration.CFG):
         width = fpr[i+1] - fpr[i]
         height = (tpr[i+1] + tpr[i]) / 2
         auc += (width * height)
+    return auc
+
+
+def pr_auc(y_true: np.ndarray, y_logit: np.ndarray, cfg: configuration.CFG) -> float:
+    """ calculate function for pr auc score in binary classification.
+
+    pr is the alias of "precision-recall".
+    x-axis of pr curve is meaning of "recall".
+    y-axis of pr curve is meaning of "precision".
+
+
+    Args:
+        y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
+        y_logit: must be logit prediction, 2D Array for MLM Task (batch_size*sequence, vocab size)
+                 (please do not pass the class-like prediction array for this metric calculation)
+        cfg: configuration file for the experiment, for setting the mode of calculating F_beta
+    """
+    # logic for binary classification
+    # get threshold array from model predictions
+    recall_list, precision_list = [], []
+    y_pred = y_logit[..., 1]  # result's shape must be: [0.6, 0.7, 0.7 ...]
+    thresholds = np.sort(y_pred)[::-1]
+
+    # calculate the tpr, fpr from each threshold for making the roc curve
+    for threshold in thresholds:
+        # get class-like prediction by using current threshold
+        recall_list.append(recall(y_true=y_true, y_pred=y_logit, cfg=cfg, threshold=threshold))  # recall == sensitive == tpr
+        precision_list.append(precision(y_true=y_true, y_pred=y_logit, cfg=cfg, threshold=threshold))  # 1-specificity == fpr
+
+    recall_list = [0] + recall_list + [1]
+    precision_list = [0] + precision_list + [1]
+
+    # calculate the auc (area of under the curve) of roc curve
+    auc = 0.0  # for avoiding the type cast
+    recalls = np.array(recall_list)
+    precisions = np.array(precision_list)
+    for i in range(len(precision_list)-1):
+        width = recalls[i+1] - recalls[i]
+        height = (precisions[i+1] + precisions[i]) / 2
+        auc += (width * height)
+
     return auc
 
 
