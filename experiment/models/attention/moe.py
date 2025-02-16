@@ -12,13 +12,16 @@ from experiment.models.abstract_model import AbstractModel
 
 
 class Experts(nn.Module):
-    """
+    """ replacing the pure feed-forward network for reducing the computational cost, time complexity
+    Args:
+        dim_model (int): size of latent space of current architecture model
     """
     def __init__(self, dim_model: int):
         super(Experts, self).__init__()
         self.expert = nn.Sequential(
             nn.Linear(dim_model, dim_model),
-            nn.ReLU()
+            nn.ReLU(),
+            nn.Linear(dim_model, dim_model),
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -29,73 +32,85 @@ class SparseMoELayer(nn.Module):
     """ main module of MoE, replacing the dense feed-forward network in transformer encoder/decoder blocks.
     this module has the gating network, experts network
 
-    sparse MoE layer is originated from switch transformer
+    sparse MoE layer is originated from switch transformer.
 
     Args:
         k (int): value of top-k routing
         dim_model(int): value of gating network's input size
 
+    Design:
+        - single(sparse) expert routing
+        - minimum contribution masking algorithm: select masking tokens, when routing result would be overflowed
+        - gather-scatter method for routing to activate expert
+
     Reference:
         - https://huggingface.co/blog/moe
         - https://arxiv.org/pdf/2101.03961  # switch transformer paper
+        - https://pytorch.org/docs/stable/generated/torch.full.html
+        - https://pytorch.org/docs/main/generated/torch.nonzero.html
+        - https://pytorch.org/docs/stable/generated/torch.nn.functional.one_hot.html
     """
     def __init__(self, num_experts: int, dim_model: int, k: int = 1, capacity_factor: float = 1.25):
         super(SparseMoELayer, self).__init__()
         self.k = k  # value of top-k routing
-        self.gate = nn.Sequential(
-            nn.Linear(dim_model, dim_model),
-            nn.Softmax(dim=-1)
-        )
         self.num_experts = num_experts
         self.capacity_factor = capacity_factor
+        self.gate = nn.Sequential(
+            nn.Linear(dim_model, num_experts),
+            nn.Softmax(dim=-1)
+        )
         self.experts = nn.ModuleList([Experts(dim_model) for _ in range(self.num_experts)])
 
-    def forward(self, x: Tensor) -> None:
-        # check input data's validation
+    def forward(self, x: Tensor) -> Tensor:
+        # check input data's validation 2
         assert x.ndim != 3, f'Expected (batch, sequence, hidden_state) got {x.shape}'
 
         # aliasing the each tensor dimension
         # calculating the expert capacity value
         batch_size, seq_len, dim_model = x.shape
         total = batch_size * seq_len
-        capacity = (total/self.num_experts) * self.capacity_factor
+        capacity = int((total/self.num_experts) * self.capacity_factor)
 
         # single (top-1) expert routing
-        gating = self.gate(x)
-        expert_index = gating.argmax(dim=-1)
-        """ need to implement top-k routing and sparse activation logic here
-        """
-        return
+        # gating method must have the softmax layer
+        # 1) set the token limit of each unique expert
+        # 2) forward the flatten input x into gating layer
+        # 3) get top-1 expert's name for sparse routing
+        # 4) make the one-hot vector by num_experts
+        gating_score = self.gate(x)
+        expert_indices = gating_score.argmax(dim=-1)
 
+        flat_x = x.view(total, dim_model)
+        token_mask = torch.full((total, ), fill_value=-1, dtype=torch.long, device=x.device)
+        for expert in range(self.num_experts):
+            indices = (expert == expert_indices).nonzero(as_tuple=False).squeeze()
+            if not indices.numel():
+                continue
 
-class MoE(nn.Module, AbstractModel):
-    """ interface module of MoE(Mixture of Experts) for transformer architecture
-    this implementation follow the detail of switch transformer from google research
+            if not indices.dim():
+                indices = indices.unsqueeze(0)
 
-    Args:
-        cfg: configuration module of initializing the MoE transformer architecture
+            # exception handling: when the allocated tokens are over-flowed to expert capacity
+            # current masking algorithm is "random sampling"
+            # must add the alternative method, named "minimum contribution"
+            if indices.numel() > capacity:  # torch.numel(): count the element in tensor
+                indices = indices[:capacity]
 
-    Design:
-        - expert capacity
-        - single expert routing (top-1 routing)
+            token_mask[indices] = expert
 
-    Reference:
-        - https://huggingface.co/blog/moe
-        - https://arxiv.org/pdf/2101.03961  # switch transformer paper
-    """
-    def __init__(self, cfg):
-        super(MoE, self).__init__()
-        self.cfg = cfg
-        self.dim_model = cfg.dim_model
-        self.num_layers = cfg.num_layers
-        self.num_experts = cfg.num_experts
-        self.capacity_factor = cfg.capacity_factor  # for calculating the expert capacity
+        # gathering the each tokens, breakdown by expert name
+        # scattering the gather tokens into original sequence ordering
+        output = torch.zeros_like(flat_x)
+        for expert in range(self.num_experts):
+            indices = (expert == token_mask).nonzero(as_tuple=False).squeeze()
+            if not indices.numel():
+                continue
 
-        # init encoder/decoder module
-        self.decoder = None
+            expert_input = flat_x[indices]
+            output[indices] = self.experts[expert](expert_input)
 
-    def forward(self):
-        return
+        output = output.view(batch_size, seq_len, dim_model)
+        return output
 
 
 if __name__ == '__main__':

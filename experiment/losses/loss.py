@@ -508,3 +508,21 @@ class NeuralMemoryLoss(nn.Module):
     def forward(self, k: Tensor, v: Tensor) -> Tensor:
         loss = self.criterion(k-v, p=self.distance)
         return loss
+
+
+class LoadBalancingLoss(nn.Module):
+    """ loss module of load-balancing to ensure diverse expert routing for sparse MoE layer from switch transformer
+
+    Args:
+
+    Reference:
+        - https://arxiv.org/pdf/2101.03961
+    """
+    def __init__(self):
+        super(LoadBalancingLoss, self).__init__()
+
+    def forward(self, x: Tensor):
+
+
+
+        return
