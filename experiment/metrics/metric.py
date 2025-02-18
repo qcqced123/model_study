@@ -242,7 +242,6 @@ def pr_auc(y_true: np.ndarray, y_logit: np.ndarray, cfg: configuration.CFG) -> f
     x-axis of pr curve is meaning of "recall".
     y-axis of pr curve is meaning of "precision".
 
-
     Args:
         y_true: ground truth, 1D Array for MLM Task (batch_size*sequence)
         y_logit: must be logit prediction, 2D Array for MLM Task (batch_size*sequence, vocab size)

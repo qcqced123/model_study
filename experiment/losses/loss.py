@@ -522,7 +522,4 @@ class LoadBalancingLoss(nn.Module):
         super(LoadBalancingLoss, self).__init__()
 
     def forward(self, x: Tensor):
-
-
-
         return
