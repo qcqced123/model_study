@@ -63,7 +63,7 @@ class SparseMoELayer(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         # check input data's validation 2
-        assert x.ndim != 3, f'Expected (batch, sequence, hidden_state) got {x.shape}'
+        # assert x.ndim != 3, f'Expected (batch, sequence, hidden_state) got {x.shape}'
 
         # aliasing the each tensor dimension
         # calculating the expert capacity value
@@ -114,4 +114,30 @@ class SparseMoELayer(nn.Module):
 
 
 if __name__ == '__main__':
-    pass
+    # set the accelerator device
+    os = "macOS"
+    accelerator = None
+    if os == "macOS":
+        accelerator = "mps" if torch.backends.mps.is_available() else "cpu"
+    elif os == "linux":
+        accelerator = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+
+    device = torch.device(accelerator)
+
+    # init the sparse MoE module
+    num_experts = 16
+    batch_size = 16
+    max_seq = 512
+    dim_model = 512
+    sparse_moe = SparseMoELayer(
+        num_experts=num_experts,
+        dim_model=dim_model
+    )
+    sparse_moe.to(device=device)
+    # check the module of sparse MoE
+    print(sparse_moe)
+
+    # forward the input x to sparse MoE to debugging
+    x = torch.randn(batch_size, max_seq, dim_model, device=device)
+    y = sparse_moe(x)
+    print(y)
