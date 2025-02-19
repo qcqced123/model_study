@@ -61,7 +61,7 @@ class SparseMoELayer(nn.Module):
         )
         self.experts = nn.ModuleList([Experts(dim_model) for _ in range(self.num_experts)])
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tuple[Tensor, Tensor]:
         # check input data's validation 2
         # assert x.ndim != 3, f'Expected (batch, sequence, hidden_state) got {x.shape}'
 
@@ -110,7 +110,18 @@ class SparseMoELayer(nn.Module):
             output[indices] = self.experts[expert](expert_input)
 
         output = output.view(batch_size, seq_len, dim_model)
-        return output
+
+        # calculate the load balancing loss for making the gating layer to distribute the score uniformly
+        # element-wise product between "expert probs" and "expert density"
+        # expert probs: average gating scores of each expert
+        # expert density: average fraction of tokens routed to each expert
+        expert_probs = gating_score.view(total, self.num_experts).mean(dim=0)
+        expert_density = token_mask[token_mask > -1].bincount() / (total - len(token_mask[token_mask == -1]))
+
+        expert_losses = (expert_probs * expert_density) * self.num_experts ** 2
+        expert_loss = expert_losses.mean()
+
+        return output, expert_loss
 
 
 if __name__ == '__main__':
@@ -139,5 +150,6 @@ if __name__ == '__main__':
 
     # forward the input x to sparse MoE to debugging
     x = torch.randn(batch_size, max_seq, dim_model, device=device)
-    y = sparse_moe(x)
-    print(y)
+    y, l = sparse_moe(x)
+    print(f"final output activation of sparse MoE layer is: {y}")
+    print(f"final load balancing loss of sparse MoE layer is: {l}")
