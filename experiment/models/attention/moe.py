@@ -114,9 +114,9 @@ class SparseMoELayer(nn.Module):
         # calculate the load balancing loss for making the gating layer to distribute the score uniformly
         # element-wise product between "expert probs" and "expert density"
         # expert probs: average gating scores of each expert
-        # expert density: average fraction of tokens routed to each expert
+        # expert density: average fraction of tokens routed to each expert, using the expert tokens matrix before applying masking
         expert_probs = gating_score.view(total, self.num_experts).mean(dim=0)
-        expert_density = token_mask[token_mask > -1].bincount() / (total - len(token_mask[token_mask == -1]))
+        expert_density = expert_indices.view(-1).bincount() / total
 
         expert_losses = (expert_probs * expert_density) * self.num_experts ** 2
         expert_loss = expert_losses.mean()
