@@ -145,6 +145,7 @@ if __name__ == '__main__':
         dim_model=dim_model
     )
     sparse_moe.to(device=device)
+
     # check the module of sparse MoE
     print(sparse_moe)
 

@@ -17,6 +17,7 @@ from einops.layers.torch import Rearrange
 from transformers import AutoConfig, AutoTokenizer
 from experiment.losses.loss import NeuralMemoryLoss
 from experiment.activation.activation import SwiGLU
+from experiment.models.attention.moe import SparseMoELayer
 from experiment.models.abstract_model import AbstractModel
 
 
