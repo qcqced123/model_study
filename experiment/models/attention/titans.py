@@ -108,7 +108,6 @@ def separable_convolution_attention(
     v: Tensor,
 ):
     """ func of "1D separable depth-wise convolution", replacing the "global full attention", firstly suggested by "mobileNet"
-
     Args:
         q: query matrix, shape (batch_size, seq_len, dim_head)
         k: key matrix, shape (batch_size, seq_len, dim_head)

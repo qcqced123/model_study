@@ -154,6 +154,7 @@ if __name__ == '__main__':
     device = torch.device(accelerator)
 
     # init the sparse MoE module
+    alpha = 1e-2
     num_loop = 1000
     num_layers = 16
     num_experts = 32
@@ -199,8 +200,10 @@ if __name__ == '__main__':
         optimizer.zero_grad(set_to_none=True)
 
         # forward logic
+        # alpha: ensure load balancing without interfering with training loss
         y, l = model(x)
-        loss = l / num_layers
+        loss = alpha * l / num_layers
+
         # backward logic for load balancing loss
         loss.backward()
         optimizer.step()
