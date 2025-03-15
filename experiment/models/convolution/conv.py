@@ -1,6 +1,5 @@
 """py module of implementing the convolution for replacing self-attention in transformer (quadratic time complexity)
 """
-import torch
 import torch.nn as nn
 from torch import Tensor
 

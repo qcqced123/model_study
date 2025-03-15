@@ -19,6 +19,7 @@ from experiment.losses.loss import NeuralMemoryLoss
 from experiment.activation.activation import SwiGLU
 from experiment.models.attention.moe import SparseMoELayer
 from experiment.models.abstract_model import AbstractModel
+from experiment.models.convolution.conv import DepthWiseSeparableConv
 
 
 def apply_rotary_position_embeddings(sinusoidal_pos: Tensor, query_layer: Tensor, key_layer: Tensor, value_layer: Tensor = None):
@@ -102,31 +103,6 @@ def scaled_dot_product_attention(
     return attention_matrix
 
 
-def separable_convolution_attention(
-    q: Tensor,
-    k: Tensor,
-    v: Tensor,
-):
-    """ func of "1D separable depth-wise convolution", replacing the "global full attention", firstly suggested by "mobileNet"
-    Args:
-        q: query matrix, shape (batch_size, seq_len, dim_head)
-        k: key matrix, shape (batch_size, seq_len, dim_head)
-        v: value matrix, shape (batch_size, seq_len, dim_head)
-
-    reference:
-        - https://arxiv.org/pdf/1704.04861
-        - https://arxiv.org/pdf/2111.00396
-    """
-
-    return
-
-
-def sliding_window_attention():
-    """ sliding window(local, block-sparse, ...) attention func for encoding the "short-term memory" for MAG Titans
-    """
-    return
-
-
 class MultiHeadAttention(nn.Module):
     def __init__(
         self,
@@ -147,7 +123,7 @@ class MultiHeadAttention(nn.Module):
         self.fc_v = nn.Linear(self.dim_model, self.dim_model)
         self.fc_concat = nn.Linear(self.dim_model, self.dim_model)  # same as W_O in original paper
         self.apply_rope = apply_rotary_position_embeddings
-        self.attention = scaled_dot_product_attention if arch == "MAC" else sliding_window_attention
+        self.attention = scaled_dot_product_attention if arch == "MAC" else DepthWiseSeparableConv
 
         self.attention_dropout = nn.Dropout(p=attention_dropout_prob)
         self.dot_scale = torch.sqrt(torch.tensor(self.dim_head, dtype=torch.float32))
